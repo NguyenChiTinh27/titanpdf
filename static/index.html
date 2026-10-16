@@ -1,0 +1,2610 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LUV-PDF Private Suite — Hệ Sinh Thái Xử Lý Tài Liệu Cục Bộ</title>
+    <link rel="icon" type="image/jpeg" href="icons/hse_avatar.jpg">
+    <link rel="shortcut icon" href="icons/hse_avatar.jpg">
+    <!-- Synchronous Inline Theme Pre-load Script (Zero FOUC) -->
+    <script>
+        (function() {
+            var t = localStorage.getItem("luv_theme") || "clean";
+            document.documentElement.setAttribute("data-theme", t);
+        })();
+    </script>
+    <!-- 100% Offline Local Stylesheet - Zero External CDNs -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="hse_style.css">
+    <link rel="stylesheet" href="legal_style.css">
+    <!-- Local Offline PDF.js -->
+    <script src="libs/pdf.min.js"></script>
+    <!-- Google Identity Services (Sign In With Google) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+    <!-- ============================================================ -->
+    <!-- TITANPDF MASTER SVG ICON SPRITE (100% LOCAL • ZERO CDN)     -->
+    <!-- 56 Geometric Vector Symbols: 26 Tools + 30 UI Controls       -->
+    <!-- ============================================================ -->
+    <svg id="icon-sprite" xmlns="http://www.w3.org/2000/svg" style="display: none;" aria-hidden="true">
+        <!-- TOOL ICONS (26 Tools) -->
+        <symbol id="icon-merge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="9" rx="1.5" />
+            <rect x="14" y="3" width="7" height="9" rx="1.5" />
+            <rect x="7" y="12" width="10" height="9" rx="1.5" />
+            <path d="M6.5 12V9.5a1.5 1.5 0 0 1 1.5-1.5h8a1.5 1.5 0 0 1 1.5 1.5V12" />
+            <path d="M12 8v4" />
+            <path d="m10 10.5 2 2 2-2" />
+        </symbol>
+
+        <symbol id="icon-split" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="3" width="16" height="18" rx="2" />
+            <path d="M12 3v18" stroke-dasharray="2 2" />
+            <path d="m8 10-3 2 3 2" />
+            <path d="m16 10 3 2-3 2" />
+        </symbol>
+
+        <symbol id="icon-extract-pages" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 8H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+            <rect x="9" y="3" width="11" height="13" rx="2" />
+            <path d="m13 10 3-3m0 0h-3m3 0v3" />
+        </symbol>
+
+        <symbol id="icon-delete-pages" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <circle cx="12" cy="14" r="3.5" />
+            <path d="M10 14h4" />
+        </symbol>
+
+        <symbol id="icon-organize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="8" height="10" rx="1.5" />
+            <rect x="13" y="11" width="8" height="10" rx="1.5" />
+            <path d="m18 7-2-2m0 0-2 2m2-2v4" />
+            <path d="m6 17 2 2m0 0 2-2m-2 2v-4" />
+        </symbol>
+
+        <symbol id="icon-rotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="8" y="7" width="8" height="11" rx="1.5" transform="rotate(12 12 12.5)" />
+            <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
+            <path d="M21 3v5h-5" />
+        </symbol>
+
+        <symbol id="icon-page-numbers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="M8 17h2M9 13v4" />
+            <path d="M13 13.5a1.2 1.2 0 0 1 2 1c0 1-1.8 1.8-2 2.5h2.5" />
+        </symbol>
+
+        <symbol id="icon-word-to-pdf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="m8 13 1.5 5 1.5-3.5 1.5 3.5 1.5-5" />
+        </symbol>
+
+        <symbol id="icon-ppt-to-pdf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="12" rx="2" />
+            <path d="M7 8h4M7 11h2" />
+            <circle cx="16" cy="9" r="2" />
+            <path d="M12 15v4M8 21h8" />
+        </symbol>
+
+        <symbol id="icon-excel-to-pdf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <rect x="7" y="11" width="10" height="7" rx="1" />
+            <line x1="7" y1="14.5" x2="17" y2="14.5" />
+            <line x1="12" y1="11" x2="12" y2="18" />
+        </symbol>
+
+        <symbol id="icon-images-to-pdf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="13" height="11" rx="2" />
+            <circle cx="6" cy="8" r="1.2" />
+            <path d="m2 13 3.5-3.5a1 1 0 0 1 1.4 0L10 12" />
+            <path d="M16 8h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-2" />
+            <path d="M13 18h4" />
+        </symbol>
+
+        <symbol id="icon-pdf-to-word" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14V4a2 2 0 0 1 2-2h8l4 4v4" />
+            <polyline points="14 2 14 6 18 6" />
+            <rect x="7" y="11" width="14" height="11" rx="2" />
+            <path d="m10 15 1.2 4 1.3-2.5 1.3 2.5 1.2-4" />
+        </symbol>
+
+        <symbol id="icon-pdf-to-ppt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14V4a2 2 0 0 1 2-2h8l4 4v4" />
+            <polyline points="14 2 14 6 18 6" />
+            <rect x="7" y="11" width="14" height="10" rx="2" />
+            <path d="M11 18v-4h2a1.5 1.5 0 0 1 0 3h-2" />
+            <path d="m16 16.5 2-2" />
+        </symbol>
+
+        <symbol id="icon-pdf-to-excel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14V4a2 2 0 0 1 2-2h8l4 4v4" />
+            <polyline points="14 2 14 6 18 6" />
+            <rect x="7" y="11" width="14" height="11" rx="2" />
+            <line x1="7" y1="16" x2="21" y2="16" />
+            <line x1="14" y1="11" x2="14" y2="22" />
+        </symbol>
+
+        <symbol id="icon-pdf-to-images" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v8" />
+            <polyline points="14 2 14 6 18 6" />
+            <rect x="8" y="9" width="13" height="12" rx="2" />
+            <circle cx="12" cy="13" r="1.5" />
+            <path d="m8 18 3.5-3.5a1 1 0 0 1 1.4 0l4.1 4.1" />
+        </symbol>
+
+        <symbol id="icon-pdf-to-pdfa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6" />
+            <polyline points="14 2 14 8 20 8" />
+            <circle cx="17" cy="16" r="4.5" />
+            <path d="m15.2 16.5 1.3 1.3 2.5-2.5" />
+        </symbol>
+
+        <symbol id="icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="6" y="7" width="12" height="10" rx="1.5" />
+            <path d="M12 2v3m0 0-2-2m2 2 2-2" />
+            <path d="M12 22v-3m0 0-2 2m2 2 2 2" />
+            <line x1="9" y1="11" x2="15" y2="11" />
+            <line x1="9" y1="13.5" x2="13" y2="13.5" />
+        </symbol>
+
+        <symbol id="icon-repair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="m14.7 11.3 1.8-1.8a2.1 2.1 0 0 1 3 3l-1.8 1.8" />
+            <path d="m11.5 14.5-3 3a1 1 0 0 0 0 1.4l.6.6a1 1 0 0 0 1.4 0l3-3" />
+            <path d="m13 13 2 2" />
+        </symbol>
+
+        <symbol id="icon-ocr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+            <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+            <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+            <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+            <path d="m8 15 4-8 4 8" />
+            <line x1="9.5" y1="12.5" x2="14.5" y2="12.5" />
+            <line x1="2" y1="12" x2="22" y2="12" stroke-dasharray="1 3" />
+        </symbol>
+
+        <symbol id="icon-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="2" width="16" height="20" rx="2" />
+            <path d="m7 16 10-8" stroke-dasharray="2 2" stroke-width="2.5" />
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 10.5v3" />
+        </symbol>
+
+        <symbol id="icon-crop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+            <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+        </symbol>
+
+        <symbol id="icon-protect" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <rect x="9" y="13" width="6" height="5" rx="1" />
+            <path d="M10 13v-1.5a2 2 0 1 1 4 0V13" />
+        </symbol>
+
+        <symbol id="icon-unlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <rect x="9" y="13" width="6" height="5" rx="1" />
+            <path d="M10 13v-2a2 2 0 0 1 3.8-.8" />
+        </symbol>
+
+        <symbol id="icon-sign" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="M8 17h8" stroke-dasharray="1 2" />
+            <path d="M8 16c1.5-2 3 1 4.5-1.5s2.5 0 3.5-1" />
+        </symbol>
+
+        <symbol id="icon-redact" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <rect x="7" y="11" width="10" height="3" rx="0.5" fill="currentColor" stroke="none" />
+            <rect x="7" y="16" width="7" height="3" rx="0.5" fill="currentColor" stroke="none" />
+        </symbol>
+
+        <symbol id="icon-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="8" height="18" rx="1.5" />
+            <rect x="14" y="3" width="8" height="18" rx="1.5" />
+            <path d="M10 9h4M10 15h4" />
+            <path d="m11 7 2 2-2 2M13 13l-2 2 2 2" />
+        </symbol>
+
+        <!-- TOOL 27: DỊCH SONG NGỮ KỸ THUẬT (DOC-TRAN) -->
+        <symbol id="icon-interlinear-translate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="m7.5 17 2.2-5.5 2.2 5.5" />
+            <line x1="8.3" y1="15" x2="11.1" y2="15" />
+            <path d="M13.5 13.5h3m0 0-1.2-1.2m1.2 1.2-1.2 1.2" />
+            <path d="M16.5 16.5h-3m0 0 1.2-1.2m-1.2 1.2 1.2 1.2" />
+        </symbol>
+
+        <symbol id="icon-doc-tran" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <use href="#icon-interlinear-translate"></use>
+        </symbol>
+
+        <symbol id="icon-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <use href="#icon-interlinear-translate"></use>
+        </symbol>
+
+        <!-- TOOL 28: TRÌNH CHỈNH SỬA VIP PRO (VIP PDF EDITOR) -->
+        <symbol id="icon-vip-editor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+        </symbol>
+
+        <!-- TOOL 29: DỊCH THUẬT VĂN BẢN (AI TRANSLATOR) -->
+        <symbol id="icon-ai-translator" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 8 6 6" />
+            <path d="m4 14 6-6 2-3" />
+            <path d="M2 5h12" />
+            <path d="M7 2h1" />
+            <path d="m22 22-5-10-5 10" />
+            <path d="M14 18h6" />
+        </symbol>
+
+        <!-- TOOL 30: AI TÓM TẮT TÀI LIỆU (AI SUMMARIZER) -->
+        <symbol id="icon-ai-summarizer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <path d="m10 9-1-1 1-1" />
+            <path d="m19 19 3 3" />
+            <path d="m18 13 4-4" />
+        </symbol>
+
+        <!-- TOOL 31: XÓA WATERMARK & NỀN RÁC (WATERMARK REMOVER) -->
+        <symbol id="icon-remove-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="12" x2="16" y2="12" stroke-dasharray="2 2" />
+            <path d="m18 17 3 3" />
+            <circle cx="15.5" cy="15.5" r="2.5" />
+        </symbol>
+
+        <!-- TOOL 32: MSDS AI & SỔ HÓA CHẤT CIL -->
+        <symbol id="icon-msds-studio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2v7.31L4.15 19.37A2 2 0 0 0 5.84 22h12.32a2 2 0 0 0 1.69-2.63L14 9.31V2" />
+            <path d="M8.5 2h7" />
+            <path d="M7 16h10" />
+            <circle cx="10" cy="18.5" r="1" fill="currentColor" />
+            <circle cx="14" cy="18" r="1" fill="currentColor" />
+        </symbol>
+
+        <!-- TOOL 33: HSE REPORT STUDIO -->
+        <symbol id="icon-hse-studio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            <path d="m9 14 2 2 4-4" />
+            <path d="M9 10h6" />
+        </symbol>
+
+        <!-- GOOGLE DRIVE SYNC ICON -->
+        <symbol id="icon-google-drive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+            <path d="M12 12v9" />
+            <path d="m8 17 4-4 4 4" />
+        </symbol>
+
+        <!-- UI CONTROL ICONS (30 UI Icons) -->
+        <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+        </symbol>
+
+        <symbol id="icon-clear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18M6 6l12 12" />
+        </symbol>
+
+        <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+        </symbol>
+
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+        </symbol>
+
+        <symbol id="icon-rotate-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
+            <path d="M21 3v5h-5" />
+        </symbol>
+
+        <symbol id="icon-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+            <path d="M3 3v5h5" />
+        </symbol>
+
+        <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+        </symbol>
+
+        <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+        </symbol>
+
+        <symbol id="icon-circle-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="m9 12 2 2 4-4" />
+        </symbol>
+
+        <symbol id="icon-check-double" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m18 6-9 9-4-4M22 10l-9 9-2-2" />
+        </symbol>
+
+        <symbol id="icon-zoom-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="11" y1="8" x2="11" y2="14" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+        </symbol>
+
+        <symbol id="icon-zoom-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+        </symbol>
+
+        <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+        </symbol>
+
+        <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+        </symbol>
+
+        <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20" />
+        </symbol>
+
+        <symbol id="icon-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+        </symbol>
+
+        <symbol id="icon-grid-view" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="7" height="7" x="3" y="3" rx="1.5" />
+            <rect width="7" height="7" x="14" y="3" rx="1.5" />
+            <rect width="7" height="7" x="14" y="14" rx="1.5" />
+            <rect width="7" height="7" x="3" y="14" rx="1.5" />
+        </symbol>
+
+        <symbol id="icon-reader-view" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5ZM4 6h16M8 10h8M8 14h6" />
+        </symbol>
+
+        <symbol id="icon-file-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m2 17 10 5 10-5M2 12l10 5 10-5M12 2 2 7l10 5 10-5-10-5Z" />
+        </symbol>
+
+        <symbol id="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4" />
+        </symbol>
+
+        <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14" />
+        </symbol>
+
+        <symbol id="icon-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" x2="4" y1="21" y2="14" />
+            <line x1="4" x2="4" y1="10" y2="3" />
+            <line x1="12" x2="12" y1="21" y2="12" />
+            <line x1="12" x2="12" y1="8" y2="3" />
+            <line x1="20" x2="20" y1="21" y2="16" />
+            <line x1="20" x2="20" y1="12" y2="3" />
+            <line x1="1" x2="7" y1="14" y2="14" />
+            <line x1="9" x2="15" y1="8" y2="8" />
+            <line x1="17" x2="23" y1="16" y2="16" />
+        </symbol>
+
+        <symbol id="icon-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z" />
+        </symbol>
+
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6" />
+        </symbol>
+
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6" />
+        </symbol>
+
+        <symbol id="icon-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 12 7-7 7 7M12 19V5" />
+        </symbol>
+
+        <symbol id="icon-arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m19 12-7 7-7-7M12 5v14" />
+        </symbol>
+
+        <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+        </symbol>
+
+        <symbol id="icon-bolt" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </symbol>
+
+        <symbol id="icon-file-lines" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+        </symbol>
+
+        <symbol id="icon-grip-vertical" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="12" r="1.3" fill="currentColor"/>
+            <circle cx="9" cy="6" r="1.3" fill="currentColor"/>
+            <circle cx="9" cy="18" r="1.3" fill="currentColor"/>
+            <circle cx="15" cy="12" r="1.3" fill="currentColor"/>
+            <circle cx="15" cy="6" r="1.3" fill="currentColor"/>
+            <circle cx="15" cy="18" r="1.3" fill="currentColor"/>
+        </symbol>
+
+        <symbol id="icon-empty-state" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35M9 9l4 4M13 9l-4 4" />
+        </symbol>
+    </svg>
+
+    <!-- ============================================================ -->
+    <!-- 1. SECURITY GATE LOCK SCREEN (Khóa Bảo Mật Chuẩn Doanh Nghiệp) -->
+    <!-- ============================================================ -->
+    <div id="security-gate" class="security-gate-overlay">
+        <div class="security-card" id="security-card-box">
+            <div class="security-icon-box">
+                <div class="security-avatar-wrapper">
+                    <img src="icons/hse_avatar.jpg" alt="Nhân viên văn phòng siêu cấp Vip Pro" class="security-hse-avatar">
+                </div>
+            </div>
+            
+            <div style="display:inline-flex; align-items:center; gap:6px; background:#eff6ff; color:#1d4ed8; padding:5px 14px; border-radius:20px; font-size:12.5px; font-weight:600; margin-bottom:12px; border:1px solid #bfdbfe;">
+                <span>🔒 BẢO MẬT ĐỘC QUYỀN GOOGLE</span>
+            </div>
+            
+            <h2 class="security-title" style="margin-bottom:6px;">Xác Thực Chủ Sở Hữu</h2>
+            <p class="security-subtitle" style="margin-bottom:16px;">Hệ thống khóa riêng biệt cho tài khoản Google:<br><strong style="color:#0284c7; font-size:15px;">ntc270120cm@gmail.com</strong>.<br>Vui lòng bấm nút bên dưới để đăng nhập bằng tài khoản Google chính chủ.</p>
+
+            <div id="google-signin-container" style="margin: 20px 0 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; width:100%;">
+                <div id="g_id_onload"
+                     data-client_id="1074976510569-vdgu3g3vumvd3fl4irtbhpgguau04qj8.apps.googleusercontent.com"
+                     data-callback="handleGoogleCredentialResponse"
+                     data-auto_prompt="true"
+                     data-cancel_on_tap_outside="false">
+                </div>
+                <div class="g_id_signin" 
+                     data-type="standard" 
+                     data-shape="pill" 
+                     data-theme="outline" 
+                     data-text="signin_with" 
+                     data-size="large" 
+                     data-logo_alignment="left"
+                     data-width="300">
+                </div>
+            </div>
+
+            <div id="security-error-msg" class="security-error-msg hidden" style="margin-top: 14px; text-align: center; font-size: 13px;"></div>
+
+            <div class="security-footer-hint" style="margin-top:18px;">
+                <span>🛡️ Xác thực an toàn qua Google OAuth 2.0 • Chỉ dành cho <strong>ntc270120cm@gmail.com</strong></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- 2. SECURITY SETTINGS & PASSWORD MANAGEMENT MODAL             -->
+    <!-- ============================================================ -->
+    <div id="security-settings-modal" class="vip-modal-backdrop hidden">
+        <div class="vip-modal-content" style="max-width: 480px; width: 90%; background:#ffffff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
+            <div class="vip-modal-header" style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:34px; height:34px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">Quản Trị Mật Khẩu & Bảo Mật</h3>
+                        <p style="margin:2px 0 0; font-size:11px; color:#64748b;">Tùy chỉnh mật mã riêng và chế độ khóa ứng dụng</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeSecurityModal()" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
+            </div>
+
+            <div class="vip-modal-body" style="padding: 18px 22px;">
+                <!-- Section A: Toggle Startup Lock -->
+                <div style="padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:600; font-size:13px; color:#1e293b;">Khóa ứng dụng khi khởi động</div>
+                            <div style="font-size:12px; color:#64748b; margin-top:2px;">Yêu cầu nhập mật mã khi mở LUV-PDF</div>
+                        </div>
+                        <label class="switch-toggle" style="position:relative; display:inline-block; width:44px; height:24px; cursor:pointer;">
+                            <input type="checkbox" id="sec-toggle-gate-chk" onchange="handleToggleGate(this.checked)" style="opacity:0; width:0; height:0;" />
+                            <span class="switch-slider" id="sec-toggle-slider" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:24px; transition:0.2s;"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Section B: Change Master Password -->
+                <div style="margin-top: 16px;">
+                    <div style="font-weight:700; font-size:13px; color:#1e293b; margin-bottom:12px;">Đổi Mật Khẩu Quản Trị:</div>
+                    
+                    <form id="form-change-password" onsubmit="handleChangePassword(event)">
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Mật khẩu hiện tại:</label>
+                            <input type="password" id="sec-curr-pass" class="input-text" placeholder="Nhập mật khẩu đang dùng..." required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                        </div>
+
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Mật khẩu mới (Tối thiểu 4 ký tự):</label>
+                            <input type="password" id="sec-new-pass" class="input-text" placeholder="Nhập mật khẩu mới tùy chọn..." minlength="4" required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                        </div>
+
+                        <div style="margin-bottom: 12px;">
+                            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Xác nhận mật khẩu mới:</label>
+                            <input type="password" id="sec-confirm-pass" class="input-text" placeholder="Nhập lại mật khẩu mới..." minlength="4" required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                        </div>
+
+                        <div id="sec-change-msg" class="hidden" style="padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:12px;"></div>
+
+                        <button type="submit" id="btn-save-new-pass" class="btn-primary" style="width:100%; padding:10px; font-weight:700; font-size:13px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                            <span>CẬP NHẬT MẬT KHẨU MỚI</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Section C: Quick Lock App Button -->
+                <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:12px; color:#64748b;">Rời khỏi máy tính?</span>
+                    <button type="button" onclick="closeSecurityModal(); lockApp();" class="btn-secondary btn-sm" style="color:#ef4444; border:1px solid #fca5a5; background:#fff; padding:5px 10px; border-radius:6px; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        Khóa màn hình ngay
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ZERO-DEPENDENCY PROFESSIONAL AUTH & SECURITY ENGINE -->
+    <script>
+        function togglePasskeyVisibility() {
+            var inp = document.getElementById("security-passkey-input");
+            var icon = document.getElementById("eye-icon");
+            if (!inp) return;
+            if (inp.type === "password") {
+                inp.type = "text";
+                if (icon) icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                inp.type = "password";
+                if (icon) icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        }
+
+        async function handleGoogleCredentialResponse(response) {
+            var errMsg = document.getElementById("security-error-msg");
+            if (!response || !response.credential) return;
+
+            try {
+                if (errMsg) {
+                    errMsg.innerText = "⏳ Đang đối soát danh tính Google ntc270120cm@gmail.com...";
+                    errMsg.style.color = "#0284c7";
+                    errMsg.classList.remove("hidden");
+                }
+                var fd = new FormData();
+                fd.append("credential", response.credential);
+                var res = await fetch("/api/auth/google-verify", { method: "POST", body: fd });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    unlockGateUI(data.token);
+                    alert("✅ Xác thực thành công chủ sở hữu: " + (data.email || "ntc270120cm@gmail.com"));
+                } else {
+                    if (errMsg) {
+                        errMsg.innerText = data.message || "Từ chối truy cập! Tài khoản Google không hợp lệ.";
+                        errMsg.style.color = "#ef4444";
+                        errMsg.classList.remove("hidden");
+                    }
+                }
+            } catch(err) {
+                if (errMsg) {
+                    errMsg.innerText = "Lỗi kết nối xác thực Google. Vui lòng thử lại!";
+                    errMsg.style.color = "#ef4444";
+                    errMsg.classList.remove("hidden");
+                }
+            }
+        }
+
+        function unlockGateUI(token) {
+            var effectiveToken = token || "verified";
+            try {
+                sessionStorage.setItem("luv_auth_token", effectiveToken);
+                localStorage.setItem("luv_auth_token", effectiveToken);
+                localStorage.setItem("luv_owner_authorized", "ntc270120cm@gmail.com");
+            } catch(e) {}
+
+            var gate = document.getElementById("security-gate");
+            if (gate) {
+                gate.classList.add("unlocked");
+                gate.style.setProperty("display", "none", "important");
+                gate.setAttribute("aria-hidden", "true");
+            }
+            var errMsg = document.getElementById("security-error-msg");
+            if (errMsg) errMsg.classList.add("hidden");
+            var inp = document.getElementById("security-passkey-input");
+            if (inp) inp.value = "";
+        }
+
+        function lockApp() {
+            try {
+                sessionStorage.removeItem("luv_auth_token");
+                localStorage.removeItem("luv_auth_token");
+            } catch(e) {}
+
+            var gate = document.getElementById("security-gate");
+            if (gate) {
+                gate.style.removeProperty("display");
+                gate.style.display = "flex";
+                gate.classList.remove("unlocked");
+                gate.removeAttribute("aria-hidden");
+            }
+            var inp = document.getElementById("security-passkey-input");
+            if (inp) {
+                inp.value = "";
+                inp.focus();
+            }
+        }
+
+        async function handleSecurityUnlock(e) {
+            if (e && typeof e.preventDefault === "function") e.preventDefault();
+            var input = document.getElementById("security-passkey-input");
+            var errMsg = document.getElementById("security-error-msg");
+            var btn = document.getElementById("btn-unlock-app");
+            var card = document.getElementById("security-card-box");
+            
+            var raw = input ? input.value : "";
+            var clean = raw.trim();
+
+            if (!clean) {
+                if (errMsg) {
+                    errMsg.innerText = "Vui lòng nhập mật mã bảo mật hoặc License Key!";
+                    errMsg.classList.remove("hidden");
+                }
+                return;
+            }
+
+            if (btn) btn.disabled = true;
+
+            try {
+                var fd = new FormData();
+                fd.append("passkey", clean);
+
+                var res = await fetch("/api/auth/verify", { method: "POST", body: fd });
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    unlockGateUI(data.token);
+                } else {
+                    if (errMsg) {
+                        errMsg.innerText = (data && data.message) ? data.message : "Mật mã bảo mật không chính xác. Vui lòng thử lại!";
+                        errMsg.classList.remove("hidden");
+                    }
+                    if (card) {
+                        card.classList.remove("shake-anim");
+                        void card.offsetWidth;
+                        card.classList.add("shake-anim");
+                    }
+                    if (input) {
+                        input.select();
+                        input.focus();
+                    }
+                }
+            } catch(err) {
+                if (errMsg) {
+                    errMsg.innerText = "Không thể kết nối máy chủ xác thực nội bộ. Vui lòng bấm thử lại!";
+                    errMsg.classList.remove("hidden");
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        // Security Settings Modal Logic
+        async function openSecurityModal() {
+            var modal = document.getElementById("security-settings-modal");
+            var toggleChk = document.getElementById("sec-toggle-gate-chk");
+            var msg = document.getElementById("sec-change-msg");
+            if (msg) msg.classList.add("hidden");
+
+            try {
+                var res = await fetch("/api/auth/settings");
+                if (res.ok) {
+                    var data = await res.json();
+                    if (toggleChk) toggleChk.checked = data.enabled;
+                }
+            } catch(e) {}
+
+            if (modal) modal.classList.remove("hidden");
+        }
+
+        function closeSecurityModal() {
+            var modal = document.getElementById("security-settings-modal");
+            if (modal) modal.classList.add("hidden");
+        }
+
+        async function handleToggleGate(checked) {
+            var pass = prompt("Vui lòng xác nhận mật mã bảo mật hiện tại của bạn:");
+            if (pass === null) {
+                // revert toggle
+                var toggleChk = document.getElementById("sec-toggle-gate-chk");
+                if (toggleChk) toggleChk.checked = !checked;
+                return;
+            }
+
+            try {
+                var fd = new FormData();
+                fd.append("enabled", checked ? "true" : "false");
+                fd.append("passkey", pass);
+
+                var res = await fetch("/api/auth/toggle-gate", { method: "POST", body: fd });
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    alert(data.message);
+                } else {
+                    alert("Lỗi: " + (data.message || "Mật mã xác nhận không chính xác!"));
+                    var toggleChk = document.getElementById("sec-toggle-gate-chk");
+                    if (toggleChk) toggleChk.checked = !checked;
+                }
+            } catch(e) {
+                alert("Lỗi kết nối máy chủ: " + e.message);
+            }
+        }
+
+        async function handleChangePassword(e) {
+            if (e && typeof e.preventDefault === "function") e.preventDefault();
+            var curr = document.getElementById("sec-curr-pass")?.value || "";
+            var newP = document.getElementById("sec-new-pass")?.value || "";
+            var conf = document.getElementById("sec-confirm-pass")?.value || "";
+            var msg = document.getElementById("sec-change-msg");
+
+            if (newP !== conf) {
+                if (msg) {
+                    msg.innerText = "Mật khẩu mới và xác nhận mật khẩu không khớp!";
+                    msg.style.background = "#fef2f2";
+                    msg.style.color = "#dc2626";
+                    msg.style.border = "1px solid #fecaca";
+                    msg.classList.remove("hidden");
+                }
+                return;
+            }
+
+            try {
+                var fd = new FormData();
+                fd.append("current_pass", curr);
+                fd.append("new_pass", newP);
+
+                var res = await fetch("/api/auth/change-password", { method: "POST", body: fd });
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    if (msg) {
+                        msg.innerText = "✓ " + data.message;
+                        msg.style.background = "#f0fdf4";
+                        msg.style.color = "#16a34a";
+                        msg.style.border = "1px solid #bbf7d0";
+                        msg.classList.remove("hidden");
+                    }
+                    document.getElementById("sec-curr-pass").value = "";
+                    document.getElementById("sec-new-pass").value = "";
+                    document.getElementById("sec-confirm-pass").value = "";
+                } else {
+                    if (msg) {
+                        msg.innerText = "✕ " + (data.message || "Mật khẩu hiện tại không chính xác!");
+                        msg.style.background = "#fef2f2";
+                        msg.style.color = "#dc2626";
+                        msg.style.border = "1px solid #fecaca";
+                        msg.classList.remove("hidden");
+                    }
+                }
+            } catch(err) {
+                if (msg) {
+                    msg.innerText = "Lỗi kết nối: " + err.message;
+                    msg.classList.remove("hidden");
+                }
+            }
+        }
+
+        // Auto-check authentication and startup gate on page load
+        (function() {
+            try {
+                var savedToken = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token");
+                var url = savedToken ? ("/api/auth/status?token=" + encodeURIComponent(savedToken)) : "/api/auth/status";
+                fetch(url)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data && (data.authenticated === true || data.lock_enabled === false)) {
+                            var g = document.getElementById("security-gate");
+                            if (g) {
+                                g.classList.add("unlocked");
+                                g.style.setProperty("display", "none", "important");
+                                g.setAttribute("aria-hidden", "true");
+                            }
+                        } else {
+                            var g = document.getElementById("security-gate");
+                            if (g) {
+                                g.classList.remove("unlocked");
+                                g.style.removeProperty("display");
+                                g.style.display = "flex";
+                                g.removeAttribute("aria-hidden");
+                            }
+                            var inp = document.getElementById("security-passkey-input");
+                            if (inp) {
+                                inp.value = "";
+                                setTimeout(function() { inp.focus(); }, 150);
+                            }
+                        }
+                    })
+                    .catch(function() {
+                        var g = document.getElementById("security-gate");
+                        if (g) {
+                            g.classList.remove("unlocked");
+                            g.style.removeProperty("display");
+                            g.style.display = "flex";
+                        }
+                    });
+            } catch(e) {}
+        })();
+    </script>
+
+    <!-- 1. STICKY TOP NAVBAR (56px) -->
+    <header class="navbar">
+        <div class="navbar-container">
+            <!-- Brand Logo & Title -->
+            <div class="navbar-brand" onclick="goHome()" role="button" tabindex="0" title="Trở về trang chủ">
+                <div class="brand-avatar-box">
+                    <img src="icons/hse_avatar.jpg" alt="Nhân viên văn phòng siêu cấp Vip Pro" class="navbar-hse-avatar">
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">LUV-PDF</span>
+                    <span class="brand-badge">Private Suite</span>
+                </div>
+            </div>
+
+            <!-- Main Navigation Tabs: Sleek Modern Segmented Control -->
+            <div class="main-nav-tabs" role="tablist" aria-label="Không gian làm việc chính">
+                <button id="nav-tab-tools" class="main-nav-tab nav-tab-tools active" onclick="switchMainTab('tools')" title="Bộ 32 Công Cụ Xử Lý PDF Chuyên Nghiệp" role="tab" aria-selected="true">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg>
+                    <span class="tab-label">Công Cụ</span>
+                    <span class="nav-tab-pill-badge badge-tools">32</span>
+                </button>
+                <button id="nav-tab-editor" class="main-nav-tab nav-tab-editor" onclick="switchMainTab('editor')" title="Trình Chỉnh Sửa PDF Trực Quan VIP Pro" role="tab" aria-selected="false">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    <span class="tab-label">VIP Editor</span>
+                    <span class="nav-tab-pill-badge badge-vip">VIP</span>
+                </button>
+                <button id="nav-tab-ai" class="main-nav-tab nav-tab-ai" onclick="switchMainTab('ai')" title="AI Studio Dịch Thuật & Tóm Tắt PDF Đa Ngôn Ngữ" role="tab" aria-selected="false">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
+                    <span class="tab-label">AI Studio</span>
+                    <span class="nav-tab-pill-badge badge-ai">AI</span>
+                </button>
+                <button id="nav-tab-msds" class="main-nav-tab nav-tab-msds" onclick="switchMainTab('msds')" title="Sổ Hóa Chất CIL & Bóc Tách MSDS Đa Ngôn Ngữ" role="tab" aria-selected="false">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 2v7.31M14 2v7.31M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+                    <span class="tab-label">MSDS & CIL</span>
+                    <span class="nav-tab-pill-badge badge-msds" id="nav-msds-count-badge">CIL</span>
+                </button>
+                <button id="nav-tab-hse" class="main-nav-tab nav-tab-hse" onclick="switchMainTab('hse')" title="HSE Report Studio - Báo Cáo An Toàn & Cải Tiến Hiện Trường" role="tab" aria-selected="false">
+                    <img src="icons/hse_avatar.jpg" alt="HSE" class="tab-hse-avatar" />
+                    <span class="tab-label">HSE Report</span>
+                    <span class="nav-tab-pill-badge badge-hse">HSE</span>
+                </button>
+                <button id="nav-tab-legal" class="main-nav-tab nav-tab-legal" onclick="switchMainTab('legal')" title="Pháp Lý Hóa Chất - Tra Cứu Danh Mục NĐ 24, NĐ 28, QCVN 01" role="tab" aria-selected="false">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                        <path d="M6 6h10"></path>
+                        <path d="M6 10h10"></path>
+                        <path d="M6 14h7"></path>
+                    </svg>
+                    <span class="tab-label">Pháp Lý</span>
+                    <span class="nav-tab-pill-badge badge-legal"><span class="pulse-dot"></span>MỚI</span>
+                </button>
+            </div>
+
+            <!-- Global Search Bar Hidden (Replaced by dedicated MSDS Tab) -->
+            <div class="navbar-search" style="display:none;" aria-hidden="true">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="search-input" onkeyup="handleSearch(this.value)" placeholder="Tìm nhanh công cụ..." autocomplete="off" spellcheck="false" />
+                    <kbd class="kbd-badge" id="search-kbd-hint">Ctrl K</kbd>
+                    <button id="search-clear-btn" class="search-clear hidden" onclick="clearSearch()" title="Xóa tìm kiếm">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Offline & Security Status + Security Settings & Lock App Button (Hidden per user request) -->
+            <div class="navbar-status" style="display: none !important;" aria-hidden="true">
+                <a href="https://drive.google.com/drive/u/0/my-drive" target="_blank" rel="noopener noreferrer" class="btn-gdrive-nav" title="Mở nhanh Google Drive trực tuyến (ntc270120cm@gmail.com)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
+                    <span>Google Drive</span>
+                </a>
+                <button id="theme-switcher-btn" onclick="toggleTheme()" class="btn-theme-switcher" title="Chuyển đổi giao diện (Clean SaaS 💼 / Vibrant Pop 🎨)">
+                    <span class="theme-icon">🎨</span>
+                    <span class="theme-text" id="theme-btn-label">Clean SaaS</span>
+                </button>
+                <span class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">100% Cục bộ & Bảo mật</span>
+                </span>
+                <button id="nav-sec-settings-btn" onclick="openSecurityModal()" class="btn-sec-settings" title="Cài đặt Mật khẩu & Chế độ Khởi động">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span>Cài đặt Khóa</span>
+                </button>
+                <button id="nav-lock-btn" onclick="lockApp()" class="btn-lock" title="Khóa ứng dụng ngay">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span>Khóa</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. HOME DASHBOARD VIEW (#home-view) -->
+    <main id="home-view" class="main-content">
+        <div class="dashboard-container">
+            <!-- Header Hero Banner -->
+            <div class="dashboard-hero">
+                <div class="hero-top-row">
+                    <div class="hero-badge">OFFLINE WORKSPACE • ZERO TELEMETRY</div>
+                    <div class="hero-brand-companion">
+                        <img src="icons/hse_avatar.jpg" alt="Nhân viên văn phòng siêu cấp Vip Pro" class="hero-hse-avatar">
+                        <span class="companion-status-dot"></span>
+                        <span class="companion-text">Đồng hành cùng Nhân viên văn phòng siêu cấp Vip Pro</span>
+                    </div>
+                </div>
+                <h1 class="hero-title">Bộ Công Cụ Xử Lý PDF Riêng Tư & Siêu Tốc</h1>
+                <p class="hero-subtitle">Mọi tác vụ thực thi 100% trên phần cứng máy tính của bạn. Không giới hạn tệp, không phụ thuộc internet.</p>
+            </div>
+
+            <!-- Apple-Style Segmented Category Filter -->
+            <div class="category-filter-wrapper">
+                <div class="segmented-control" role="tablist" aria-label="Phân loại công cụ">
+                    <button class="segment-btn active" data-cat="all" onclick="filterCategory('all')" role="tab" aria-selected="true">
+                        Tất cả <span class="segment-count">31</span>
+                    </button>
+                    <button class="segment-btn" data-cat="organize" onclick="filterCategory('organize')" role="tab" aria-selected="false">
+                        Tổ chức <span class="segment-count">8</span>
+                    </button>
+                    <button class="segment-btn" data-cat="convert" onclick="filterCategory('convert')" role="tab" aria-selected="false">
+                        Chuyển đổi <span class="segment-count">9</span>
+                    </button>
+                    <button class="segment-btn" data-cat="security" onclick="filterCategory('security')" role="tab" aria-selected="false">
+                        Bảo mật & Ký số <span class="segment-count">7</span>
+                    </button>
+                    <button class="segment-btn" data-cat="optimize" onclick="filterCategory('optimize')" role="tab" aria-selected="false">
+                        Tối ưu <span class="segment-count">3</span>
+                    </button>
+                    <button class="segment-btn" data-cat="ai" onclick="filterCategory('ai')" role="tab" aria-selected="false">
+                        Trí tuệ AI ✨ <span class="segment-count">4</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tool Cards Grid -->
+            <div id="tools-grid" class="tools-grid">
+                <!-- Dynamically populated via JS -->
+            </div>
+
+            <!-- Empty State for Search -->
+            <div id="tools-empty-state" class="empty-state hidden">
+                <div class="empty-icon">
+                    <svg width="36" height="36"><use href="#icon-empty-state"></use></svg>
+                </div>
+                <h3 class="empty-title">Không tìm thấy công cụ phù hợp</h3>
+                <p class="empty-desc" id="empty-query-text">Thử tìm kiếm với từ khóa khác như "ghép", "nén", "docx", "ký"...</p>
+                <button class="btn-secondary" onclick="clearSearch()">Xem tất cả 27 công cụ</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 3. WORKSPACE & SIDE-BY-SIDE STUDIO VIEW (#workspace-view) -->
+    <main id="workspace-view" class="main-content hidden">
+        <div class="workspace-container">
+            <!-- Workspace Top Bar -->
+            <div class="ws-topbar">
+                <div class="ws-topbar-left">
+                    <button onclick="goHome()" class="btn-ghost btn-back">
+                        <svg width="16" height="16"><use href="#icon-arrow-left"></use></svg>
+                        Trang chủ
+                    </button>
+                    <div class="ws-divider"></div>
+                    <div class="ws-tool-meta">
+                        <div id="ws-icon-slot" class="ws-tool-icon">
+                            <img id="ws-icon-img" src="/icons/merge_icon.png" alt="Icon" class="hidden" />
+                        </div>
+                        <div>
+                            <h2 id="ws-title" class="ws-tool-title">Tên công cụ</h2>
+                            <p id="ws-desc" class="ws-tool-desc">Mô tả chi tiết tác vụ</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ws-topbar-right">
+                    <span id="ws-status-badge" class="badge-status badge-ready">
+                        <span class="badge-dot"></span> Sẵn sàng
+                    </span>
+                    <button onclick="document.getElementById('file-input').click()" class="btn-secondary btn-sm">
+                        <svg width="14" height="14"><use href="#icon-plus"></use></svg>
+                        Thêm tệp
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hidden File Input Hook -->
+            <input type="file" id="file-input" class="hidden" multiple />
+
+            <!-- Initial Dropzone -->
+            <div id="dropzone" class="dropzone-box">
+                <div class="dropzone-content">
+                    <div id="dropzone-icon-slot" class="dropzone-icon">
+                        <img id="dropzone-icon-img" src="/icons/merge_icon.png" alt="Icon" class="hidden" />
+                    </div>
+                    <div class="dropzone-actions">
+                        <button type="button" onclick="document.getElementById('file-input').click()" class="btn-primary btn-lg">
+                            <svg width="18" height="18"><use href="#icon-upload"></use></svg>
+                            Chọn tệp tin từ máy tính
+                        </button>
+                        <p class="dropzone-hint">hoặc kéo & thả một hoặc nhiều tệp cùng lúc vào đây (Hàng đợi hàng loạt iLovePDF)</p>
+                    </div>
+                    <div id="ws-hint" class="format-pill">Hỗ trợ định dạng PDF</div>
+                </div>
+            </div>
+
+            <!-- Studio 2-Column Container -->
+            <div id="studio-container" class="studio-layout hidden">
+                <!-- Left Column: Review Canvas (68%) -->
+                <div class="studio-canvas-col">
+                    <div class="studio-toolbar">
+                        <!-- View Modes -->
+                        <div class="view-mode-tabs">
+                            <button id="view-mode-grid" onclick="switchStudioView('grid')" class="view-tab active">
+                                <svg width="14" height="14"><use href="#icon-grid-view"></use></svg>
+                                Lưới trang
+                            </button>
+                            <button id="view-mode-viewer" onclick="switchStudioView('viewer')" class="view-tab">
+                                <svg width="14" height="14"><use href="#icon-reader-view"></use></svg>
+                                Xem tài liệu
+                            </button>
+                            <button id="view-mode-files" onclick="switchStudioView('files')" class="view-tab">
+                                <svg width="14" height="14"><use href="#icon-file-list"></use></svg>
+                                Hàng đợi tệp (<span id="studio-files-count">1</span>)
+                            </button>
+                        </div>
+
+                        <!-- Comparison Toggle Group -->
+                        <div id="comparison-toggle-group" class="comparison-toggle-group hidden">
+                            <span class="comp-label">So sánh:</span>
+                            <button id="btn-view-original" type="button" onclick="switchPreviewSource('original')" class="comp-btn">
+                                <svg width="13" height="13"><use href="#icon-file-lines"></use></svg> Bản gốc
+                            </button>
+                            <button id="btn-view-processed" type="button" onclick="switchPreviewSource('processed')" class="comp-btn active">
+                                <svg width="13" height="13"><use href="#icon-sparkles"></use></svg> Kết quả hoàn tất ✨
+                            </button>
+                        </div>
+
+                        <!-- Canvas Controls -->
+                        <div class="canvas-controls">
+                            <div class="btn-group">
+                                <button onclick="rotateAllPages(-90)" title="Xoay tất cả sang trái 90°" class="btn-tool">
+                                    <svg width="13" height="13"><use href="#icon-rotate-ccw"></use></svg> -90°
+                                </button>
+                                <button onclick="rotateAllPages(90)" title="Xoay tất cả sang phải 90°" class="btn-tool">
+                                    <svg width="13" height="13"><use href="#icon-rotate-cw"></use></svg> +90°
+                                </button>
+                            </div>
+                            <button onclick="toggleSelectAllPages()" id="btn-select-all" class="btn-tool">
+                                <svg width="14" height="14"><use href="#icon-check-double"></use></svg> Chọn tất cả
+                            </button>
+                            <div class="zoom-control">
+                                <svg width="12" height="12"><use href="#icon-zoom-out"></use></svg>
+                                <input type="range" id="thumb-zoom-slider" min="130" max="280" value="180" oninput="changeThumbSize(this.value)" class="slider-control" />
+                                <svg width="12" height="12"><use href="#icon-zoom-in"></use></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Canvas Main Area -->
+                    <div class="canvas-viewport">
+                        <div id="canvas-shimmer-bar" class="canvas-shimmer-bar hidden"></div>
+                        <div id="canvas-status-pill" class="canvas-status-pill hidden">
+                            <div class="spinner-sm"></div>
+                            <span>Đang thực thi tác vụ... Bạn vẫn có thể xem tài liệu</span>
+                        </div>
+
+                        <div id="studio-loading" class="canvas-loading hidden">
+                            <div class="spinner"></div>
+                            <span class="loading-text">Đang kết xuất trang trực quan...</span>
+                        </div>
+
+                        <div id="studio-grid-view">
+                            <div class="grid-header">
+                                <span id="grid-meta-text" class="meta-pages">Đang hiển thị 0 trang</span>
+                                <span class="meta-tip">Mẹo: Nhấp vào trang để chọn, rê chuột để xoay hoặc xóa trang đơn lẻ</span>
+                            </div>
+                            <div id="pages-grid" class="pages-grid-container"></div>
+                        </div>
+
+                        <div id="studio-doc-view" class="hidden">
+                            <div class="doc-header">
+                                <span>Trình đọc tài liệu chất lượng cao</span>
+                                <span id="doc-view-page-info" class="meta-pages">Trang 1 / 1</span>
+                            </div>
+                            <div id="doc-viewer-container" class="doc-container"></div>
+                        </div>
+
+                        <div id="studio-files-view" class="hidden">
+                            <!-- Queue Header with Count, Size, Add & Clear All -->
+                            <div class="files-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span class="meta-pages" style="font-weight:700; color:var(--text-main);">Hàng đợi xử lý: <span id="queue-count" style="color:var(--primary);">0</span> tệp</span>
+                                    <span id="queue-total-size" class="format-pill-sm">0 MB</span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button type="button" onclick="document.getElementById('file-input').click()" class="btn-secondary btn-sm" id="btn-queue-add" style="display:inline-flex; align-items:center; gap:4px;">
+                                        <svg width="13" height="13"><use href="#icon-plus"></use></svg> Thêm tệp
+                                    </button>
+                                    <button type="button" onclick="clearAllQueueFiles()" class="btn-ghost btn-sm text-danger" id="btn-queue-clear" style="display:inline-flex; align-items:center; gap:4px;" title="Xóa tất cả tệp khỏi hàng đợi">
+                                        <svg width="13" height="13"><use href="#icon-trash"></use></svg> Xóa tất cả
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Live Batch Processing Progress Banner -->
+                            <div id="batch-progress-box" class="batch-progress-card hidden" style="margin: 12px 0 16px; padding: 14px 18px; border-radius: 12px; background: var(--bg-surface); border: 1px solid var(--border-subtle); box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <div class="spinner-sm" id="batch-spinner"></div>
+                                        <span id="batch-progress-title" style="font-size:13px; font-weight:700; color:var(--text-main);">Đang xử lý hàng loạt...</span>
+                                    </div>
+                                    <span id="batch-progress-percent" style="font-size:13px; font-weight:800; color:var(--primary);">0%</span>
+                                </div>
+                                <div class="batch-progress-track" style="height: 8px; width: 100%; background: #e2e8f0; border-radius: 999px; overflow: hidden; position: relative;">
+                                    <div id="batch-progress-bar-fill" class="batch-progress-fill" style="width: 0%; height: 100%; border-radius: 999px; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981);"></div>
+                                </div>
+                                <div id="batch-progress-subtext" style="font-size: 11.5px; color: #64748b; margin-top: 6px;">Đang chuẩn bị tệp trong hàng đợi...</div>
+                            </div>
+
+                            <!-- Batch Complete Banner -->
+                            <div id="batch-complete-banner" class="batch-complete-card hidden" style="margin: 12px 0 16px; padding: 14px 18px; border-radius: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <span style="font-size:20px;">🎉</span>
+                                    <div>
+                                        <div id="batch-complete-title" style="font-weight:700; font-size:13px; color:#15803d;">Xử lý hàng loạt hoàn tất!</div>
+                                        <div id="batch-complete-sub" style="font-size:11.5px; color:#166534;">Tất cả các tệp hợp lệ đã được chuyển đổi thành công.</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button type="button" onclick="openOutputFolder()" class="btn-primary btn-sm" style="background:#0f172a; color:#fff; display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border-radius:6px; font-size:12px;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                        <span>📂 Mở Thư Mục Kết Quả</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="multi-file-list" class="multi-file-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Options Sidebar (32%) -->
+                <div class="studio-sidebar-col">
+                    <!-- File Summary Card -->
+                    <div class="sidebar-card">
+                        <div class="card-header-row">
+                            <span class="card-caption">Tài liệu nguồn</span>
+                            <button onclick="resetWorkspace()" class="card-action-link text-danger">Thay tệp khác</button>
+                        </div>
+                        <div class="file-info-box">
+                            <div class="file-icon-square">
+                                <svg width="18" height="18"><use href="#icon-file-lines"></use></svg>
+                            </div>
+                            <div class="file-meta-text">
+                                <h4 id="side-filename" class="file-title">document.pdf</h4>
+                                <p class="file-sub"><span id="side-filepages">0 trang</span> • <span id="side-filesize">0 MB</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Options Panel -->
+                    <div id="options-panel" class="sidebar-card">
+                        <div class="card-header-row">
+                            <h3 class="card-title">
+                                <svg width="15" height="15"><use href="#icon-sliders"></use></svg>
+                                Thiết lập tác vụ
+                            </h3>
+                            <span class="badge-subtle">Trực tiếp</span>
+                        </div>
+                        <div id="options-content" class="options-body"></div>
+                    </div>
+
+                    <!-- Action Execution Panel -->
+                    <div id="action-panel" class="sidebar-card action-card">
+                        <button id="btn-process" onclick="executeProcess()" class="btn-primary btn-block btn-lg">
+                            <svg width="16" height="16"><use href="#icon-sparkles"></use></svg>
+                            <span id="btn-process-text">BẮT ĐẦU XỬ LÝ</span>
+                        </button>
+                        <p class="action-note">100% Cục bộ • An toàn tuyệt đối</p>
+                    </div>
+
+                    <!-- Loading Progress Panel -->
+                    <div id="loading-panel" class="sidebar-card loading-card hidden">
+                        <div class="spinner"></div>
+                        <h3 class="loading-title">Đang thực thi tác vụ...</h3>
+                        <p class="loading-sub">Động cơ cục bộ đang xử lý với tốc độ tối đa.</p>
+                    </div>
+
+                    <!-- Output Result Panel -->
+                    <div id="result-panel" class="sidebar-card result-card hidden">
+                        <div class="result-icon-badge">
+                            <svg width="22" height="22"><use href="#icon-check"></use></svg>
+                        </div>
+                        <h3 class="result-title">Xử lý hoàn tất!</h3>
+                        <p id="result-detail" class="result-desc">Tài liệu đã sẵn sàng để tải xuống.</p>
+                        <div class="result-actions">
+                            <a id="btn-download" href="#" class="btn-primary btn-block">
+                                <svg width="16" height="16"><use href="#icon-download"></use></svg>
+                                TẢI XUỐNG TỆP TIN
+                            </a>
+                            <button id="btn-preview-output" onclick="previewOutputResult()" class="btn-secondary btn-block">
+                                <svg width="16" height="16"><use href="#icon-eye"></use></svg>
+                                Xem trước kết quả ngay
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 4. TRÌNH CHỈNH SỬA VIP PRO (#vip-editor-view) -->
+    <main id="vip-editor-view" class="main-content hidden">
+        <!-- Top Toolbar -->
+        <div class="vip-toolbar">
+            <!-- Left controls -->
+            <div class="vip-toolbar-left">
+                <button onclick="switchMainTab('tools')" class="vip-tool-btn" title="Trở về danh sách công cụ">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <div class="vip-file-tag" id="vip-file-tag-display">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span id="vip-active-filename">*Chưa chọn tệp PDF</span>
+                </div>
+                <button onclick="document.getElementById('vip-file-input').click()" class="vip-tool-btn" title="Mở tệp PDF khác">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+                <button onclick="toggleVipSidebar()" id="vip-btn-toggle-sidebar" class="vip-tool-btn" title="Ẩn/Hiện danh sách trang">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+                </button>
+            </div>
+
+            <!-- Hidden file input for VIP Editor (PDF & Image files) -->
+            <input type="file" id="vip-file-input" class="hidden" accept=".pdf,image/png,image/jpeg,image/webp,image/bmp" onchange="handleVipFileInput(event)" />
+            <!-- Hidden image input for inserting images -->
+            <input type="file" id="vip-image-input" class="hidden" accept="image/*" onchange="handleVipImageInsert(event)" />
+            <!-- Hidden image input for replacing existing image -->
+            <input type="file" id="vip-replace-image-input" class="hidden" accept="image/*" onchange="handleVipReplaceImage(event)" />
+
+            <!-- Center tools (matching user screenshot) -->
+            <div class="vip-toolbar-center">
+                <!-- Select tool (Active blue by default) -->
+                <button id="vip-tool-select" onclick="setVipTool('select')" class="vip-tool-btn active" title="Con trỏ chọn & di chuyển đối tượng">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="m3 3 7 18 3-7 7-3L3 3z"/></svg>
+                </button>
+                <!-- Hand pan tool -->
+                <button id="vip-tool-hand" onclick="setVipTool('hand')" class="vip-tool-btn" title="Bàn tay cuộn trang">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+                </button>
+
+                <div class="vip-divider"></div>
+
+                <!-- Pen drawing tool -->
+                <button id="vip-tool-pen" onclick="setVipTool('pen')" class="vip-tool-btn" title="Bút vẽ tự do (Pen)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                <!-- Highlighter tool -->
+                <button id="vip-tool-highlighter" onclick="setVipTool('highlighter')" class="vip-tool-btn" title="Bút dạ quang (Highlighter)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
+                </button>
+                <!-- Text typewriter tool -->
+                <button id="vip-tool-text" onclick="setVipTool('text')" class="vip-tool-btn" title="Chèn văn bản (Text / Typewriter)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+                </button>
+                <!-- Rectangle Shape -->
+                <button id="vip-tool-rect" onclick="setVipTool('rect')" class="vip-tool-btn" title="Chèn hình chữ nhật (Shapes)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="14" x="3" y="5" rx="2"/></svg>
+                </button>
+                <!-- Circle Shape -->
+                <button id="vip-tool-circle" onclick="setVipTool('circle')" class="vip-tool-btn" title="Chèn hình tròn / elip">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+                </button>
+                <!-- Line Shape -->
+                <button id="vip-tool-line" onclick="setVipTool('line')" class="vip-tool-btn" title="Chèn đường thẳng">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+                </button>
+                <!-- Add Image -->
+                <button onclick="document.getElementById('vip-image-input').click()" class="vip-tool-btn" title="Chèn hình ảnh vào PDF">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                </button>
+
+                <div class="vip-divider"></div>
+
+                <!-- Palette / Colors -->
+                <div class="vip-prop-group" title="Chọn màu nét & tô nền">
+                    <div onclick="setVipColor('#ef4444')" class="vip-color-dot active" style="background:#ef4444;" title="Đỏ"></div>
+                    <div onclick="setVipColor('#2563eb')" class="vip-color-dot" style="background:#2563eb;" title="Xanh dương"></div>
+                    <div onclick="setVipColor('#16a34a')" class="vip-color-dot" style="background:#16a34a;" title="Xanh lá"></div>
+                    <div onclick="setVipColor('#eab308')" class="vip-color-dot" style="background:#eab308;" title="Vàng"></div>
+                    <div onclick="setVipColor('#ec4899')" class="vip-color-dot" style="background:#ec4899;" title="Hồng"></div>
+                    <div onclick="setVipColor('#0f172a')" class="vip-color-dot" style="background:#0f172a;" title="Đen"></div>
+                    <input type="color" id="vip-custom-color" onchange="setVipColor(this.value)" style="width:18px; height:18px; border:none; padding:0; background:transparent; cursor:pointer;" title="Màu khác...">
+                </div>
+
+                <!-- Delete selected button -->
+                <button onclick="deleteVipSelectedAnnot()" id="vip-btn-delete" class="vip-tool-btn" title="Xóa đối tượng đang chọn (Phím Delete)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+            </div>
+
+            <!-- Right controls -->
+            <div class="vip-toolbar-right">
+                <button onclick="vipUndo()" class="vip-tool-btn" title="Hoàn tác (Ctrl+Z)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                </button>
+                <button onclick="vipRedo()" class="vip-tool-btn" title="Làm lại (Ctrl+Y)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
+                </button>
+
+                <div class="vip-divider"></div>
+
+                <button onclick="saveVipEditedPdf()" id="vip-btn-save-export" class="vip-btn-save" title="Lưu và xuất bản PDF chỉnh sửa">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    <span>LƯU PDF</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Editor Workspace (Sidebar + Canvas) -->
+        <div class="vip-workspace">
+            <!-- Left Thumbnail Strip -->
+            <div id="vip-sidebar" class="vip-sidebar">
+                <!-- Page cards dynamically rendered here -->
+            </div>
+
+            <!-- Main Canvas Viewport -->
+            <div id="vip-viewport" class="vip-viewport">
+                <!-- Dropzone shown when no PDF loaded -->
+                <div id="vip-empty-dropzone" class="dropzone-box" style="margin: auto; max-width: 500px;" onclick="document.getElementById('vip-file-input').click()">
+                    <div class="dropzone-content">
+                        <div class="dropzone-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6m-3 3 3-3 3 3"/></svg>
+                        </div>
+                        <div class="dropzone-actions">
+                            <button type="button" class="btn-primary btn-lg">
+                                Chọn tệp PDF hoặc Hình Ảnh để chỉnh sửa VIP Pro
+                            </button>
+                            <p class="dropzone-hint">hoặc kéo & thả file PDF, PNG, JPG, WEBP vào đây để bắt đầu vẽ, viết chữ, cắt và sửa ảnh trực quan</p>
+                        </div>
+                        <div class="format-pill">100% Cục bộ • Hỗ trợ cả PDF & Hình Ảnh • Chuẩn Vector Siêu Nét</div>
+                    </div>
+                </div>
+
+                <!-- Page canvas containers dynamically injected here -->
+                <div id="vip-pages-container" class="hidden" style="display:flex; flex-direction:column; align-items:center; gap:32px; width:100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Bottom Navigation Bar (Matching user screenshot) -->
+        <div id="vip-bottom-nav" class="vip-bottom-nav hidden">
+            <button onclick="goToVipPrevPage()" title="Trang trước">❮</button>
+            <span id="vip-nav-page-indicator">1 trên 1</span>
+            <button onclick="goToVipNextPage()" title="Trang sau">❯</button>
+            <select id="vip-nav-zoom" onchange="changeVipZoom(this.value)">
+                <option value="1.0">100%</option>
+                <option value="1.25">125%</option>
+                <option value="1.5">150%</option>
+                <option value="1.77" selected>177%</option>
+                <option value="2.0">200%</option>
+            </select>
+            <button onclick="fitVipWidth()" title="Vừa chiều rộng màn hình">|↔|</button>
+        </div>
+
+        <!-- Interactive Image Crop Modal -->
+        <div id="vip-crop-modal" class="vip-modal-backdrop hidden">
+            <div class="vip-modal-content">
+                <div class="vip-modal-header">
+                    <h3>✂️ Cắt xén & Định hình hình ảnh</h3>
+                    <button type="button" onclick="closeVipCropModal()" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
+                </div>
+                <div class="vip-modal-body">
+                    <div id="vip-crop-container" style="position:relative; display:inline-block; max-width:100%; max-height:58vh; overflow:hidden; user-select:none; border:1px solid #cbd5e1; background:#00000010; border-radius:6px;">
+                        <img id="vip-crop-preview-img" style="display:block; max-width:100%; max-height:58vh; pointer-events:none;" />
+                        <div id="vip-crop-box" style="position:absolute; top:10%; left:10%; width:80%; height:80%; border:2px dashed #2563eb; background:rgba(37,99,235,0.18); cursor:move; box-sizing:border-box;">
+                            <div class="vip-handle vip-handle-tl" style="cursor:nwse-resize;"></div>
+                            <div class="vip-handle vip-handle-tr" style="cursor:nesw-resize;"></div>
+                            <div class="vip-handle vip-handle-bl" style="cursor:nesw-resize;"></div>
+                            <div class="vip-handle vip-handle-br" style="cursor:nwse-resize;"></div>
+                        </div>
+                    </div>
+                    <div style="margin-top:14px; display:flex; gap:10px; font-size:12px; color:#475569; align-items:center;">
+                        <span style="font-weight:600;">Tỉ lệ cắt:</span>
+                        <button type="button" class="crop-aspect-btn active" onclick="setVipCropAspect('free')">Tự do</button>
+                        <button type="button" class="crop-aspect-btn" onclick="setVipCropAspect('1:1')">1:1 Vuông</button>
+                        <button type="button" class="crop-aspect-btn" onclick="setVipCropAspect('4:3')">4:3 Chuẩn</button>
+                        <button type="button" class="crop-aspect-btn" onclick="setVipCropAspect('16:9')">16:9 Rộng</button>
+                    </div>
+                </div>
+                <div class="vip-modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeVipCropModal()" style="padding:6px 14px; border-radius:6px; cursor:pointer;">Hủy</button>
+                    <button type="button" class="btn btn-primary" onclick="applyVipCrop()" style="padding:6px 16px; border-radius:6px; background:#2563eb; color:#fff; border:none; font-weight:700; cursor:pointer;">Áp dụng cắt ảnh</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 4. AI STUDIO VIEW (#ai-studio-view) - DỊCH THUẬT & TÓM TẮT THÔNG MINH -->
+    <main id="ai-studio-view" class="main-content hidden">
+        <div class="ai-studio-container">
+            <!-- Studio Header & Sub-Navigation Tabs -->
+            <div class="ai-studio-header">
+                <div class="ai-studio-title-box">
+                    <div class="ai-studio-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
+                    </div>
+                    <div>
+                        <h2 class="ai-studio-title">AI Document & Text Intelligence</h2>
+                        <p class="ai-studio-desc">Dịch tự do Google & AI DeepSeek tốc độ cao, tóm tắt tài liệu văn phòng, bảo mật 100%.</p>
+                    </div>
+                </div>
+
+                <!-- Sub-tab switcher -->
+                <div class="ai-subtabs">
+                    <button id="ai-subtab-translate" class="ai-subtab-btn active" onclick="switchAiSubTab('translate')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                        <span>Dịch Thuật Tự Do</span>
+                    </button>
+                    <button id="ai-subtab-summarize" class="ai-subtab-btn" onclick="switchAiSubTab('summarize')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        <span>Tóm Tắt Tài Liệu AI</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SECTION 1: DỊCH THUẬT VĂN BẢN (AI TRANSLATOR) -->
+            <div id="ai-panel-translate" class="ai-studio-panel">
+                <!-- Translation Toolbar Controls -->
+                <div class="ai-trans-controls">
+                    <div class="ai-trans-select-group">
+                        <label class="ai-ctrl-label">Nguồn:</label>
+                        <select id="ai-trans-src-lang" class="select-box select-sm">
+                            <option value="auto" selected>🌐 Tự động nhận diện</option>
+                            <option value="vi">Tiếng Việt</option>
+                            <option value="en">Tiếng Anh (English)</option>
+                            <option value="zh">Tiếng Trung (中文)</option>
+                            <option value="ja">Tiếng Nhật (日本語)</option>
+                            <option value="ko">Tiếng Hàn (한국어)</option>
+                            <option value="fr">Tiếng Pháp (Français)</option>
+                            <option value="de">Tiếng Đức (Deutsch)</option>
+                            <option value="ru">Tiếng Nga (Русский)</option>
+                            <option value="es">Tiếng TBN (Español)</option>
+                        </select>
+                    </div>
+
+                    <button type="button" class="btn-swap-lang" onclick="swapAiLanguages()" title="Hoán đổi ngôn ngữ">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                    </button>
+
+                    <div class="ai-trans-select-group">
+                        <label class="ai-ctrl-label">Đích:</label>
+                        <select id="ai-trans-tgt-lang" class="select-box select-sm">
+                            <option value="vi" selected>Tiếng Việt</option>
+                            <option value="en">Tiếng Anh (English)</option>
+                            <option value="zh">Tiếng Trung (中文)</option>
+                            <option value="ja">Tiếng Nhật (日本語)</option>
+                            <option value="ko">Tiếng Hàn (한국어)</option>
+                            <option value="fr">Tiếng Pháp (Français)</option>
+                            <option value="de">Tiếng Đức (Deutsch)</option>
+                            <option value="ru">Tiếng Nga (Русский)</option>
+                            <option value="es">Tiếng TBN (Español)</option>
+                        </select>
+                    </div>
+
+                    <div class="ai-trans-divider"></div>
+
+                    <div class="ai-trans-select-group">
+                        <label class="ai-ctrl-label">Động cơ:</label>
+                        <select id="ai-trans-engine-select" class="select-box select-sm" onchange="toggleAiKeyInput()">
+                            <option value="google" selected>⚡ Google Dịch (Siêu tốc, Miễn phí)</option>
+                            <option value="deepseek">🧠 DeepSeek AI (Văn phong chuyên sâu)</option>
+                        </select>
+                    </div>
+
+                    <div id="ai-deepseek-key-box" class="ai-key-box hidden">
+                        <input type="password" id="ai-deepseek-key" class="input-text input-sm" placeholder="Nhập DeepSeek API Key..." />
+                        <button type="button" onclick="saveAiDeepSeekKey()" class="btn-secondary btn-xs">Lưu</button>
+                    </div>
+                </div>
+
+                <!-- Side-by-Side Dual Text Editor -->
+                <div class="ai-split-editor">
+                    <!-- Left: Source Text Box -->
+                    <div class="ai-editor-box">
+                        <div class="ai-editor-top">
+                            <span class="ai-editor-label">Văn bản gốc</span>
+                            <div class="ai-editor-actions">
+                                <button type="button" class="btn-action-sm" onclick="pasteToAiInput()" title="Dán nội dung từ clipboard">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                                    Dán
+                                </button>
+                                <button type="button" class="btn-action-sm" onclick="document.getElementById('ai-file-load-input').click()" title="Đọc văn bản từ tệp tin">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
+                                    Nạp file
+                                </button>
+                                <input type="file" id="ai-file-load-input" class="hidden" accept=".txt,.docx,.doc,.pdf" onchange="handleAiFileToInput(event)" />
+                                <button type="button" class="btn-action-sm text-danger" onclick="clearAiInput()" title="Xóa toàn bộ">✕ Xóa</button>
+                            </div>
+                        </div>
+                        <textarea id="ai-input-text" class="ai-textarea" placeholder="Nhập hoặc dán đoạn văn bản cần dịch vào đây (hoặc bấm 'Nạp file' để lấy văn bản từ tệp .txt, .docx, .pdf)..." oninput="updateAiInputStats()"></textarea>
+                        <div class="ai-editor-footer">
+                            <span id="ai-input-stats" class="ai-stat-text">0 ký tự · 0 từ</span>
+                            <span class="ai-stat-hint">Gợi ý: Nhấn Ctrl + Enter để dịch ngay</span>
+                        </div>
+                    </div>
+
+                    <!-- Center Process Trigger -->
+                    <div class="ai-split-middle">
+                        <button type="button" id="btn-ai-translate" class="btn-primary btn-trans-trigger" onclick="runAiTranslation()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            <span id="txt-btn-ai-translate">DỊCH NGAY</span>
+                        </button>
+                    </div>
+
+                    <!-- Right: Target Result Box -->
+                    <div class="ai-editor-box">
+                        <div class="ai-editor-top">
+                            <span class="ai-editor-label">Bản dịch hoàn tất</span>
+                            <div class="ai-editor-actions">
+                                <button type="button" id="btn-copy-trans" class="btn-action-sm btn-copy-primary" onclick="copyAiTranslatedText()">
+                                    <svg id="icon-copy-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                    <span id="txt-copy-trans">📋 Sao chép nhanh</span>
+                                </button>
+                                <button type="button" class="btn-action-sm" onclick="downloadAiTranslatedText()" title="Tải về tệp .txt">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Lưu file
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="ai-output-text" class="ai-textarea" readonly placeholder="Bản dịch sẽ xuất hiện tại đây..."></textarea>
+                        <div class="ai-editor-footer">
+                            <span id="ai-output-stats" class="ai-stat-text">Sẵn sàng dịch</span>
+                            <span id="ai-engine-badge" class="ai-engine-pill">Google Translate</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: AI TÓM TẮT TÀI LIỆU (AI SUMMARIZER) -->
+            <div id="ai-panel-summarize" class="ai-studio-panel hidden">
+                <div class="ai-sum-layout">
+                    <!-- Left: Upload & Options (38%) -->
+                    <div class="ai-sum-sidebar">
+                        <!-- File Upload Card -->
+                        <div class="ai-card">
+                            <h3 class="ai-card-title">1. Chọn tệp tin cần tóm tắt</h3>
+                            <div id="ai-sum-dropzone" class="ai-sum-drop-area" onclick="document.getElementById('ai-sum-file-input').click()">
+                                <input type="file" id="ai-sum-file-input" class="hidden" accept=".pdf,.docx,.doc,.txt,.pptx" onchange="handleAiSumFileSelect(event)" />
+                                <div id="ai-sum-drop-prompt">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--text-muted);"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
+                                    <div style="font-weight:600; margin-top:8px; color:var(--text-primary);">Kéo thả tệp hoặc bấm để chọn</div>
+                                    <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Hỗ trợ: PDF, Word (.docx/.doc), Text (.txt), PowerPoint (.pptx)</div>
+                                </div>
+                                <div id="ai-sum-selected-info" class="hidden" style="text-align:left; width:100%;">
+                                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                                        <div style="font-weight:600; color:var(--primary); font-size:13px; word-break:break-all;" id="ai-sum-filename">ten_file.pdf</div>
+                                        <button type="button" onclick="event.stopPropagation(); clearAiSumFile();" style="border:none; background:transparent; color:#ef4444; font-size:12px; cursor:pointer; flex-shrink:0; margin-left:8px;">Đổi file</button>
+                                    </div>
+                                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;" id="ai-sum-filesize">0 KB</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Options Card -->
+                        <div class="ai-card" style="margin-top:16px;">
+                            <h3 class="ai-card-title">2. Cấu hình bản tóm tắt</h3>
+                            
+                            <div class="ai-form-group">
+                                <label class="form-label">Phong cách tóm tắt:</label>
+                                <select id="ai-sum-mode" class="select-box">
+                                    <option value="executive" selected>📋 Tóm tắt điều hành (Executive Summary)</option>
+                                    <option value="bullets">🎯 Gạch đầu dòng cốt lõi (Key Bullets)</option>
+                                    <option value="metrics">📊 Tổng hợp số liệu & kết luận (Actionable Metrics)</option>
+                                    <option value="full">📖 Báo cáo chuyên sâu toàn diện</option>
+                                </select>
+                            </div>
+
+                            <div class="ai-form-group" style="margin-top:12px;">
+                                <label class="form-label">Độ dài bản tóm tắt:</label>
+                                <select id="ai-sum-length" class="select-box">
+                                    <option value="short">⚡ Ngắn gọn & súc tích (~150 - 250 từ)</option>
+                                    <option value="medium" selected>📄 Tiêu chuẩn vừa phải (~350 - 500 từ)</option>
+                                    <option value="detailed">📑 Chi tiết & chuyên sâu (~700 - 1000 từ)</option>
+                                </select>
+                            </div>
+
+                            <div class="ai-form-group" style="margin-top:12px;">
+                                <label class="form-label">Động cơ trí tuệ nhân tạo:</label>
+                                <select id="ai-sum-engine" class="select-box" onchange="toggleAiSumKeyInput()">
+                                    <option value="deepseek" selected>🧠 DeepSeek AI Document Intelligence</option>
+                                    <option value="local">💻 Extractive Engine Cục Bộ (Offline)</option>
+                                </select>
+                            </div>
+
+                            <div id="ai-sum-key-group" class="ai-form-group" style="margin-top:12px;">
+                                <label class="form-label">Khóa API DeepSeek (Tùy chọn):</label>
+                                <div style="display:flex; gap:8px;">
+                                    <input type="password" id="ai-sum-key" class="input-text" placeholder="Tự động dùng key đã lưu..." />
+                                    <button type="button" class="btn-secondary btn-sm" onclick="saveAiSumKey()">Lưu</button>
+                                </div>
+                            </div>
+
+                            <button type="button" id="btn-run-ai-summarize" class="btn-primary btn-block" style="margin-top:18px; padding:12px;" onclick="runAiDocumentSummarize()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
+                                <span id="txt-run-ai-sum">TÓM TẮT TÀI LIỆU BẰNG AI</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Summary Results View (62%) -->
+                    <div class="ai-sum-content">
+                        <!-- Empty initial state -->
+                        <div id="ai-sum-empty-state" class="ai-sum-empty">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-muted);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            <h4 style="margin-top:12px; color:var(--text-primary); font-size:16px;">Chưa có bản tóm tắt</h4>
+                            <p style="color:var(--text-muted); font-size:13px; margin-top:4px;">Chọn tệp tin ở cột bên trái và nhấn 'Tóm tắt tài liệu bằng AI' để đọc hiểu văn bản.</p>
+                        </div>
+
+                        <!-- Progress indicator -->
+                        <div id="ai-sum-loading" class="ai-sum-loading hidden">
+                            <div class="spinner"></div>
+                            <h4 style="margin-top:12px; font-size:15px; color:var(--text-primary);">AI đang đọc hiểu và trích xuất ý chính...</h4>
+                            <p style="font-size:13px; color:var(--text-muted); margin-top:4px;">Quá trình phân tích ngữ nghĩa và tạo bản tóm tắt mất khoảng vài giây.</p>
+                        </div>
+
+                        <!-- Result Display Card -->
+                        <div id="ai-sum-result-box" class="ai-sum-result hidden">
+                            <!-- Metric badges row -->
+                            <div class="ai-metrics-row">
+                                <div class="ai-metric-card">
+                                    <span class="ai-metric-label">Tỷ lệ rút gọn</span>
+                                    <span id="metric-ratio" class="ai-metric-val text-success">-75%</span>
+                                </div>
+                                <div class="ai-metric-card">
+                                    <span class="ai-metric-label">Độ dài tóm tắt</span>
+                                    <span id="metric-words" class="ai-metric-val">350 từ</span>
+                                </div>
+                                <div class="ai-metric-card">
+                                    <span class="ai-metric-label">Tài liệu gốc</span>
+                                    <span id="metric-orig-words" class="ai-metric-val">1,420 từ</span>
+                                </div>
+                                <div class="ai-metric-card">
+                                    <span class="ai-metric-label">Thời gian</span>
+                                    <span id="metric-time" class="ai-metric-val">2.8s</span>
+                                </div>
+                            </div>
+
+                            <!-- Action buttons row: Quick Copy & Download Word -->
+                            <div class="ai-sum-actions-bar">
+                                <button type="button" id="btn-copy-summary" class="btn-primary" onclick="copyAiSummaryText()">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                    <span id="txt-copy-summary">📋 Sao Chép Bản Tóm Tắt</span>
+                                </button>
+                                <a id="btn-download-summary-docx" class="btn-secondary" href="#" download>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    <span>💾 Tải Về Tệp Word (.docx)</span>
+                                </a>
+                            </div>
+
+                            <!-- Formatted Summary Content Container -->
+                            <div id="ai-summary-content" class="ai-summary-article"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==================================================================
+         5. MSDS EHS COMMAND CENTER & CHEMICAL INVENTORY LIST (CIL)
+         Giao diện độc lập 100% cố định khung nhìn (Zero Page Scroll Bounce)
+         ================================================================== -->
+    <main id="msds-studio-view" class="msds-command-center msds-split-layout hidden">
+        <!-- CỘT TRÁI (LEFT PANEL): BẢNG ĐIỀU KHIỂN & NẠP TỆP MSDS AI (350px) -->
+        <aside id="msds-left-panel" class="msds-left-panel">
+            <div class="msds-sidebar-topbar">
+                <div class="msds-cmd-brand">
+                    <div class="msds-cmd-icon-box">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 2v7.31M14 2v7.31M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+                    </div>
+                    <div class="msds-cmd-brand-text">
+                        <h3 class="msds-cmd-title">MSDS &amp; Sổ CIL</h3>
+                        <span class="msds-cmd-pill">Chuẩn 16 Mục GHS</span>
+                    </div>
+                </div>
+                <button type="button" class="msds-btn-sidebar-collapse" onclick="toggleMsdsSidebar()" title="Thu gọn bảng điều khiển để mở rộng toàn màn hình bảng hóa chất">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
+                </button>
+            </div>
+
+            <div class="msds-sidebar-scroll-body">
+                <!-- 1. LIVE KPI METRICS (2x2 Grid) -->
+                <div class="msds-side-card">
+                    <div class="msds-side-card-title">
+                        <span>📊 THỐNG KÊ SỔ HÓA CHẤT</span>
+                    </div>
+                    <div class="msds-kpi-grid-2x2">
+                        <div class="msds-kpi-card msds-kpi-total" onclick="setMsdsGhsFilter('all')" title="Bấm để xem toàn bộ hóa chất">
+                            <div class="msds-kpi-num" id="msds-stat-total">0</div>
+                            <div class="msds-kpi-lbl">Tổng hóa chất</div>
+                        </div>
+                        <div class="msds-kpi-card msds-kpi-hazard" onclick="setMsdsGhsFilter('HAZARD')" title="Bấm để lọc các hóa chất có cảnh báo nguy hại GHS">
+                            <div class="msds-kpi-num" id="msds-stat-hazardous">0</div>
+                            <div class="msds-kpi-lbl">Nguy hại GHS</div>
+                        </div>
+                        <div class="msds-kpi-card msds-kpi-safe" onclick="setMsdsGhsFilter('NON DG')" title="Bấm để lọc các hóa chất an toàn NON DG">
+                            <div class="msds-kpi-num" id="msds-stat-nondg">0</div>
+                            <div class="msds-kpi-lbl">An toàn (NON DG)</div>
+                        </div>
+                        <div class="msds-kpi-card msds-kpi-supplier" title="Tổng số nhà sản xuất / nhà cung cấp">
+                            <div class="msds-kpi-num" id="msds-stat-suppliers">0</div>
+                            <div class="msds-kpi-lbl">Nhà cung cấp</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. SMART INTAKE & BATCH AI ANALYZER -->
+                <div class="msds-side-card" id="msds-intake-drawer">
+                    <div class="msds-side-card-title">
+                        <span>⚡ NẠP TỆP &amp; BÓC TÁCH AI</span>
+                    </div>
+                    <!-- Dropzone -->
+                    <div id="msds-upload-dropzone" class="msds-ribbon-dropzone" onclick="document.getElementById('msds-file-input').click()">
+                        <input type="file" id="msds-file-input" class="hidden" accept=".pdf,.docx,.doc,.txt" multiple onchange="handleMsdsFileSelect(event)" />
+                        <div id="msds-drop-prompt" class="msds-drop-prompt-row">
+                            <div class="msds-drop-icon-circle">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
+                            </div>
+                            <div class="msds-drop-text-col">
+                                <div class="msds-drop-main-txt">Kéo thả tệp hoặc <span style="color:#0284c7; text-decoration:underline;">chọn file</span></div>
+                                <div class="msds-drop-sub-txt">PDF scan, Word (.docx, .doc), Text</div>
+                            </div>
+                        </div>
+                        <div id="msds-selected-info" class="msds-selected-files-strip hidden" onclick="event.stopPropagation()">
+                            <div class="msds-selected-header">
+                                <span class="msds-selected-badge" id="msds-file-count">0 tệp đã chọn</span>
+                                <button type="button" class="msds-btn-add-more" onclick="document.getElementById('msds-file-input').click()">➕ Thêm</button>
+                                <button type="button" class="msds-btn-clear-all" onclick="clearMsdsFile()">✕ Xóa</button>
+                            </div>
+                            <div id="msds-file-list" class="msds-file-chips-row"></div>
+                        </div>
+                    </div>
+
+                    <!-- AI Engine Select -->
+                    <div class="msds-side-config-box">
+                        <label class="msds-side-lbl" for="msds-ai-engine">Động cơ bóc tách:</label>
+                        <select id="msds-ai-engine" class="select-box msds-engine-select">
+                            <option value="deepseek" selected>🧠 AI DeepSeek EHS (16 mục GHS)</option>
+                            <option value="heuristic">💻 Heuristic Cục Bộ (100% Offline)</option>
+                        </select>
+                    </div>
+
+                    <!-- Execute Button -->
+                    <button type="button" id="btn-run-msds-analyze" class="msds-btn-analyze-now w-full" onclick="runMsdsAnalysis()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        <span id="txt-run-msds-analyze">PHÂN TÍCH &amp; LƯU VÀO SỔ CIL</span>
+                    </button>
+                </div>
+
+                <!-- 3. ACTIONS TOOLS -->
+                <div class="msds-side-card">
+                    <div class="msds-side-card-title">
+                        <span>🛠️ TÁC VỤ &amp; XUẤT DỮ LIỆU</span>
+                    </div>
+                    <div class="msds-side-actions-grid">
+                        <button type="button" class="msds-btn-folder" onclick="openMsdsStorageFolder()" title="Mở thư mục lưu trữ toàn bộ tệp MSDS gốc trên máy tính">
+                            <span>📁 Kho File Gốc</span>
+                        </button>
+                        <button type="button" class="msds-btn-excel" onclick="exportCilExcel()" title="Xuất báo cáo Sổ Danh Mục Hóa Chất CIL ra file Excel (.xlsx)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span>Xuất Excel (.xlsx)</span>
+                        </button>
+                        <button type="button" id="btn-msds-gdrive-sync" class="msds-btn-gdrive" onclick="syncMsdsToGoogleDrive()" title="Đồng bộ Sổ CIL và file MSDS lên Google Drive">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
+                            <span id="txt-msds-gdrive-sync">☁️ Lưu Drive</span>
+                        </button>
+                        <button type="button" class="msds-btn-gdrive-open" onclick="openMsdsGoogleDriveFolder()" title="Mở thư mục lưu trữ MSDS trên Google Drive trực tuyến">
+                            <span>📂 Mở Drive</span>
+                        </button>
+                    </div>
+                    <div class="msds-sidebar-danger-zone" style="margin-top:12px; padding-top:10px; border-top:1px dashed #e2e8f0;">
+                        <button type="button" class="msds-btn-delete-all" onclick="openMsdsDeleteAllModal()" title="Xóa toàn bộ CSDL hóa chất CIL (yêu cầu mật khẩu quản trị: 270120)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                            <span>🗑️ Xóa Tất Cả CSDL</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CỘT PHẢI (RIGHT PANEL): SỔ HÓA CHẤT CIL WORKSPACE (flex: 1) -->
+        <section class="msds-right-panel">
+            <!-- ZONE 3: INSTANT SEARCH & QUICK GHS FILTER PILLS BAR -->
+            <div class="msds-filter-toolbar">
+                <div class="msds-toolbar-top-row">
+                    <!-- Toggle Sidebar Button (Shows when collapsed) -->
+                    <button type="button" id="btn-reopen-msds-sidebar" class="msds-btn-reopen-sidebar hidden" onclick="toggleMsdsSidebar()" title="Mở lại bảng điều khiển &amp; nạp tệp MSDS">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+                        <span>Bảng Điều Khiển</span>
+                    </button>
+
+                    <!-- Search Input with Clear Button -->
+                    <div class="msds-search-box">
+                        <svg class="msds-search-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="msds-search-input" class="msds-search-field" placeholder="Tra cứu tức thì theo Mã SP (FTU0005...), Tên hóa chất, Số CAS (67-64-1...), Nhà cung cấp..." oninput="handleMsdsSearch(this.value)" autocomplete="off" />
+                        <button type="button" id="msds-search-clear" class="msds-search-clear-btn hidden" onclick="clearMsdsSearchInput()" title="Xóa từ khóa tìm kiếm">✕</button>
+                    </div>
+
+                    <!-- Item Type Segmented Filter: Tất cả | Nguyên liệu (Raw) | Thành phẩm (Finished) -->
+                    <div class="msds-item-type-segment" id="msds-item-type-filter">
+                        <button type="button" class="msds-type-pill active" data-type="all" onclick="setMsdsItemTypeFilter('all')">
+                            <span>Tất cả</span>
+                        </button>
+                        <button type="button" class="msds-type-pill" data-type="raw_material" onclick="setMsdsItemTypeFilter('raw_material')" title="Lọc hóa chất nguyên liệu đơn chất">
+                            <span>🧪 Nguyên liệu (Raw)</span>
+                        </button>
+                        <button type="button" class="msds-type-pill" data-type="finished_product" onclick="setMsdsItemTypeFilter('finished_product')" title="Lọc sản phẩm thành phẩm pha chế">
+                            <span>🏷️ Thành phẩm (Finished)</span>
+                        </button>
+                    </div>
+
+                    <!-- Right Status & Refresh -->
+                    <div class="msds-toolbar-right">
+                        <span id="msds-showing-count" class="msds-showing-badge">0 hóa chất</span>
+                        <button type="button" class="msds-btn-refresh" onclick="loadMsdsChemicalsList()" title="Làm mới dữ liệu từ CSDL">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+                            <span>Làm mới</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick 1-Click GHS Filter Pills -->
+                <div class="msds-ghs-pills" id="msds-ghs-filter-pills">
+                    <button type="button" class="msds-filter-pill active" data-ghs="all" onclick="setMsdsGhsFilter('all')">Tất cả</button>
+                    <button type="button" class="msds-filter-pill pill-nondg" data-ghs="NON DG" onclick="setMsdsGhsFilter('NON DG')">✅ NON DG</button>
+                    <button type="button" class="msds-filter-pill" data-ghs="GHS02" onclick="setMsdsGhsFilter('GHS02')">🔥 Dễ cháy (GHS02)</button>
+                    <button type="button" class="msds-filter-pill" data-ghs="GHS05" onclick="setMsdsGhsFilter('GHS05')">🧪 Ăn mòn (GHS05)</button>
+                    <button type="button" class="msds-filter-pill" data-ghs="GHS06" onclick="setMsdsGhsFilter('GHS06')">☠️ Độc cấp (GHS06)</button>
+                    <button type="button" class="msds-filter-pill" data-ghs="GHS07" onclick="setMsdsGhsFilter('GHS07')">⚠️ Kích ứng (GHS07)</button>
+                    <button type="button" class="msds-filter-pill" data-ghs="GHS08" onclick="setMsdsGhsFilter('GHS08')">🫁 Sức khỏe (GHS08)</button>
+                    <button type="button" class="msds-filter-pill" data-ghs="GHS09" onclick="setMsdsGhsFilter('GHS09')">🐟 Môi trường (GHS09)</button>
+                </div>
+            </div>
+
+            <!-- BATCH ACTION BAR (Chế độ chọn nhiều để xóa) -->
+            <div id="msds-batch-action-bar" class="msds-batch-action-bar hidden">
+                <div class="msds-batch-left">
+                    <div class="msds-batch-check-indicator">✓</div>
+                    <span class="msds-batch-text">Đã chọn: <b id="msds-selected-count">0</b> hóa chất</span>
+                    <button type="button" class="msds-btn-batch-select-all" onclick="toggleSelectAllFiltered(true)">Chọn toàn bộ mục đang lọc</button>
+                </div>
+                <div class="msds-batch-right">
+                    <button type="button" class="msds-btn-batch-delete" onclick="deleteSelectedMsdsBatch()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                        <span>Xóa <span id="msds-batch-del-num">0</span> mục đã chọn</span>
+                    </button>
+                    <button type="button" class="msds-btn-batch-cancel" onclick="clearMsdsSelection()">
+                        ✕ Bỏ chọn
+                    </button>
+                </div>
+            </div>
+
+            <!-- ZONE 4: DEDICATED FULL-WIDTH SCROLLABLE TABLE VIEWPORT -->
+            <div class="msds-workspace-body">
+                <!-- Loading State Overlay -->
+                <div id="msds-loading" class="msds-loading-panel hidden">
+                    <div class="spinner"></div>
+                    <h4 style="margin-top:14px; font-size:16px; font-weight:700; color:#0f172a;">AI đang bóc tách 16 mục GHS &amp; kiểm định mã nguy hại Phần 2...</h4>
+                    <p style="font-size:13px; color:#64748b; margin-top:4px;">Hệ thống đang thẩm định số CAS, phân loại GHS / NON DG và lưu trữ vào CSDL CIL cục bộ.</p>
+                </div>
+
+                <!-- Table Container -->
+                <div id="msds-inventory-container" class="msds-table-card">
+                    <div id="msds-table-scroll-area" class="msds-table-scroll-viewport">
+                        <table class="msds-modern-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:38px; text-align:center;">
+                                        <input type="checkbox" id="msds-select-all" class="msds-th-checkbox" onchange="toggleSelectAllMsds(this.checked)" title="Chọn / Bỏ chọn tất cả hóa chất đang hiển thị" />
+                                    </th>
+                                    <th style="width:48px; text-align:center;">STT</th>
+                                    <th style="width:130px;">Mã SP / MSDS</th>
+                                    <th style="min-width:240px;">Tên Hóa Chất &amp; Công Dụng</th>
+                                    <th style="width:135px;">Số CAS Chính</th>
+                                    <th style="width:200px;">Nhà Cung Cấp / Sản Xuất</th>
+                                    <th style="min-width:200px;">Phân Loại Mối Nguy GHS (Phần 2)</th>
+                                    <th style="width:145px; text-align:center;">Hồ Sơ MSDS Gốc</th>
+                                    <th style="width:170px; text-align:center;">Thao Tác Nhanh</th>
+                                </tr>
+                            </thead>
+                            <tbody id="msds-table-body">
+                                <!-- Rendered dynamically -->
+                            </tbody>
+                        </table>
+                        <div id="msds-table-empty" class="msds-empty-state hidden">
+                            <div class="msds-empty-icon">🧪</div>
+                            <div class="msds-empty-title">Chưa có hóa chất nào khớp với bộ lọc hiện tại</div>
+                            <div class="msds-empty-sub">Hãy kéo thả tệp MSDS / SDS vào khung nạp ở cột bên trái hoặc thử từ khóa tìm kiếm khác.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 7. MODAL THẺ AN TOÀN KHẨN CẤP MSDS -->
+    <div id="msds-safety-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.6); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fff; border-radius:12px; max-width:850px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); border:1px solid #cbd5e1;">
+            <div style="background:#1B365D; color:#fff; padding:16px 20px; border-radius:12px 12px 0 0; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h3 id="modal-card-title" style="margin:0; font-size:17px; font-weight:700;">THẺ AN TOÀN HÓA CHẤT KHẨN CẤP</h3>
+                    <div id="modal-card-subtitle" style="font-size:12px; color:#cbd5e1; margin-top:2px;">Mã SP / MSDS: FTU0005 | CAS: 67-64-1</div>
+                </div>
+                <button type="button" onclick="closeMsdsSafetyModal()" style="border:none; background:transparent; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px;">✕</button>
+            </div>
+            <div id="modal-card-body" style="padding:20px;">
+                <!-- Dynamically populated -->
+            </div>
+            <div style="background:#f8fafc; padding:12px 20px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; border-radius:0 0 12px 12px;">
+                <button type="button" class="btn-secondary" onclick="closeMsdsSafetyModal()">Đóng</button>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <a id="modal-btn-download-original" class="btn-secondary" href="#" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; font-weight:700; color:#1d4ed8; border-color:#bfdbfe; background:#eff6ff;">
+                        <span>📥 Tải File MSDS Gốc</span>
+                    </a>
+                    <a id="modal-btn-download-word" class="btn-primary" href="#" target="_blank" style="background:#1B365D; text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:8px 16px;">
+                        <span>📄 Tải Thẻ Word (.docx)</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. MODAL CẢNH BÁO PHÁT HIỆN TRÙNG LẶP MÃ SẢN PHẨM / MSDS -->
+    <div id="msds-duplicate-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.65); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fff; border-radius:12px; max-width:680px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,0.3); border:1px solid #f59e0b;">
+            <div style="background:#b45309; color:#fff; padding:16px 20px; border-radius:12px 12px 0 0; display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:22px;">⚠️</span>
+                    <div>
+                        <h3 id="dup-modal-title" style="margin:0; font-size:16px; font-weight:700;">PHÁT HIỆN TRÙNG LẶP MÃ SẢN PHẨM / MSDS</h3>
+                        <div id="dup-modal-subtitle" style="font-size:12px; color:#fef3c7; margin-top:2px;">Mã hóa chất này đã tồn tại trong CSDL CIL. Vui lòng chọn phương thức xử lý!</div>
+                    </div>
+                </div>
+                <button type="button" onclick="closeMsdsDuplicateModal()" style="border:none; background:transparent; color:#fff; font-size:20px; cursor:pointer; padding:4px 8px;">✕</button>
+            </div>
+
+            <div style="padding:20px;">
+                <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px; color:#92400e; line-height:1.5;">
+                    Hệ thống phát hiện Mã sản phẩm / Mã MSDS <b id="dup-code-highlight" style="font-family:monospace; font-size:14px; background:#fef3c7; padding:2px 6px; border-radius:4px; color:#b45309;">FTU0005</b> đã được lưu trước đó trong Sổ Danh Mục Hóa Chất (CIL). Bạn muốn <b>cập nhật ghi đè</b> lên mã hiện tại hay <b>lưu thành mã mới</b>?
+                </div>
+
+                <!-- So sánh 2 bản ghi -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;">
+                    <!-- Bản đang lưu trong CSDL -->
+                    <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px 14px;">
+                        <div style="font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; margin-bottom:8px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
+                            📌 Bản đang lưu trong CSDL
+                        </div>
+                        <div id="dup-existing-details" style="font-size:12.5px; color:#1e293b; line-height:1.6;"></div>
+                    </div>
+
+                    <!-- Bản mới vừa phân tích -->
+                    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:12px 14px;">
+                        <div style="font-size:12px; font-weight:700; color:#166534; text-transform:uppercase; margin-bottom:8px; border-bottom:1px solid #bbf7d0; padding-bottom:6px;">
+                            ✨ Bản MSDS mới vừa phân tích
+                        </div>
+                        <div id="dup-new-details" style="font-size:12.5px; color:#1e293b; line-height:1.6;"></div>
+                    </div>
+                </div>
+
+                <!-- Lựa chọn 1: Ghi đè -->
+                <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                    <div>
+                        <div style="font-weight:700; font-size:13.5px; color:#1e40af;">1. Ghi đè / Cập nhật vào mã hiện tại</div>
+                        <div style="font-size:12px; color:#475569; margin-top:2px;">Cập nhật toàn bộ dữ liệu MSDS mới nhất vào mã <b id="dup-overwrite-code-lbl">FTU0005</b></div>
+                    </div>
+                    <button type="button" id="btn-dup-overwrite" class="btn-primary" style="background:#2563eb; border-color:#2563eb; padding:8px 16px; font-weight:700; font-size:12.5px; white-space:nowrap;" onclick="confirmMsdsDuplicateAction('overwrite')">
+                        🔄 Ghi đè mã cũ
+                    </button>
+                </div>
+
+                <!-- Lựa chọn 2: Lưu thành mã mới -->
+                <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px 16px;">
+                    <div style="font-weight:700; font-size:13.5px; color:#0f172a;">2. Lưu thành Mã Sản Phẩm / MSDS mới (Giữ nguyên bản cũ)</div>
+                    <div style="font-size:12px; color:#64748b; margin-top:2px; margin-bottom:8px;">Nhập mã định danh mới để lưu riêng biệt cả 2 phiên bản:</div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="text" id="dup-new-code-input" class="input-text" placeholder="Nhập mã mới (vd: FTU0005-V2)..." style="flex:1; font-family:monospace; font-weight:700; font-size:13px; text-transform:uppercase;" />
+                        <button type="button" id="btn-dup-save-new" class="btn-primary" style="background:#0F5C78; border-color:#0F5C78; padding:8px 16px; font-weight:700; font-size:12.5px; white-space:nowrap;" onclick="confirmMsdsDuplicateAction('new_code')">
+                            ➕ Lưu mã mới
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background:#f8fafc; padding:12px 20px; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end; border-radius:0 0 12px 12px;">
+                <button type="button" class="btn-secondary" onclick="closeMsdsDuplicateModal()">❌ Hủy bỏ (Không lưu)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. MODAL XÁC NHẬN XÓA TOÀN BỘ CSDL CIL (MẬT KHẨU: 270120) -->
+    <div id="msds-delete-all-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.72); backdrop-filter:blur(4px); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fff; border-radius:16px; max-width:480px; width:100%; box-shadow:0 25px 50px -12px rgba(220,38,38,0.35); border:1px solid #fecaca; overflow:hidden;">
+            <div style="background:linear-gradient(135deg, #ef4444, #b91c1c); color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; background:rgba(255,255,255,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:16px; font-weight:800; letter-spacing:0.3px;">XÓA TOÀN BỘ CƠ SỞ DỮ LIỆU CIL</h3>
+                        <div style="font-size:12px; color:#fee2e2; margin-top:2px;">Yêu cầu mật khẩu Quản trị viên tối cao</div>
+                    </div>
+                </div>
+                <button type="button" onclick="closeMsdsDeleteAllModal()" style="border:none; background:transparent; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+            </div>
+            <div style="padding:22px;">
+                <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:12px 14px; margin-bottom:18px; display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:20px; line-height:1.2;">🚨</span>
+                    <div style="font-size:13px; color:#991b1b; line-height:1.5;">
+                        <b>CẢNH BÁO BẢO MẬT:</b><br/>
+                        Hành động này sẽ <b>xóa sạch vĩnh viễn toàn bộ</b> danh mục hóa chất CIL, bảng thành phần CAS và phân loại 16 mục GHS. Thao tác <b>không thể hoàn tác</b>!
+                    </div>
+                </div>
+                <div style="margin-bottom:14px;">
+                    <label for="msds-delete-all-pwd" style="display:block; font-size:13px; font-weight:700; color:#334155; margin-bottom:6px;">
+                        Nhập mật khẩu quản trị để xác nhận (270120):
+                    </label>
+                    <div style="position:relative;">
+                        <input type="password" id="msds-delete-all-pwd" class="input-text w-full" placeholder="Nhập mật khẩu quản trị..." autocomplete="off" onkeydown="if(event.key==='Enter') executeDeleteAllMsds()" style="width:100%; box-sizing:border-box; padding:11px 14px; font-size:15px; border:2px solid #cbd5e1; border-radius:8px; outline:none;" />
+                    </div>
+                    <div id="msds-delete-all-err" class="hidden" style="color:#dc2626; font-size:12.5px; font-weight:600; margin-top:8px; display:flex; align-items:center; gap:6px;">
+                        <span>❌</span> <span id="msds-delete-all-err-txt">Mật khẩu xác nhận không chính xác!</span>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                    <button type="button" class="btn-secondary" onclick="closeMsdsDeleteAllModal()" style="padding:9px 16px; font-size:13px; font-weight:600;">
+                        Hủy Bỏ
+                    </button>
+                    <button type="button" id="btn-confirm-delete-all" class="btn-primary" onclick="executeDeleteAllMsds()" style="background:linear-gradient(135deg, #ef4444, #dc2626); border-color:#dc2626; padding:9px 18px; font-size:13px; font-weight:700; box-shadow:0 4px 12px rgba(239,68,68,0.35);">
+                        🗑️ Xác Nhận Xóa Sạch CSDL
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 10. MODAL QUẢN LÝ DANH SÁCH BÁO CÁO HSE ĐÃ LƯU & SAO CHÉP CẢI THIỆN -->
+    <div id="hse-reports-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.68); backdrop-filter:blur(4px); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fff; border-radius:16px; max-width:980px; width:100%; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(15,23,42,0.3); border:1px solid #cbd5e1; overflow:hidden;">
+            <!-- Modal Header -->
+            <div style="background:linear-gradient(135deg, #1e3a8a, #0f172a); color:#fff; padding:16px 22px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:38px; height:38px; background:rgba(255,255,255,0.15); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px;">
+                        📋
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:17px; font-weight:800; letter-spacing:0.3px;">DANH SÁCH BÁO CÁO HSE ĐÃ LƯU</h3>
+                        <div style="font-size:12px; color:#cbd5e1; margin-top:2px;">
+                            Quản lý hồ sơ an toàn · Sao chép sang Phục Tra Cải Thiện (整改复查) · Lưu trực tiếp Google Drive
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <a href="https://drive.google.com/drive/u/0/my-drive" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:rgba(59,130,246,0.25); border:1px solid rgba(147,197,253,0.5); color:#93c5fd; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none;" title="Mở thư mục Google Drive trực tuyến">
+                        ☁️ Google Drive
+                    </a>
+                    <button type="button" onclick="closeHseReportsModal()" style="border:none; background:transparent; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+                </div>
+            </div>
+
+            <!-- Modal Filter Bar -->
+            <div style="padding:14px 22px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:260px;">
+                    <div style="position:relative; flex:1;">
+                        <input type="text" id="hse-search-reports-input" placeholder="Tìm theo ngày, tiêu đề, mã báo cáo..." oninput="filterHseReportsList(this.value)" style="width:100%; box-sizing:border-box; padding:8px 12px 8px 32px; font-size:13px; border:1px solid #cbd5e1; border-radius:8px; outline:none;" />
+                        <span style="position:absolute; left:10px; top:8px; color:#94a3b8; font-size:13px;">🔍</span>
+                    </div>
+                    <select id="hse-filter-report-type" onchange="filterHseReportsList()" style="padding:8px 12px; font-size:13px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; outline:none; font-weight:600; color:#334155;">
+                        <option value="all">Tất cả loại báo cáo</option>
+                        <option value="inspection">📋 Báo cáo kiểm tra hiện trường</option>
+                        <option value="improvement">🛠️ Báo cáo phục tra cải thiện</option>
+                    </select>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span id="hse-reports-modal-count" style="font-size:12.5px; font-weight:700; color:#64748b;">0 báo cáo</span>
+                    <button type="button" onclick="loadHseReportsList()" style="display:inline-flex; align-items:center; gap:4px; padding:6px 12px; font-size:12px; font-weight:700; border:1px solid #cbd5e1; background:#fff; border-radius:6px; cursor:pointer; color:#0f172a;">
+                        🔄 Làm mới
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body: Scrollable Table View -->
+            <div id="hse-reports-modal-body" style="padding:18px 22px; overflow-y:auto; flex:1; min-height:280px;">
+                <!-- Dynamically populated -->
+            </div>
+
+            <!-- Modal Footer -->
+            <div style="padding:12px 22px; background:#f8fafc; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div style="font-size:12px; color:#64748b; display:flex; align-items:center; gap:6px;">
+                    <span>📁 Vị trí lưu:</span> <code style="background:#e2e8f0; padding:2px 6px; border-radius:4px; font-size:11.5px; color:#1e293b;">data/hse_reports &amp; G:\Drive của tôi\HSE_BaoCao</code>
+                </div>
+                <button type="button" onclick="closeHseReportsModal()" class="btn-secondary" style="padding:8px 18px; font-size:13px; font-weight:600;">
+                    Đóng
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- HSE REPORT STUDIO WORKSPACE (#hse-studio-view)                -->
+    <!-- ============================================================ -->
+    <main id="hse-studio-view" class="hse-studio-container hidden">
+        <!-- Sticky Topbar -->
+        <header class="hse-topbar">
+            <div class="hse-topbar-brand">
+                <img src="icons/hse_avatar.jpg" alt="Avatar HSE" />
+                <div class="hse-topbar-title">
+                    <h2>HSE REPORT STUDIO · ZHAN CHEN</h2>
+                    <span>Nhật ký kiểm tra an toàn & Báo cáo phục tra cải thiện song ngữ</span>
+                </div>
+            </div>
+
+            <!-- Mode Selector Switch -->
+            <div class="hse-mode-toggle" id="hse-mode-toggle">
+                <button type="button" class="hse-mode-pill active" data-mode="inspection" title="Lập báo cáo kiểm tra hiện trường hàng tháng">
+                    📋 Kiểm tra hiện trường
+                </button>
+                <button type="button" class="hse-mode-pill" data-mode="improvement" title="Lập biên bản phục tra xem các mục đã cải thiện hay chưa">
+                    🛠️ Báo cáo cải thiện (整改复查)
+                </button>
+            </div>
+
+            <!-- Top Actions -->
+            <div class="hse-topbar-actions">
+                <button type="button" class="hse-btn hse-btn-save" id="hse-save-report-btn" title="Lưu báo cáo vào hệ thống và tự động lưu trực tiếp trên Google Drive" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; border: none; box-shadow: 0 2px 6px rgba(16,185,129,0.3); display: inline-flex; align-items: center; gap: 6px;">
+                    💾 Lưu Báo Cáo
+                </button>
+                <button type="button" class="hse-btn hse-btn-reports-list" id="hse-list-reports-btn" title="Xem danh sách báo cáo đã lưu và chọn sao chép sang Báo cáo Cải thiện" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-weight: 700; border: none; box-shadow: 0 2px 6px rgba(37,99,235,0.3); display: inline-flex; align-items: center; gap: 6px;">
+                    📋 Danh Sách Báo Cáo <span id="hse-reports-count-badge" style="background: #ffffff; color: #1d4ed8; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 800;">0</span>
+                </button>
+                <button type="button" class="hse-btn hse-btn-gdrive" id="hse-gdrive-open-btn" onclick="openHseGoogleDriveFolder()" title="Mở thư mục lưu trữ Google Drive (G:\Drive của tôi\HSE_BaoCao)" style="border-color: #60a5fa; color: #1d4ed8; font-weight: 700; background: #eff6ff;">
+                    ☁️ Google Drive
+                </button>
+                <button type="button" class="hse-btn hse-btn-outline" id="hse-open-folder-btn" title="Mở thư mục xuất báo cáo cục bộ">📂 Mở thư mục</button>
+                <button type="button" class="hse-btn hse-btn-outline" id="hse-export-json-btn" title="Xuất dữ liệu dự phòng JSON">📥 Xuất JSON</button>
+                <label class="hse-btn hse-btn-outline" title="Nhập dữ liệu từ file JSON" style="cursor: pointer; margin-bottom: 0;">
+                    📤 Nhập JSON
+                    <input type="file" id="hse-import-json-input" accept=".json" style="display: none;" />
+                </label>
+                <label class="hse-btn hse-btn-secondary" title="Nhập từ file Word (.docx) cũ để tự động chuyển sang chế độ Phục tra Cải thiện" style="cursor: pointer; margin-bottom: 0;">
+                    📄 Nhập Word cũ (.docx)
+                    <input type="file" id="hse-import-docx-input" accept=".docx" style="display: none;" />
+                </label>
+                <button type="button" class="hse-btn hse-btn-primary" id="hse-export-word-btn" title="Xuất tài liệu Word (.docx) chuẩn A4">
+                    Xuất file Word (.docx)
+                </button>
+            </div>
+        </header>
+
+        <!-- 2-Column Studio Layout -->
+        <div class="hse-workspace">
+            <!-- Left Column: Controls & Forms -->
+            <div class="hse-controls-col">
+                <!-- Step Navigation -->
+                <nav class="hse-step-nav" aria-label="Các bước tác nghiệp">
+                    <button type="button" class="hse-step-btn active" data-target="hse-meta-panel">
+                        <span>1</span> Thông tin chung
+                    </button>
+                    <button type="button" class="hse-step-btn" data-target="hse-checklist-panel">
+                        <span>2</span> Checklist 26 mục
+                    </button>
+                    <button type="button" class="hse-step-btn" data-target="hse-findings-panel">
+                        <span>3</span> Hình ảnh vấn đề
+                    </button>
+                </nav>
+
+                <!-- SECTION 1: METADATA -->
+                <section class="hse-panel" id="hse-meta-panel">
+                    <div class="hse-panel-head">
+                        <div class="hse-panel-title-group">
+                            <span class="hse-panel-kicker">THÔNG TIN ĐỢT KIỂM TRA</span>
+                            <h3>Thông tin biên bản & đoàn kiểm tra</h3>
+                        </div>
+                        <div class="hse-status-indicator" id="hse-save-status">
+                            <span class="hse-status-dot"></span> Tự động lưu IndexedDB
+                        </div>
+                    </div>
+
+                    <div class="hse-form-grid">
+                        <label class="hse-label">
+                            Ngày kiểm tra / phục tra *
+                            <input type="date" id="hse-inspection-date" class="hse-input" />
+                        </label>
+                        <label class="hse-label">
+                            Người kiểm tra / Ban an toàn *
+                            <input type="text" id="hse-inspectors" class="hse-input" placeholder="Ví dụ: Ban HSE - Nguyễn Văn A, Trần Văn B" value="Ban HSE - ZhanChen Safety Team" />
+                        </label>
+                    </div>
+                </section>
+
+                <!-- SECTION 2: CHECKLIST ACCORDION -->
+                <section class="hse-panel" id="hse-checklist-panel">
+                    <div class="hse-panel-head">
+                        <div class="hse-panel-title-group">
+                            <span class="hse-panel-kicker">CHECKLIST 26 HẠNG MỤC</span>
+                            <h3>Hạng mục kiểm tra tiêu chuẩn xưởng ZhanChen</h3>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="hse-status-indicator" id="hse-checklist-summary">0 không đạt</span>
+                            <button type="button" class="hse-btn hse-btn-secondary" id="hse-mark-all-pass-btn">✓ Đạt tất cả</button>
+                        </div>
+                    </div>
+
+                    <div class="hse-improvement-banner hidden" id="hse-improvement-banner">
+                        <div class="hse-imp-banner-info">
+                            <span class="hse-imp-icon">🛠️</span>
+                            <div>
+                                <strong>Đang ở chế độ Báo cáo cải thiện (整改复查):</strong>
+                                <p>Tích chọn ô "Đã phục tra cải thiện" đối với các vi phạm tháng trước đã khắc phục xong.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="hse-checklist-root" class="hse-checklist-root"></div>
+                </section>
+
+                <!-- SECTION 3: FINDINGS & PHOTOS -->
+                <section class="hse-panel" id="hse-findings-panel">
+                    <div class="hse-panel-head">
+                        <div class="hse-panel-title-group">
+                            <span class="hse-panel-kicker">BÁO CÁO HÌNH ẢNH</span>
+                            <h3>Vấn đề hiện trường & Tự động soạn thảo AI</h3>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="hse-btn hse-btn-secondary" id="hse-batch-ai-btn" title="Dùng DeepSeek AI đọc tất cả ảnh vi phạm">
+                                🐳 DeepSeek đọc tất cả ảnh
+                            </button>
+                            <button type="button" class="hse-btn hse-btn-primary" id="hse-add-finding-btn">
+                                + Thêm vấn đề
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Global AI Context Hint -->
+                    <div class="hse-global-hint">
+                        <div class="hse-global-hint-head">
+                            <span>🎯 Gợi ý chung cho toàn đợt kiểm tra (Bối cảnh cho AI):</span>
+                            <span>Tùy chọn · Dùng khi bấm "DeepSeek đọc tất cả ảnh"</span>
+                        </div>
+                        <input type="text" id="hse-global-ai-hint" class="hse-input" placeholder="Ví dụ: Kiểm tra an toàn xưởng sơn ZhanChen, tập trung PCCC, hóa chất nguy hiểm và lối thoát hiểm..." />
+                    </div>
+
+                    <!-- Findings Root Container -->
+                    <div id="hse-findings-root" class="hse-findings-list"></div>
+
+                    <!-- Empty Placeholder -->
+                    <div class="hse-dropzone" id="hse-findings-empty" style="padding: 30px; margin-top: 12px; cursor: default;">
+                        <span style="font-size: 32px; margin-bottom: 8px;">📸</span>
+                        <h4 style="margin: 0 0 6px;">Chưa có hình ảnh vấn đề hiện trường</h4>
+                        <p style="margin: 0 0 12px; font-size: 12.5px; color: #64748b;">Bấm nút bên dưới để thêm ghi nhận vi phạm và để DeepSeek AI tự động soạn thảo biên bản song ngữ.</p>
+                        <button type="button" class="hse-btn hse-btn-primary" id="hse-empty-add-btn">+ Thêm vấn đề đầu tiên</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Real-Time A4 Preview Canvas -->
+            <div class="hse-preview-col" id="hse-preview-viewport">
+                <div class="hse-preview-header">
+                    <div class="hse-segmented-tabs">
+                        <button type="button" class="hse-segmented-btn active" data-preview="findings">
+                            Trang hình ảnh (2 ảnh/trang)
+                        </button>
+                        <button type="button" class="hse-segmented-btn" data-preview="checklist">
+                            Bảng Checklist kiểm tra
+                        </button>
+                    </div>
+                    <span id="hse-page-summary" style="font-size: 11.5px; font-weight: 700; color: #475569;">Tổng 5 trang A4</span>
+                    <button type="button" class="hse-btn hse-btn-primary" id="hse-preview-export-btn" style="padding: 5px 12px; font-size: 11.5px;">
+                        Xuất Word
+                    </button>
+                </div>
+
+                <!-- Preview Papers Root -->
+                <div id="hse-preview-root"></div>
+            </div>
+        </div>
+
+        <!-- Floating DeepSeek HSE Wording Assistant Launcher -->
+        <button type="button" class="hse-assistant-launcher" id="hse-assistant-launcher" aria-label="Mở trợ lý câu chữ DeepSeek">
+            <span>🐳</span> Trợ lý câu chữ AI
+        </button>
+
+        <!-- Floating Assistant Panel -->
+        <aside class="hse-assistant-panel hidden" id="hse-writing-assistant" aria-label="Trợ lý câu chữ HSE">
+            <div class="hse-assistant-head">
+                <div>
+                    <span style="font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8;">DEEPSEEK AI ASSISTANT</span>
+                    <h4>Tinh chỉnh câu chữ HSE chuyên nghiệp</h4>
+                </div>
+                <button type="button" class="hse-assistant-close" id="hse-assistant-close-btn">×</button>
+            </div>
+            <div class="hse-assistant-body">
+                <p style="margin: 0; font-size: 12px; color: #475569; background: #eff6ff; padding: 10px; border-radius: 8px; border: 1px solid #bfdbfe;">
+                    Nhập ý ngắn gọn ghi nhận tại hiện trường. AI sẽ đề xuất 3 phương án chuẩn phong cách an toàn công nghiệp ZhanChen.
+                </p>
+                <label class="hse-label">
+                    <span>Ý ghi nhận của bạn:</span>
+                    <textarea id="hse-assistant-input" class="hse-textarea" placeholder="Ví dụ: thùng sơn để chắn lối lên cầu thang thoát hiểm..."></textarea>
+                </label>
+                <button type="button" class="hse-btn hse-btn-primary" id="hse-assistant-generate-btn" style="width: 100%; justify-content: center;">
+                    Tạo 3 lựa chọn
+                </button>
+                <div id="hse-assistant-options" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- ============================================================ -->
+    <!-- LEGAL CHEMICAL LOOKUP COMMAND CENTER (#legal-lookup-view)    -->
+    <!-- ============================================================ -->
+    <main id="legal-lookup-view" class="legal-command-center hidden">
+  <!-- Header Bar -->
+  <header class="legal-header">
+    <div class="legal-header-brand">
+      <div class="legal-header-icon">⚖️</div>
+      <div class="legal-header-titles">
+        <h1>
+          BẢNG ĐIỀU KHIỂN &amp; TRA CỨU PHÁP LÝ HÓA CHẤT
+          <span class="legal-status-dot" title="Hệ thống Engine Trực tuyến"></span>
+        </h1>
+        <p>
+          Hệ thống đối soát nghĩa vụ tuân thủ hóa chất theo Luật Hóa chất 69/2025/QH15, 
+          Nghị định 24/2026/NĐ-CP, Nghị định 28/2026/NĐ-CP và QCVN 01:2025/BYT.
+        </p>
+      </div>
+    </div>
+    <div class="legal-header-badges">
+      <span class="legal-header-tag">⚡ CSDL In-Memory &lt;1ms</span>
+      <span class="legal-header-tag">🛡️ Phân loại 5 Bậc</span>
+      <span class="legal-header-tag">📊 Đối soát CIL Tức thì</span>
+    </div>
+  </header>
+
+  <!-- Scope Note Disclaimer -->
+  <div class="legal-scope-note" id="legalScopeNote">
+    <span class="legal-scope-note-icon">ℹ️</span>
+    <span>Dữ liệu pháp lý được trích xuất nguyên trạng từ văn bản quy phạm pháp luật hiện hành. CAS chuẩn hóa phục vụ đối chiếu; CAS gốc luôn được lưu trữ song song.</span>
+  </div>
+
+  <!-- KPI Metric Summary Cards Grid -->
+  <section class="legal-kpi-grid">
+    <div class="legal-kpi-card" id="cardLegalTotal">
+      <div class="legal-kpi-icon-box">📚</div>
+      <div class="legal-kpi-content">
+        <strong id="legalTotalRecords">2.191</strong>
+        <span>Tổng Bản ghi Pháp lý</span>
+      </div>
+    </div>
+
+    <div class="legal-kpi-card" id="cardLegalCas">
+      <div class="legal-kpi-icon-box">🔬</div>
+      <div class="legal-kpi-content">
+        <strong id="legalUniqueCas">1.787</strong>
+        <span>Số CAS Quản lý Duy nhất</span>
+      </div>
+    </div>
+
+    <div class="legal-kpi-card" id="cardLegalResult">
+      <div class="legal-kpi-icon-box">📋</div>
+      <div class="legal-kpi-content">
+        <strong id="legalResultCount">0</strong>
+        <span>Kết quả Đang xem</span>
+      </div>
+    </div>
+
+    <div class="legal-kpi-card legal-kpi-match" id="cardLegalMatch">
+      <div class="legal-kpi-icon-box">🎯</div>
+      <div class="legal-kpi-content">
+        <strong id="legalMatchCount">—</strong>
+        <span>Dòng Trùng trong CIL SDS</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mode Switcher Pills -->
+  <div class="legal-mode-bar">
+    <div class="legal-mode-switch" role="group" aria-label="Chế độ xem danh mục pháp lý">
+      <button id="legalCatalogModeBtn" class="legal-mode-btn active" type="button">
+        📖 Toàn bộ danh mục pháp lý
+      </button>
+      <button id="legalMatchesModeBtn" class="legal-mode-btn" type="button">
+        🎯 Chỉ chất đang trùng trong CIL
+        <span class="legal-mode-counter" id="legalMatchesPillCount">—</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter & Search Toolbar -->
+  <section class="legal-toolbar">
+    <!-- Filter 1: Văn bản luật -->
+    <div class="legal-field">
+      <label for="legalSourceFilter">Văn bản Quy phạm</label>
+      <select id="legalSourceFilter">
+        <option value="">Tất cả văn bản (NĐ 24, NĐ 28, QCVN 01)</option>
+      </select>
+    </div>
+
+    <!-- Filter 2: Mục / Phụ lục -->
+    <div class="legal-field">
+      <label for="legalSectionFilter">Mục / Phụ lục Nghị định</label>
+      <select id="legalSectionFilter">
+        <option value="">Tất cả mục / phụ lục</option>
+      </select>
+    </div>
+
+    <!-- Filter 3: Phân nhóm chi tiết -->
+    <div class="legal-field" id="legalSubgroupField">
+      <label for="legalSubgroupFilter">Phân nhóm Chi tiết</label>
+      <select id="legalSubgroupFilter">
+        <option value="">Tất cả phân nhóm</option>
+      </select>
+    </div>
+
+    <!-- Filter 4: Phân loại hàng hóa (Nguyên liệu / Thành phẩm) -->
+    <div class="legal-field" id="legalItemTypeField">
+      <label for="legalItemTypeFilter">Loại Hàng Hóa</label>
+      <select id="legalItemTypeFilter">
+        <option value="">Tất cả hàng hóa</option>
+        <option value="raw_material">🧪 Nguyên liệu (Raw Material)</option>
+        <option value="finished_product">📦 Thành phẩm (Finished Product)</option>
+      </select>
+    </div>
+
+    <!-- Search Box with Clear Button -->
+    <div class="legal-field">
+      <label for="legalSearchInput">Tìm CAS, Tên chất, Mã HS, Công thức…</label>
+      <div class="legal-search-wrapper">
+        <span class="legal-search-icon">🔍</span>
+        <input 
+          id="legalSearchInput" 
+          type="search" 
+          placeholder="Ví dụ: 67-64-1 hoặc Axeton / Acetone…" 
+          autocomplete="off" 
+          spellcheck="false"
+        />
+        <button id="legalSearchClearBtn" class="legal-search-clear hidden" type="button" title="Xóa tìm kiếm">✕</button>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="legal-actions">
+      <button id="legalRefreshBtn" class="legal-btn legal-btn-secondary" type="button" title="Làm mới bảng và số liệu thống kê">
+        🔄 Làm mới
+      </button>
+      <button id="legalExportBtn" class="legal-btn legal-btn-primary" type="button" title="Xuất tệp báo cáo Excel đa bảng tính">
+        ⬇️ Xuất Excel (.xlsx)
+      </button>
+    </div>
+  </section>
+
+  <!-- Error / Alert Message Container -->
+  <div id="legalCatalogMessage" class="legal-message" role="status" aria-live="polite"></div>
+
+  <!-- Interactive Data Table Wrap (Sticky Header) -->
+  <div id="legalCatalogTable" class="legal-table-wrapper">
+    <div class="legal-state-box">
+      <div class="legal-spinner"></div>
+      <strong>Đang nạp dữ liệu pháp lý…</strong>
+      <p>Vui lòng chờ trong giây lát.</p>
+    </div>
+  </div>
+
+  <!-- Pagination Controls -->
+  <footer class="legal-pagination">
+    <div class="legal-page-info" id="legalPageInfo">
+      Trang <strong>1</strong> / 1 · Tổng <strong>0</strong> bản ghi
+    </div>
+    <div class="legal-pagination-nav">
+      <button id="legalPrevBtn" class="legal-btn-page" type="button" disabled>
+        ← Trang trước
+      </button>
+      <button id="legalNextBtn" class="legal-btn-page" type="button" disabled>
+        Trang sau →
+      </button>
+    </div>
+  </footer>
+</main>
+
+    <!-- 5. MINIMALIST FOOTER -->
+    <footer class="footer">
+        <div class="footer-container">
+            <p>© 2026 <b>TitanPDF Private Suite</b> — Hệ sinh thái xử lý tài liệu bảo mật nội bộ. 100% Offline & Tự do sử dụng.</p>
+        </div>
+    </footer>
+
+    <!-- 6. ULTRA-VIBRANT FULLSCREEN PROCESSING ANIMATION MODAL -->
+    <div id="processing-video-modal" class="processing-video-backdrop hidden" aria-hidden="true">
+        <div class="processing-video-card">
+            <!-- Animated circular glowing video frame -->
+            <div class="processing-video-frame">
+                <video id="processing-video-player" src="videos/processing_animation.mp4" poster="videos/processing_animation.gif" autoplay loop muted playsinline preload="auto"></video>
+            </div>
+
+            <!-- Title & Dynamic Subtitle -->
+            <div class="processing-text-wrapper">
+                <h3 class="processing-anim-title" id="processing-main-title">
+                    <span class="anim-rainbow-text">ĐANG XỬ LÝ TÀI LIỆU...</span>
+                </h3>
+                <p class="processing-anim-desc" id="processing-sub-status">
+                    Nhân viên văn phòng siêu cấp Vip Pro đang phân tích và tối ưu hóa tài liệu siêu tốc.
+                </p>
+            </div>
+
+            <!-- Dynamic Animated Rainbow Progress Bar -->
+            <div class="processing-progress-container">
+                <div class="processing-progress-bar" id="processing-progress-fill"></div>
+            </div>
+
+            <div class="processing-badges-row">
+                <span class="proc-badge proc-badge-offline">⚡ 100% CỤC BỘ</span>
+                <span class="proc-badge proc-badge-engine" id="proc-engine-badge">ĐỘNG CƠ TITAN-V9</span>
+                <span class="proc-badge proc-badge-safe">🛡️ ZERO TELEMETRY</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controller Scripts -->
+    <script src="app.js"></script>
+    <script src="vip_editor.js"></script>
+    <script src="ai_studio.js"></script>
+    <script src="hse_studio.js"></script>
+    <script src="legal_lookup.js"></script>
+</body>
+</html>

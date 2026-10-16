@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: titanpdf-hse
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    autoDeploy: true
+    healthCheckPath: /api/hse/health

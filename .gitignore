@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Binaries and archives
+*.exe
+*.zip
+cloudflared.exe
+mingit/
+bin/
+
+# Temporary / logs
+*.log
+tunnel_url.txt
+cloudflare.log
+scratch/
+output/
+uploads/
+tests/
+*.docx
+*.pdf
+!sample_5pages.pdf
+
+temp/
+
+
+# Secrets and credentials
+client_secret.json
+settings.json
+deploy_to_hf.py
+login_gcloud.bat
+*.key
+token.json
+.env*
+
+# Agents internal telemetry
+.agents/
+
+# Local run scripts
+CHAY_*.bat
+run_*.bat
+run_*.vbs

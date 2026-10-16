@@ -1,0 +1,28 @@
+steps:
+  # 1. Build Docker container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/titanpdf:latest', '.']
+
+  # 2. Push image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/titanpdf:latest']
+
+  # 3. Deploy container image to Google Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'titanpdf'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/titanpdf:latest'
+      - '--region'
+      - 'asia-southeast1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '1Gi'
+
+images:
+  - 'gcr.io/$PROJECT_ID/titanpdf:latest'
