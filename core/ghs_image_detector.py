@@ -285,6 +285,39 @@ class GHSImageDetector:
         return extracted
 
     @classmethod
+    def extract_label_ghs_images_from_doc_raw(cls, doc_path: str) -> List[bytes]:
+        """
+        Trích xuất trực tiếp các khối ảnh PNG/JPEG nhúng trong tệp nhị phân OLE2 .doc
+        hoàn toàn bằng Pure Python, không phụ thuộc Windows Word COM (chạy tốt trên Linux/Render).
+        """
+        try:
+            with open(doc_path, "rb") as f:
+                raw = f.read()
+            extracted = []
+            # Tìm kiếm chữ ký PNG (\x89PNG\r\n\x1a\n)
+            for m in re.finditer(b"\x89PNG\r\n\x1a\n", raw):
+                start = m.start()
+                end = raw.find(b"IEND", start)
+                if end != -1:
+                    end += 8  # IEND + 4 bytes CRC
+                    png_data = raw[start:end]
+                    if cls.is_ghs_diamond_image(png_data):
+                        extracted.append(png_data)
+            # Tìm kiếm chữ ký JPEG (\xff\xd8\xff)
+            for m in re.finditer(b"\xff\xd8\xff", raw):
+                start = m.start()
+                end = raw.find(b"\xff\xd9", start)
+                if end != -1:
+                    end += 2
+                    jpg_data = raw[start:end]
+                    if cls.is_ghs_diamond_image(jpg_data):
+                        extracted.append(jpg_data)
+            return extracted
+        except Exception as e:
+            print(f"[GHSImageDetector] Lỗi bóc tách ảnh nhị phân .doc: {e}")
+            return []
+
+    @classmethod
     def detect_ghs_pictograms_from_file(cls, file_path: str) -> List[str]:
         """
         Đọc và phân tích trực tiếp các hình đồ GHS có mặt trong tệp (.docx, .doc, .pdf).
@@ -298,18 +331,21 @@ class GHSImageDetector:
         if ext == ".docx":
             extracted_images = cls.extract_label_ghs_images_from_docx(file_path)
         elif ext == ".doc":
-            # Tệp Word .doc: Chuyển sang .docx tạm thời
-            temp_docx = str(p.parent / f"temp_ghs_{p.stem}.docx")
-            try:
-                from core.interlinear_translator import convert_doc_to_docx
-                conv_path = convert_doc_to_docx(file_path, temp_docx)
-                extracted_images = cls.extract_label_ghs_images_from_docx(conv_path)
+            # 1. Ưu tiên bóc tách trực tiếp bằng Pure Python từ luồng nhị phân OLE2 (tương thích 100% Linux/Render & Windows)
+            extracted_images = cls.extract_label_ghs_images_from_doc_raw(file_path)
+            # 2. Dự phòng chuyển sang .docx nếu có Word COM (chỉ áp dụng nếu bước 1 không có kết quả)
+            if not extracted_images:
+                temp_docx = str(p.parent / f"temp_ghs_{p.stem}.docx")
                 try:
-                    os.remove(conv_path)
-                except Exception:
-                    pass
-            except Exception as e:
-                print(f"[GHSImageDetector] Lỗi chuyển đổi .doc sang .docx: {e}")
+                    from core.interlinear_translator import convert_doc_to_docx
+                    conv_path = convert_doc_to_docx(file_path, temp_docx)
+                    extracted_images = cls.extract_label_ghs_images_from_docx(conv_path)
+                    try:
+                        os.remove(conv_path)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"[GHSImageDetector] Lỗi chuyển đổi .doc sang .docx: {e}")
         elif ext == ".pdf":
             extracted_images = cls.extract_label_ghs_images_from_pdf(file_path)
 

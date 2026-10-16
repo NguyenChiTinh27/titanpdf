@@ -1087,10 +1087,10 @@ class MSDSExtractorEngine:
         system_prompt = (
             "Bạn là chuyên gia phân tích an toàn hóa chất (EHS / MSDS Specialist) hàng đầu thế giới. "
             "Nhiệm vụ của bạn là đọc hiểu toàn văn bản MSDS/SDS được cung cấp và trích xuất dữ liệu chuẩn 16 mục GHS thành định dạng JSON hợp lệ duy nhất.\n"
-            "QUY TẮC PHÂN LOẠI GHS BẮT BUỘC (TUYỆT ĐỐI TUÂN THỦ):\n"
-            "1. Trường 'ghs_codes' và 'signal_word' CHỈ ĐƯỢC XÁC ĐỊNH DỰA TRÊN MỤC 2 (Nhận dạng đặc tính nguy hiểm / Section 2: Hazards Identification) của MSDS áp dụng cho SẢN PHẨM CHÍNH. TUYỆT ĐỐI KHÔNG suy diễn hoặc lấy nhầm mã GHS của từng chất phụ gia/thành phần ở Mục 3.\n"
-            "2. NẾU SẢN PHẨM CÓ TÍNH DỄ CHÁY (Flammable liquid/gas/solid, H220-H228, Dễ cháy, Điểm chớp cháy < 60°C), BẮT BUỘC PHẢI CÓ MÃ GHS02 TRONG 'ghs_codes'. TUYỆT ĐỐI KHÔNG TRẢ VỀ NON DG KHI SẢN PHẨM CÓ ĐẶC TÍNH DỄ CHÁY HOẶC NGUY HIỂM.\n"
-            "3. Chỉ gán các mã GHS (GHS01..GHS09) khi có bằng chứng rõ ràng (câu cảnh báo nguy cơ H-code, từ cảnh báo Danger/Warning, hoặc mô tả nguy hại chính thức ở Mục 2). TUYỆT ĐỐI KHÔNG TỰ BỊA ĐẶT CÁC MÃ GHS KHÔNG CÓ TRONG TÀI LIỆU (ví dụ không tự ý thêm GHS05, GHS06, GHS08 khi tài liệu chỉ có GHS02).\n"
+            "QUY TẮC BẮT BUỘC TỐI THƯỢNG (TUYỆT ĐỐI TUÂN THỦ THEO YÊU CẦU NGƯỜI DÙNG):\n"
+            "1. Trong file ở Mục 2 có hiển thị hình đồ GHS thì hiển thị lại đúng hình đồ cảnh báo GHS đó, TUYỆT ĐỐI KHÔNG HIỂN THỊ DƯ. Tuyệt đối không tự ý suy diễn hoặc gán thêm bất kỳ hình đồ nào khác từ câu chữ mô tả nguy cơ hay các phép thử phân loại (ví dụ: file ở Mục 2 chỉ có hình đồ ngọn lửa thì trường 'ghs_codes' CHỈ ĐƯỢC CHỨA ['GHS02'], TUYỆT ĐỐI KHÔNG hiển thị dư GHS05, GHS06, GHS07, GHS08).\n"
+            "2. Trường 'ghs_codes' và 'signal_word' CHỈ ĐƯỢC XÁC ĐỊNH DỰA TRÊN MỤC 2 (Nhận dạng đặc tính nguy hiểm / Section 2: Hazards Identification) của MSDS áp dụng cho SẢN PHẨM CHÍNH (dựa trên hàng Yếu tố nhãn / Hình đồ cảnh báo). TUYỆT ĐỐI KHÔNG suy diễn hoặc lấy nhầm mã GHS của từng chất phụ gia/thành phần ở Mục 3.\n"
+            "3. NẾU SẢN PHẨM CÓ TÍNH DỄ CHÁY (Flammable liquid/gas/solid, H220-H228, Dễ cháy, Điểm chớp cháy <= 60°C), BẮT BUỘC PHẢI CÓ MÃ GHS02 TRONG 'ghs_codes'. TUYỆT ĐỐI KHÔNG TRẢ VỀ NON DG KHI SẢN PHẨM CÓ ĐẶC TÍNH DỄ CHÁY HOẶC NGUY HIỂM.\n"
             "4. Nếu ở Mục 2 ghi rõ 'Không phải là chất hay hỗn hợp nguy hại', 'Not classified as hazardous', 'Not a hazardous substance or mixture', 'No symbol', và hoàn toàn không có bất kỳ mối nguy hại nào, BẮT BUỘC trả về: \"ghs_codes\": [\"NON DG\"] và \"signal_word\": \"NON DG\".\n"
             f"{ghs_visual_instruction}"
             "5. Toàn bộ các trường mô tả an toàn, tên tiếng Việt, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n"
@@ -1744,32 +1744,18 @@ class MSDSExtractorEngine:
                     valid_ai_ghs = [g for g in raw_ai_ghs if g in GHS_MAP and g != "NON DG"]
                     valid_heu_ghs = [g for g in raw_heu_ghs if g in GHS_MAP and g != "NON DG"]
 
-                    # Nếu tài liệu có đặc tính dễ cháy rõ ràng, bắt buộc bổ sung GHS02
-                    if is_doc_flammable:
-                        if "GHS02" not in valid_ai_ghs:
-                            valid_ai_ghs.append("GHS02")
-                        if "GHS02" not in valid_heu_ghs:
-                            valid_heu_ghs.append("GHS02")
+                    # Tuân thủ mệnh lệnh người dùng: "trong file ở mục 2 có hiển thị hình đồ GHS thì hiển thị lại đúng hình đồ cảnh báo GHS đó, không hiển thị Dư"
+                    if valid_ai_ghs:
+                        # Ưu tiên AI vì prompt AI đã được ràng buộc nghiêm ngặt theo đúng nhãn Mục 2, KHÔNG hiển thị dư
+                        selected_ghs = list(valid_ai_ghs)
+                    elif valid_heu_ghs:
+                        selected_ghs = list(valid_heu_ghs)
+                    else:
+                        selected_ghs = []
 
-                    # Khử triệt để "hình đồ từa lưa" (Cross-validation):
-                    # Chỉ giữ lại các mã GHS có căn cứ từ khóa cảnh báo cụ thể trong văn bản
-                    selected_ghs = []
-                    cand_ghs = list(dict.fromkeys(valid_ai_ghs + valid_heu_ghs))
-                    for g in cand_ghs:
-                        if g == "GHS02" and is_doc_flammable:
-                            selected_ghs.append(g)
-                        elif g == "GHS05" and (re.search(r"\b(?:corrosive|ăn\s+mòn|H314|H318|bỏng\s+da)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                            selected_ghs.append(g)
-                        elif g == "GHS06" and (re.search(r"\b(?:acute\s+tox|độc\s+cấp|H300|H301|H310|H330|H331|fatal)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                            selected_ghs.append(g)
-                        elif g == "GHS07" and (re.search(r"\b(?:irritan|kích\s+ứng|harmful|H302|H312|H315|H319|H335|H336)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                            selected_ghs.append(g)
-                        elif g == "GHS08" and (re.search(r"\b(?:aspiration|carcinogen|reproductive|nguy\s+hại\s+sức\s+khỏe|H304|H340|H350|H360|H370|H372)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                            selected_ghs.append(g)
-                        elif g == "GHS09" and (re.search(r"\b(?:aquatic|môi\s+trường|thủy\s+sinh|H400|H410|H411)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                            selected_ghs.append(g)
-                        elif g in ("GHS01", "GHS03", "GHS04") and (g in valid_heu_ghs or g in text.upper()):
-                            selected_ghs.append(g)
+                    # Nếu tài liệu có đặc tính dễ cháy rõ ràng, bắt buộc bổ sung GHS02 nếu chưa có
+                    if is_doc_flammable and "GHS02" not in selected_ghs:
+                        selected_ghs.append("GHS02")
 
                     if not selected_ghs:
                         if is_doc_flammable:
