@@ -570,16 +570,9 @@ def auth_qr_approve(
 
     ALLOWED_EMAIL = "ntc270120cm@gmail.com"
 
-    if sess.get("status") == "consumed":
-        return JSONResponse(status_code=400, content={"success": False, "message": "Phiên QR này đã được hoàn tất và không thể tái sử dụng."})
-
-    if sess.get("status") == "authenticated":
-        return {
-            "success": True,
-            "token": sess["token"],
-            "email": sess.get("email") or ALLOWED_EMAIL,
-            "message": "Phiên QR này đã được phê duyệt thành công trước đó."
-        }
+    # Multi-device & single-use guarantee: session cannot be re-approved once authenticated or consumed
+    if sess.get("status") in ["consumed", "authenticated"]:
+        return JSONResponse(status_code=400, content={"success": False, "message": "Phiên QR này đã được hoàn tất hoặc xác thực trước đó và không thể tái sử dụng."})
 
     # 1. Google OAuth Credential
     if credential:
@@ -594,6 +587,15 @@ def auth_qr_approve(
                 "1074976510569-vdgu3g3vumvd3fl4irtbhpgguau04qj8.apps.googleusercontent.com",
                 "1074976510569-fc2nu7ebe1k127fo882mso4fg27itcpd.apps.googleusercontent.com"
             }
+            try:
+                if os.path.exists(SETTINGS_FILE):
+                    with open(SETTINGS_FILE, "r", encoding="utf-8") as sf:
+                        s_cfg = json.load(sf)
+                        if s_cfg.get("google_client_id"):
+                            valid_client_ids.add(s_cfg["google_client_id"])
+            except Exception:
+                pass
+
             aud = data.get("aud", "")
             if aud not in valid_client_ids:
                 return JSONResponse(status_code=401, content={"success": False, "message": f"Client ID không khớp ({aud})"})
@@ -612,6 +614,9 @@ def auth_qr_approve(
                 "email": email,
                 "message": f"Đã xác thực thành công Google ({email})! Máy tính đã được mở khóa tự động."
             }
+        except urllib.error.HTTPError as he:
+            body = he.read().decode('utf-8', errors='ignore')
+            return JSONResponse(status_code=400, content={"success": False, "message": f"Lỗi xác thực Google: {body}"})
         except Exception as e:
             return JSONResponse(status_code=400, content={"success": False, "message": f"Lỗi xác thực Google: {str(e)}"})
 

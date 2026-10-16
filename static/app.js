@@ -3917,7 +3917,7 @@ function unlockGateUI(token) {
     const effectiveToken = token || "verified";
     try {
         sessionStorage.setItem("luv_auth_token", effectiveToken);
-        localStorage.setItem("luv_auth_token", effectiveToken);
+        localStorage.removeItem("luv_auth_token");
         localStorage.setItem("luv_owner_authorized", "ntc270120cm@gmail.com");
     } catch (e) {}
 
@@ -4026,7 +4026,7 @@ function showSecurityError(msg) {
 }
 
 async function lockApp() {
-    const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token");
+    const token = sessionStorage.getItem("luv_auth_token");
     if (token) {
         try {
             const formData = new FormData();
@@ -4035,24 +4035,31 @@ async function lockApp() {
         } catch (e) {}
     }
     lockGateUI();
+    if (typeof initQrAuth === "function") {
+        initQrAuth();
+    }
 }
 
 async function checkSecuritySession() {
     try {
-        const savedToken = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token");
+        localStorage.removeItem("luv_auth_token");
+        const savedToken = sessionStorage.getItem("luv_auth_token");
         const url = savedToken ? `/api/auth/status?token=${encodeURIComponent(savedToken)}` : `/api/auth/status`;
         const res = await fetch(url);
         if (res.ok) {
             const data = await res.json();
-            if (data && (data.authenticated === true || data.lock_enabled === false)) {
-                unlockGateUI(savedToken || "local_bypass");
+            if (data && data.authenticated === true && savedToken) {
+                unlockGateUI(savedToken);
                 return;
             }
         }
     } catch (err) {}
 
-    // MẶC ĐỊNH: BẮT BUỘC YÊU CẦU PASS NẾU CHƯA CÓ SESSION HỢP LỆ
+    // MẶC ĐỊNH: BẮT BUỘC YÊU CẦU ĐĂNG NHẬP MỖI LẦN TRUY CẬP MỚI
     lockGateUI();
+    if (typeof initQrAuth === "function") {
+        initQrAuth();
+    }
 }
 
 // -------------------------------------------------------------

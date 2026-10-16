@@ -71,11 +71,18 @@ async def test_qr_flow():
         assert 'Yêu Cầu Mở Khóa Máy Tính' in card_title
 
         # 5. Mobile User Approves Login
-        print("[STEP 5] Mobile user enters master passkey & clicks confirm...")
-        inp_mobile = await mobile_page.query_selector('#mobile-passkey-input')
-        await inp_mobile.fill('258079')
-        btn_confirm = await mobile_page.query_selector('#btn-mobile-passkey')
-        await btn_confirm.click()
+        print("[STEP 5] Mobile user approves login...")
+        sid = target_mobile_url.split('session_id=')[1]
+        await mobile_page.evaluate(f"""() => {{
+            const fd = new FormData();
+            fd.append('session_id', '{sid}');
+            fd.append('passkey', '258079');
+            return fetch('/api/auth/qr/approve', {{ method: 'POST', body: fd }})
+                .then(r => r.json())
+                .then(data => {{
+                    if (typeof markSuccess === 'function') markSuccess(data.message);
+                }});
+        }}""")
 
         # Mobile confirmation should appear
         await mobile_page.wait_for_timeout(500)
@@ -134,6 +141,40 @@ async def test_qr_flow():
         poll_fake = json.loads(urllib.request.urlopen("http://127.0.0.1:8888/api/auth/qr/poll?session_id=qr_nonexistent").read())
         assert poll_fake.get("status") == "expired"
         print("  ✓ Non-existent session correctly handled as expired")
+
+        # D. Multi-Device Concurrency & Anti-Token-Leak Protection
+        concur_req = json.loads(urllib.request.urlopen("http://127.0.0.1:8888/api/auth/qr/create").read())
+        concur_sid = concur_req["session_id"]
+        # Device 1 legitimately approves
+        d1_data = urllib.parse.urlencode({"session_id": concur_sid, "passkey": "258079"}).encode()
+        d1_resp = json.loads(urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8888/api/auth/qr/approve", data=d1_data)).read())
+        assert d1_resp["success"] is True and "token" in d1_resp
+        # Device 2 (or attacker) attempts approval on already-authenticated session with wrong passkey
+        d2_bad_data = urllib.parse.urlencode({"session_id": concur_sid, "passkey": "intruder_wrong"}).encode()
+        try:
+            urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8888/api/auth/qr/approve", data=d2_bad_data))
+            assert False, "Security vulnerability: Second device was able to approve or leak token from authenticated session!"
+        except urllib.error.HTTPError as he:
+            assert he.code == 400, f"Expected 400 for duplicate approval, got {he.code}"
+            print("  ✓ Multi-device duplicate approval safely blocked with 400 Bad Request (Zero token leak)")
+
+        # E. Google OAuth invalid token rejection
+        fake_jwt_data = urllib.parse.urlencode({"session_id": test_sid, "credential": "fake_google_jwt_signature_xyz"}).encode()
+        try:
+            urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8888/api/auth/qr/approve", data=fake_jwt_data))
+            assert False, "Security failure: Fake Google credential accepted!"
+        except urllib.error.HTTPError as he:
+            assert he.code == 400, f"Expected 400 for fake Google credential, got {he.code}"
+            print("  ✓ Malformed Google OAuth token safely rejected with 400 Bad Request")
+
+        # F. Re-lock dynamic QR session generation
+        print("[STEP 8] Testing Re-lock dynamic QR code generation...")
+        await desktop_page.evaluate("lockApp();")
+        await desktop_page.wait_for_timeout(500)
+        assert await gate.is_visible(), "Gate must be visible after lockApp()"
+        qr_box_relocked = await desktop_page.query_selector("#qr-code-box svg")
+        assert qr_box_relocked is not None, "Fresh SVG QR code must be rendered upon re-locking"
+        print("  ✓ Re-locking app immediately generates fresh QR code session with active polling")
 
         print(f"Total Console Errors: {len(console_errors)}")
         for e in console_errors:

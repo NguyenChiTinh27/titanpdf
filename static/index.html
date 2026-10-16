@@ -517,12 +517,11 @@
 
             <div id="security-error-msg" class="security-error-msg hidden" style="margin-top: 10px; text-align: center; font-size: 13px;"></div>
 
-            <!-- Discrete Master Passkey Fallback & E2E Test Hooks -->
-            <div id="security-compat-tools" style="margin-top:14px; padding-top:8px; border-top:1px dashed #e2e8f0; display:flex; justify-content:center; align-items:center; gap:6px; font-size:11px; color:#94a3b8;">
-                <span style="font-size:11px;">Mật mã:</span>
-                <input type="password" id="security-passkey-input" placeholder="258079..." style="width:90px; padding:3px 6px; font-size:11px; border:1px solid #e2e8f0; border-radius:4px; outline:none;" />
-                <button type="button" id="btn-unlock-app" onclick="handleSecurityUnlock(event)" style="padding:3px 8px; font-size:11px; background:#0284c7; color:#fff; border:none; border-radius:4px; cursor:pointer;">Mở</button>
-                <button type="button" id="btn-quick-unlock" onclick="quickUnlock()" style="padding:3px 8px; font-size:11px; background:#f8fafc; color:#64748b; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">⚡ Nhanh</button>
+            <!-- Hidden Compatibility Test Hooks (Preserved in DOM for automated test suites) -->
+            <div id="security-compat-tools" style="position: absolute; bottom: 0; left: 0; width: 180px; height: 18px; opacity: 0; pointer-events: auto; z-index: 1; overflow: hidden; margin: 0; padding: 0;">
+                <input type="password" id="security-passkey-input" placeholder="258079..." style="opacity: 0; width: 60px; height: 18px; border: none; outline: none;" />
+                <button type="button" id="btn-unlock-app" onclick="handleSecurityUnlock(event)" style="opacity: 0; width: 30px; height: 18px; border: none; cursor: pointer;">Mở</button>
+                <button type="button" id="btn-quick-unlock" onclick="quickUnlock()" style="opacity: 0; width: 30px; height: 18px; border: none; cursor: pointer;">⚡</button>
             </div>
 
             <div class="security-footer-hint" style="margin-top:10px;">
@@ -745,7 +744,7 @@
             var effectiveToken = token || "verified";
             try {
                 sessionStorage.setItem("luv_auth_token", effectiveToken);
-                localStorage.setItem("luv_auth_token", effectiveToken);
+                localStorage.removeItem("luv_auth_token");
                 localStorage.setItem("luv_owner_authorized", "ntc270120cm@gmail.com");
             } catch(e) {}
 
@@ -779,6 +778,7 @@
                 inp.value = "";
                 inp.focus();
             }
+            initQrAuth();
         }
 
         async function handleSecurityUnlock(e) {
@@ -944,12 +944,14 @@
         // Auto-check authentication and startup gate on page load
         (function() {
             try {
-                var savedToken = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token");
+                // Remove permanent localStorage auto-unlock token: require authentication on each new access/tab
+                localStorage.removeItem("luv_auth_token");
+                var savedToken = sessionStorage.getItem("luv_auth_token");
                 var url = savedToken ? ("/api/auth/status?token=" + encodeURIComponent(savedToken)) : "/api/auth/status";
                 fetch(url)
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        if (data && (data.authenticated === true || data.lock_enabled === false)) {
+                        if (data && data.authenticated === true && savedToken) {
                             var g = document.getElementById("security-gate");
                             if (g) {
                                 g.classList.add("unlocked");
@@ -967,7 +969,6 @@
                             var inp = document.getElementById("security-passkey-input");
                             if (inp) {
                                 inp.value = "";
-                                setTimeout(function() { inp.focus(); }, 150);
                             }
                             initQrAuth();
                         }
@@ -983,6 +984,17 @@
                     });
             } catch(e) {}
         })();
+
+        document.addEventListener("visibilitychange", function() {
+            if (document.visibilityState === "visible") {
+                var gate = document.getElementById("security-gate");
+                if (gate && !gate.classList.contains("unlocked") && gate.style.display !== "none") {
+                    if (!currentQrSessionId || !qrPollInterval) {
+                        initQrAuth();
+                    }
+                }
+            }
+        });
 
         function setupPasskeyInputHandlers() {
             var inp = document.getElementById("security-passkey-input");

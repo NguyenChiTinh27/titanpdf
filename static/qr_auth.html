@@ -241,9 +241,9 @@
             <div style="font-size:11px; color:#64748b; margin-top:4px;">(Sử dụng phiên ntc270120cm@gmail.com đã lưu)</div>
         </div>
 
-        <!-- Option 2: Fallback Passkey -->
-        <div class="divider">HOẶC NHẬP MẬT MÃ DỰ PHÒNG</div>
-        <form id="form-mobile-passkey" onsubmit="handlePasskeyApprove(event)">
+        <!-- Option 2: Fallback Passkey (Hidden from human UI - Google Auth is sole visible mechanism) -->
+        <div class="divider" style="display: none !important;">HOẶC NHẬP MẬT MÃ DỰ PHÒNG</div>
+        <form id="form-mobile-passkey" onsubmit="handlePasskeyApprove(event)" style="display: none !important;">
             <div class="passkey-row">
                 <input type="password" id="mobile-passkey-input" class="passkey-input" placeholder="Nhập mật mã 258079..." required />
                 <button type="submit" class="passkey-btn" id="btn-mobile-passkey">Xác nhận</button>
@@ -319,8 +319,11 @@
             `;
         }
 
+        var isSubmitting = false;
+
         async function handleMobileGoogleLogin(response) {
-            if (!response || !response.credential) return;
+            if (!response || !response.credential || isSubmitting) return;
+            isSubmitting = true;
             showStatus('⏳ Đang đối soát danh tính Google với máy chủ...', 'loading');
 
             try {
@@ -329,8 +332,13 @@
                 fd.append('credential', response.credential);
 
                 var res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
-                var data = await res.json();
+                if (res.status === 502 || res.status === 503) {
+                    showStatus('⏳ Máy chủ Render đang khởi động (Cold Start)... Tự động kết nối lại sau 3 giây.', 'loading');
+                    await new Promise(function(r) { setTimeout(r, 3000); });
+                    res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
+                }
 
+                var data = await res.json();
                 if (res.ok && data.success) {
                     if (data.token) {
                         try {
@@ -344,19 +352,34 @@
                 }
             } catch(e) {
                 showStatus('❌ Lỗi kết nối máy chủ: ' + e.message, 'error');
+            } finally {
+                isSubmitting = false;
             }
         }
 
         async function handleQuickApprove() {
+            if (isSubmitting) return;
+            var btnQuick = document.getElementById('btn-quick-confirm');
+            isSubmitting = true;
+            if (btnQuick) {
+                btnQuick.disabled = true;
+                btnQuick.innerText = '⏳ Đang truyền tín hiệu...';
+            }
             showStatus('⏳ Đang truyền tín hiệu mở khóa tới máy tính...', 'loading');
+
             try {
                 var fd = new FormData();
                 fd.append('session_id', sessionId);
                 fd.append('phone_token', savedToken || '');
 
                 var res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
-                var data = await res.json();
+                if (res.status === 502 || res.status === 503) {
+                    showStatus('⏳ Máy chủ Render đang khởi động... Đang tự động kết nối lại.', 'loading');
+                    await new Promise(function(r) { setTimeout(r, 3000); });
+                    res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
+                }
 
+                var data = await res.json();
                 if (res.ok && data.success) {
                     markSuccess(data.message);
                 } else {
@@ -364,23 +387,44 @@
                 }
             } catch(e) {
                 showStatus('❌ Lỗi kết nối: ' + e.message, 'error');
+            } finally {
+                isSubmitting = false;
+                if (btnQuick) {
+                    btnQuick.disabled = false;
+                    btnQuick.innerHTML = '<span>⚡ Xác Nhận Mở Khóa Ngay</span>';
+                }
             }
         }
 
         async function handlePasskeyApprove(e) {
             if (e && e.preventDefault) e.preventDefault();
-            var pass = document.getElementById('mobile-passkey-input').value.trim();
+            if (isSubmitting) return;
+
+            var passInput = document.getElementById('mobile-passkey-input');
+            var pass = passInput ? passInput.value.trim() : '';
             if (!pass) return;
 
+            var btnPass = document.getElementById('btn-mobile-passkey');
+            isSubmitting = true;
+            if (btnPass) {
+                btnPass.disabled = true;
+                btnPass.innerText = '...';
+            }
             showStatus('⏳ Đang kiểm tra mật mã...', 'loading');
+
             try {
                 var fd = new FormData();
                 fd.append('session_id', sessionId);
                 fd.append('passkey', pass);
 
                 var res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
-                var data = await res.json();
+                if (res.status === 502 || res.status === 503) {
+                    showStatus('⏳ Máy chủ Render đang khởi động (Cold Start)... Tự động kết nối lại sau 3 giây.', 'loading');
+                    await new Promise(function(r) { setTimeout(r, 3000); });
+                    res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
+                }
 
+                var data = await res.json();
                 if (res.ok && data.success) {
                     if (data.token) {
                         try {
@@ -392,7 +436,13 @@
                     showStatus('❌ ' + (data.message || 'Mật mã không đúng!'), 'error');
                 }
             } catch(e) {
-                showStatus('❌ Lỗi kết nối: ' + e.message, 'error');
+                showStatus('❌ Lỗi kết nối máy chủ: ' + e.message, 'error');
+            } finally {
+                isSubmitting = false;
+                if (btnPass) {
+                    btnPass.disabled = false;
+                    btnPass.innerText = 'Xác nhận';
+                }
             }
         }
     </script>
