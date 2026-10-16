@@ -2794,7 +2794,7 @@ function renderOptions() {
                         <div>
                             <label class="form-label" style="font-weight: 600;">Mô hình Vision AI:</label>
                             <select id="opt-ocr-model" class="select-box">
-                                <option value="deepseek-flash" selected>deepseek-flash (Siêu tốc & Chuẩn)</option>
+                                <option value="DeepSeek-V4.1-Flash" selected>DeepSeek-V4.1-Flash (Siêu tốc & Chuẩn)</option>
                             </select>
                         </div>
                     </div>
@@ -3267,7 +3267,7 @@ async function appendToolSpecificOptions(formData) {
             if (ocrEngine === "deepseek") {
                 const apiKey = document.getElementById("opt-deepseek-key")?.value.trim() || localStorage.getItem("deepseek_api_key") || "";
                 const outFmt = document.getElementById("opt-ocr-format")?.value || "reconstructed_pdf";
-                const model = document.getElementById("opt-ocr-model")?.value || "deepseek-flash";
+                const model = document.getElementById("opt-ocr-model")?.value || "DeepSeek-V4.1-Flash";
                 const range = document.getElementById("opt-ocr-range")?.value.trim() || "all";
                 if (apiKey) {
                     formData.append("api_key", apiKey);
@@ -3563,7 +3563,7 @@ async function executeProcess() {
                     }
                 }
                 const outFmt = document.getElementById("opt-ocr-format")?.value || "reconstructed_pdf";
-                const model = document.getElementById("opt-ocr-model")?.value || "deepseek-flash";
+                const model = document.getElementById("opt-ocr-model")?.value || "DeepSeek-V4.1-Flash";
                 const range = document.getElementById("opt-ocr-range")?.value.trim() || "all";
                 if (apiKey) {
                     formData.append("api_key", apiKey);

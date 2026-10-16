@@ -730,7 +730,7 @@ class AIDeepSeekSupervisor:
         input_path: str, 
         output_path: str, 
         api_key: Optional[str] = None, 
-        model: str = "deepseek-flash",
+        model: str = "DeepSeek-V4.1-Flash",
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -929,7 +929,7 @@ class SmartPDFToWordDispatcher:
         output_path: str, 
         mode: str = "auto",
         api_key: Optional[str] = None,
-        model: str = "deepseek-flash",
+        model: str = "DeepSeek-V4.1-Flash",
         ai_control: bool = False
     ) -> Dict[str, Any]:
         # Kiểm tra tính toàn vẹn của tệp PDF

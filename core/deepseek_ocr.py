@@ -19,7 +19,8 @@ class DeepSeekOCR:
     """
 
     DEFAULT_API_URL = "https://api.deepseek.com/chat/completions"
-    DEFAULT_MODEL = "deepseek-flash"
+    DEFAULT_MODEL = "DeepSeek-V4.1-Flash"
+    FALLBACK_MODEL = "deepseek-chat"
 
     @staticmethod
     def get_saved_api_key() -> Optional[str]:
@@ -56,7 +57,7 @@ class DeepSeekOCR:
             return False
 
     @classmethod
-    def ocr_single_image(cls, image_bytes: bytes, api_key: str, model: str = "deepseek-flash") -> str:
+    def ocr_single_image(cls, image_bytes: bytes, api_key: str, model: str = "DeepSeek-V4.1-Flash") -> str:
         """Gửi một ảnh tài liệu lên DeepSeek Vision API để nhận diện OCR."""
         if not api_key or not api_key.strip():
             raise ValueError("Chưa có DeepSeek API Key. Vui lòng nhập API Key để sử dụng tính năng OCR AI!")
@@ -81,9 +82,10 @@ class DeepSeekOCR:
             "Content-Type": "application/json"
         }
 
+        target_model = model or cls.DEFAULT_MODEL
         # Format OpenAI-compatible vision payload
         payload = {
-            "model": model,
+            "model": target_model,
             "messages": [
                 {
                     "role": "user",
@@ -104,6 +106,12 @@ class DeepSeekOCR:
 
         try:
             resp = requests.post(cls.DEFAULT_API_URL, headers=headers, json=payload, timeout=90)
+            if resp.status_code != 200 and target_model != cls.FALLBACK_MODEL:
+                err_text = resp.text.lower()
+                if any(k in err_text for k in ("model", "not found", "invalid_request", "does not exist", "unsupported")) or resp.status_code in (400, 404):
+                    payload["model"] = cls.FALLBACK_MODEL
+                    resp = requests.post(cls.DEFAULT_API_URL, headers=headers, json=payload, timeout=90)
+
             if resp.status_code != 200:
                 err_detail = resp.text
                 try:
@@ -129,7 +137,7 @@ class DeepSeekOCR:
         output_path: str, 
         api_key: Optional[str] = None, 
         output_format: str = "docx",
-        model: str = "deepseek-flash",
+        model: str = "DeepSeek-V4.1-Flash",
         dpi: int = 200,
         page_range: Optional[str] = "all"
     ) -> Dict[str, Any]:

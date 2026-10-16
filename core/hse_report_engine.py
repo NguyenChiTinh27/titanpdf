@@ -321,7 +321,7 @@ def analyze_image_ai(
     image_data: str,
     hint: str = "",
     context: str = "",
-    model: str = "deepseek-chat"
+    model: str = "DeepSeek-V4.1-Flash"
 ) -> dict[str, str]:
     dept_key, dept_vi, dept_zh = classify_department_from_text(hint)
     hint_folded = (hint or "").casefold()

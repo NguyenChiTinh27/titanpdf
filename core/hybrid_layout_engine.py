@@ -913,7 +913,7 @@ class HybridVectorAILayoutDecompilerEngine:
         output_path: str,
         mode: str = "auto",
         api_key: Optional[str] = None,
-        model: str = "deepseek-flash",
+        model: str = "DeepSeek-V4.1-Flash",
         ai_control: bool = True,
         **kwargs
     ) -> Dict[str, Any]:

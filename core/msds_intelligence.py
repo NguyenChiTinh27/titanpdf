@@ -977,7 +977,7 @@ class MSDSExtractorEngine:
 
         # 4. Nếu Phần 2 không ghi mã H3xx mà chỉ ghi tên phân loại nguy hại (như chuẩn GB/T 16483), phân tích cú pháp Phần 2
         if not h_base and not ghs_found:
-            if re.search(r"\b(?:flammable\s+(?:liquid|gas|solid|aerosol)|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|易燃)\b", sec2, re.IGNORECASE):
+            if re.search(r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|cháy\s+được|flash\s*point|điểm\s+chớp\s+cháy|易燃)\b", sec2, re.IGNORECASE):
                 ghs_found.add("GHS02")
             if re.search(r"\b(?:oxidizing|oxidizer|chất\s+oxy\s+hóa|氧化性)\b", sec2, re.IGNORECASE):
                 ghs_found.add("GHS03")
@@ -1011,7 +1011,17 @@ class MSDSExtractorEngine:
             ):
                 ghs_found.add("GHS09")
 
-        # 5. Nếu Phần 2 hoàn toàn không có mã GHS nào -> Gán là NON DG
+        # 5. Nếu Mục 2 bị cắt hụt do cấu trúc bảng Word, kiểm tra đối soát toàn văn bản có chỉ báo dễ cháy/nguy hại không
+        if not ghs_found:
+            flammable_match = re.search(
+                r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|H22[0-8]|chớp\s+cháy\s*(?:<|nhỏ\s+hơn)?\s*(?:[1-5]?[0-9]|60)\s*°?C|flash\s*point\s*(?:<|below)?\s*(?:[1-5]?[0-9]|60)\s*°?C|易燃)\b",
+                text,
+                re.IGNORECASE
+            )
+            if flammable_match:
+                ghs_found.add("GHS02")
+
+        # 6. Nếu hoàn toàn không có mã GHS nào -> Gán là NON DG
         if not ghs_found:
             return {
                 "is_non_dg": True,
@@ -1051,7 +1061,7 @@ class MSDSExtractorEngine:
 
     @classmethod
     def parse_with_deepseek(cls, text: str, api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Sử dụng AI DeepSeek để trích xuất 16 mục GHS và dữ liệu có cấu trúc từ MSDS."""
+        """Sử dụng AI DeepSeek-V4.1-Flash để trích xuất 16 mục GHS và dữ liệu có cấu trúc từ MSDS."""
         from core.ai_text_engine import AITextEngine
         actual_key = AITextEngine.get_deepseek_key(api_key)
         if not actual_key or len(text.strip()) < 50:
@@ -1065,9 +1075,11 @@ class MSDSExtractorEngine:
             "Bạn là chuyên gia phân tích an toàn hóa chất (EHS / MSDS Specialist) hàng đầu thế giới. "
             "Nhiệm vụ của bạn là đọc hiểu toàn văn bản MSDS/SDS được cung cấp và trích xuất dữ liệu chuẩn 16 mục GHS thành định dạng JSON hợp lệ duy nhất.\n"
             "QUY TẮC PHÂN LOẠI GHS BẮT BUỘC (TUYỆT ĐỐI TUÂN THỦ):\n"
-            "1. Trường 'ghs_codes' và 'signal_word' CHỈ ĐƯỢC XÁC ĐỊNH DỰA TRÊN PHẦN 2 (Nhận dạng đặc tính nguy hiểm / Section 2: Hazards Identification) của MSDS. Tuyệt đối KHÔNG suy diễn mã GHS từ Phần 3 (bảng thành phần) hay các Phần 4-16.\n"
-            "2. Nếu ở Phần 2 ghi 'Không phải là chất hay hỗn hợp nguy hại', 'Not classified', 'Not a hazardous substance or mixture', 'No symbol', hoặc không có bất kỳ phân loại GHS nào ở Phần 2, BẮT BUỘC trả về: \"ghs_codes\": [\"NON DG\"] và \"signal_word\": \"NON DG\".\n"
-            "3. Toàn bộ các trường mô tả an toàn, tên tiếng Việt, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n"
+            "1. Trường 'ghs_codes' và 'signal_word' CHỈ ĐƯỢC XÁC ĐỊNH DỰA TRÊN MỤC 2 (Nhận dạng đặc tính nguy hiểm / Section 2: Hazards Identification) của MSDS áp dụng cho SẢN PHẨM CHÍNH. TUYỆT ĐỐI KHÔNG suy diễn hoặc lấy nhầm mã GHS của từng chất phụ gia/thành phần ở Mục 3.\n"
+            "2. NẾU SẢN PHẨM CÓ TÍNH DỄ CHÁY (Flammable liquid/gas/solid, H220-H228, Dễ cháy, Điểm chớp cháy < 60°C), BẮT BUỘC PHẢI CÓ MÃ GHS02 TRONG 'ghs_codes'. TUYỆT ĐỐI KHÔNG TRẢ VỀ NON DG KHI SẢN PHẨM CÓ ĐẶC TÍNH DỄ CHÁY HOẶC NGUY HIỂM.\n"
+            "3. Chỉ gán các mã GHS (GHS01..GHS09) khi có bằng chứng rõ ràng (câu cảnh báo nguy cơ H-code, từ cảnh báo Danger/Warning, hoặc mô tả nguy hại chính thức ở Mục 2). TUYỆT ĐỐI KHÔNG TỰ BỊA ĐẶT CÁC MÃ GHS KHÔNG CÓ TRONG TÀI LIỆU (ví dụ không tự ý thêm GHS05, GHS06, GHS08 khi tài liệu chỉ có GHS02).\n"
+            "4. Nếu ở Mục 2 ghi rõ 'Không phải là chất hay hỗn hợp nguy hại', 'Not classified as hazardous', 'Not a hazardous substance or mixture', 'No symbol', và hoàn toàn không có bất kỳ mối nguy hại nào, BẮT BUỘC trả về: \"ghs_codes\": [\"NON DG\"] và \"signal_word\": \"NON DG\".\n"
+            "5. Toàn bộ các trường mô tả an toàn, tên tiếng Việt, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n"
             "Yêu cầu các trường dữ liệu:\n"
             "{\n"
             '  "product_code": "Mã sản phẩm hoặc mã hiệu hóa chất (vd: FTU0005, ZW55019)",\n'
@@ -1081,28 +1093,28 @@ class MSDSExtractorEngine:
             '  "transport_class": "Nhóm nguy hiểm vận chuyển (vd: 3, 8)",\n'
             '  "packing_group": "Nhóm đóng gói (vd: II, III)",\n'
             '  "signal_word": "Từ cảnh báo ở Phần 2 (Nguy hiểm (Danger) / Cảnh báo (Warning) / NON DG)",\n'
-            '  "ghs_codes": ["GHS02", "GHS07"] hoặc ["NON DG"] nếu Phần 2 không có mối nguy GHS,\n'
-            '  "hazard_statements": "Mã và nội dung cảnh báo nguy hại ở Phần 2 bằng tiếng Việt (hoặc ghi NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS)",\n'
+            '  "ghs_codes": ["GHS02"] hoặc ["NON DG"] nếu Mục 2 không có mối nguy GHS,\n'
+            '  "hazard_statements": "Mã và nội dung cảnh báo nguy hại ở Phần 2 bằng tiếng Việt",\n'
             '  "precautionary_statements": "Mã và nội dung phòng ngừa bằng tiếng Việt",\n'
             '  "flash_point": "Điểm chớp cháy (kèm đơn vị °C)",\n'
             '  "density": "Tỷ trọng / Khối lượng riêng",\n'
             '  "appearance": "Ngoại quan bằng tiếng Việt (trạng thái, màu sắc, mùi)",\n'
-            '  "storage_condition": "Điều kiện bảo quản bằng tiếng Việt (nhiệt độ, thông gió, tránh xa chất tương khắc)",\n'
-            '  "respiratory_protection": "Trang bị bảo vệ hô hấp bằng tiếng Việt (khẩu trang than hoạt tính, mặt nạ phòng độc)",\n'
-            '  "hand_protection": "Bảo vệ tay bằng tiếng Việt (găng tay cao su Nitrile, Neoprene chống hóa chất)",\n'
-            '  "eye_protection": "Bảo vệ mắt bằng tiếng Việt (kính bảo hộ an toàn chống văng bắn hóa chất)",\n'
-            '  "skin_protection": "Bảo vệ da/thân bằng tiếng Việt (quần áo bảo hộ chống hóa chất, tạp dề, giày bảo hộ)",\n'
+            '  "storage_condition": "Điều kiện bảo quản bằng tiếng Việt",\n'
+            '  "respiratory_protection": "Trang bị bảo vệ hô hấp bằng tiếng Việt",\n'
+            '  "hand_protection": "Bảo vệ tay bằng tiếng Việt",\n'
+            '  "eye_protection": "Bảo vệ mắt bằng tiếng Việt",\n'
+            '  "skin_protection": "Bảo vệ da/thân bằng tiếng Việt",\n'
             '  "first_aid_inhalation": "Sơ cứu khi hít phải (bằng tiếng Việt)",\n'
             '  "first_aid_skin": "Sơ cứu khi tiếp xúc với da (bằng tiếng Việt)",\n'
             '  "first_aid_eyes": "Sơ cứu khi tiếp xúc với mắt (bằng tiếng Việt)",\n'
             '  "first_aid_ingestion": "Sơ cứu khi nuốt phải (bằng tiếng Việt)",\n'
-            '  "fire_measures": "Biện pháp chữa cháy bằng tiếng Việt (chất dập lửa phù hợp / cấm dùng)",\n'
+            '  "fire_measures": "Biện pháp chữa cháy bằng tiếng Việt",\n'
             '  "spill_measures": "Biện pháp xử lý tràn đổ / rò rỉ bằng tiếng Việt",\n'
             '  "composition": [\n'
             '    {\n'
-            '      "ingredient_name_vi": "Tên hoạt chất tiếng Việt (hoặc tên chuẩn quốc tế kèm mô tả)",\n'
+            '      "ingredient_name_vi": "Tên hoạt chất tiếng Việt",\n'
             '      "ingredient_name_original": "Tên hoạt chất gốc",\n'
-            '      "cas_number": "Số CAS (vd: 67-64-1)",\n'
+            '      "cas_number": "Số CAS",\n'
             '      "concentration_text": "Nồng độ (vd: 30 - 50%)",\n'
             '      "concentration_min": 30,\n'
             '      "concentration_max": 50,\n'
@@ -1114,33 +1126,26 @@ class MSDSExtractorEngine:
             "CHỈ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ, KHÔNG KÈM THEO BẤT KỲ VĂN BẢN HAY GIẢI THÍCH NÀO KHÁC."
         )
 
-        import requests
-        headers = {
-            "Authorization": f"Bearer {actual_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": sample_text}
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"}
-        }
-
         try:
-            resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=payload, timeout=90)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
-                content = re.sub(r"^```(?:json)?\s*", "", content)
-                content = re.sub(r"\s*```$", "", content)
-                parsed = json.loads(content)
-                return parsed
-        except Exception:
-            pass
-        return None
+            data = AITextEngine.call_deepseek_api(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": sample_text}
+                ],
+                api_key=actual_key,
+                model="DeepSeek-V4.1-Flash",
+                temperature=0.1,
+                response_format={"type": "json_object"},
+                timeout=90
+            )
+            content = data["choices"][0]["message"]["content"].strip()
+            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = re.sub(r"\s*```$", "", content)
+            parsed = json.loads(content)
+            return parsed
+        except Exception as e:
+            print(f"[DEEPSEEK_MSDS_PARSE_ERROR] {e}", flush=True)
+            return None
 
     @staticmethod
     def _has_vietnamese(text: str) -> bool:
@@ -1659,17 +1664,81 @@ class MSDSExtractorEngine:
             if heuristic_data.get("product_code"):
                 parsed["product_code"] = heuristic_data["product_code"]
 
-            # Bắt buộc đồng bộ chuẩn xác Mã GHS & Từ cảnh báo theo Phần 2 (tránh AI lấy nhầm mã GHS của thành phần ở Phần 3)
-            if sec2_ghs["is_non_dg"]:
-                parsed["ghs_codes"] = ["NON DG"]
+            # Kiểm tra đặc tính dễ cháy toàn tài liệu (bảo vệ chống gán nhầm NON DG)
+            is_doc_flammable = bool(re.search(
+                r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|cháy\s+được|H22[0-8]|chớp\s+cháy\s*(?:<|nhỏ\s+hơn)?\s*(?:[1-5]?[0-9]|60)\s*°?C|flash\s*point\s*(?:<|below)?\s*(?:[1-5]?[0-9]|60)\s*°?C|易燃)\b",
+                text,
+                re.IGNORECASE
+            ))
+
+            # Lấy danh sách GHS thô từ AI và từ Heuristic Mục 2
+            raw_ai_ghs = [str(c).strip().upper() for c in (parsed.get("ghs_codes") or []) if str(c).strip()]
+            raw_heu_ghs = [str(c).strip().upper() for c in (sec2_ghs.get("ghs_codes") or []) if str(c).strip()]
+            valid_ai_ghs = [g for g in raw_ai_ghs if g in GHS_MAP and g != "NON DG"]
+            valid_heu_ghs = [g for g in raw_heu_ghs if g in GHS_MAP and g != "NON DG"]
+
+            # Nếu tài liệu có đặc tính dễ cháy rõ ràng, bắt buộc bổ sung GHS02
+            if is_doc_flammable:
+                if "GHS02" not in valid_ai_ghs:
+                    valid_ai_ghs.append("GHS02")
+                if "GHS02" not in valid_heu_ghs:
+                    valid_heu_ghs.append("GHS02")
+
+            # Khử triệt để "hình đồ từa lưa" (Cross-validation):
+            # Chỉ giữ lại các mã GHS có căn cứ từ khóa cảnh báo cụ thể trong văn bản
+            selected_ghs = []
+            cand_ghs = list(dict.fromkeys(valid_ai_ghs + valid_heu_ghs))
+            for g in cand_ghs:
+                if g == "GHS02" and is_doc_flammable:
+                    selected_ghs.append(g)
+                elif g == "GHS05" and (re.search(r"\b(?:corrosive|ăn\s+mòn|H314|H318|bỏng\s+da)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                    selected_ghs.append(g)
+                elif g == "GHS06" and (re.search(r"\b(?:acute\s+tox|độc\s+cấp|H300|H301|H310|H330|H331|fatal)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                    selected_ghs.append(g)
+                elif g == "GHS07" and (re.search(r"\b(?:irritan|kích\s+ứng|harmful|H302|H312|H315|H319|H335|H336)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                    selected_ghs.append(g)
+                elif g == "GHS08" and (re.search(r"\b(?:aspiration|carcinogen|reproductive|nguy\s+hại\s+sức\s+khỏe|H304|H340|H350|H360|H370|H372)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                    selected_ghs.append(g)
+                elif g == "GHS09" and (re.search(r"\b(?:aquatic|môi\s+trường|thủy\s+sinh|H400|H410|H411)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                    selected_ghs.append(g)
+                elif g in ("GHS01", "GHS03", "GHS04") and (g in valid_heu_ghs or g in text.upper()):
+                    selected_ghs.append(g)
+
+            # Nếu không tìm thấy mã nguy hại nào nhưng tài liệu dễ cháy -> GHS02, ngược lại mới là NON DG
+            if not selected_ghs:
+                if is_doc_flammable:
+                    selected_ghs = ["GHS02"]
+                else:
+                    selected_ghs = ["NON DG"]
+
+            parsed["ghs_codes"] = sorted(list(set(selected_ghs)))
+            if "NON DG" in parsed["ghs_codes"] and len(parsed["ghs_codes"]) > 1:
+                parsed["ghs_codes"] = [g for g in parsed["ghs_codes"] if g != "NON DG"]
+
+            # Đồng bộ Từ cảnh báo (Signal Word) và Cảnh báo nguy hại tương ứng
+            if "GHS02" in parsed["ghs_codes"] or any(g in parsed["ghs_codes"] for g in ("GHS01", "GHS05", "GHS06")):
+                if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                    parsed["signal_word"] = "Nguy hiểm (Danger)"
+            elif any(g in parsed["ghs_codes"] for g in ("GHS07", "GHS09")):
+                if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                    parsed["signal_word"] = "Cảnh báo (Warning)"
+            elif parsed["ghs_codes"] == ["NON DG"]:
                 parsed["signal_word"] = "NON DG"
-                parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS (Phần 2)."
-            elif sec2_ghs["ghs_codes"]:
-                parsed["ghs_codes"] = sec2_ghs["ghs_codes"]
-                if sec2_ghs.get("signal_word"):
-                    parsed["signal_word"] = sec2_ghs["signal_word"]
+                parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
         else:
             parsed = heuristic_data
+            # Bảo vệ fallback ngoại tuyến nếu tài liệu có tính chất dễ cháy
+            is_doc_flammable = bool(re.search(
+                r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|cháy\s+được|H22[0-8]|chớp\s+cháy\s*(?:<|nhỏ\s+hơn)?\s*(?:[1-5]?[0-9]|60)\s*°?C|flash\s*point\s*(?:<|below)?\s*(?:[1-5]?[0-9]|60)\s*°?C|易燃)\b",
+                text,
+                re.IGNORECASE
+            ))
+            if is_doc_flammable and "GHS02" not in parsed.get("ghs_codes", []):
+                parsed["ghs_codes"] = ["GHS02"]
+                if not parsed.get("signal_word") or parsed["signal_word"] == "NON DG":
+                    parsed["signal_word"] = "Nguy hiểm (Danger)"
+                if not parsed.get("hazard_statements") or parsed.get("hazard_statements") == "NON DG":
+                    parsed["hazard_statements"] = "H225: Chất lỏng và hơi rất dễ cháy."
 
         # Quy tắc bắt buộc: Mã hóa chất và Mã MSDS lấy theo Mã sản phẩm (ví dụ: FTU0005)
         final_code = cls._clean_product_code_candidate(str(parsed.get("product_code") or "")) or heuristic_data.get("product_code") or ""

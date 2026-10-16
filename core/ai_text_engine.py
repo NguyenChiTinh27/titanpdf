@@ -19,6 +19,69 @@ class AITextEngine:
 
     GOOGLE_TRANSLATE_API = "https://translate.googleapis.com/translate_a/single"
     DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+    PRIMARY_MODEL = "DeepSeek-V4.1-Flash"
+    FALLBACK_MODEL = "deepseek-chat"
+
+    @classmethod
+    def call_deepseek_api(
+        cls,
+        messages: List[Dict[str, Any]],
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: float = 0.1,
+        response_format: Optional[Dict[str, str]] = None,
+        timeout: int = 90
+    ) -> Dict[str, Any]:
+        """
+        Thực thi gọi DeepSeek AI thống nhất:
+        - Ràng buộc mặc định model: DeepSeek-V4.1-Flash
+        - Tự động fallback sang deepseek-chat nếu endpoint DeepSeek yêu cầu tên định danh API chính thức
+        - Nhiệt độ mặc định temperature: 0.1
+        """
+        actual_key = cls.get_deepseek_key(api_key)
+        if not actual_key:
+            raise ValueError("Chưa có DeepSeek API Key. Vui lòng nhập API Key!")
+
+        target_model = model or cls.PRIMARY_MODEL
+        headers = {
+            "Authorization": f"Bearer {actual_key}",
+            "Content-Type": "application/json"
+        }
+
+        def _build_payload(m: str):
+            p = {
+                "model": m,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": False
+            }
+            if response_format:
+                p["response_format"] = response_format
+            return p
+
+        # 1. Thử gọi với target_model (DeepSeek-V4.1-Flash)
+        resp = requests.post(
+            cls.DEEPSEEK_API_URL,
+            headers=headers,
+            json=_build_payload(target_model),
+            timeout=timeout
+        )
+
+        # 2. Nếu model không được chấp nhận (400/404 hoặc model error), fallback sang deepseek-chat
+        if resp.status_code != 200 and target_model != cls.FALLBACK_MODEL:
+            err_text = resp.text.lower()
+            if any(k in err_text for k in ("model", "not found", "invalid_request", "does not exist", "unsupported")) or resp.status_code in (400, 404):
+                resp = requests.post(
+                    cls.DEEPSEEK_API_URL,
+                    headers=headers,
+                    json=_build_payload(cls.FALLBACK_MODEL),
+                    timeout=timeout
+                )
+
+        if resp.status_code != 200:
+            raise RuntimeError(f"DeepSeek API lỗi (HTTP {resp.status_code}): {resp.text}")
+
+        return resp.json()
 
     @classmethod
     def get_deepseek_key(cls, explicit_key: Optional[str] = None) -> Optional[str]:
@@ -160,28 +223,18 @@ class AITextEngine:
             f"3. Chỉ trả về duy nhất nội dung đã dịch, TUYỆT ĐỐI KHÔNG thêm lời chào, giải thích hoặc nhận xét."
         )
 
-        headers = {
-            "Authorization": f"Bearer {actual_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ],
-            "temperature": 0.3,
-            "stream": False
-        }
-
         try:
-            resp = requests.post(cls.DEEPSEEK_API_URL, headers=headers, json=payload, timeout=60)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data["choices"][0]["message"]["content"].strip()
-            else:
-                # Fallback to Google Translate if API quota / key error
-                return cls.translate_google(text, source_lang, target_lang)
+            data = cls.call_deepseek_api(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text}
+                ],
+                api_key=actual_key,
+                model=cls.PRIMARY_MODEL,
+                temperature=0.1,
+                timeout=60
+            )
+            return data["choices"][0]["message"]["content"].strip()
         except Exception:
             return cls.translate_google(text, source_lang, target_lang)
 
@@ -357,27 +410,18 @@ class AITextEngine:
         # Truncate text if excessively long for context window (e.g. ~40,000 chars)
         context_text = text[:45000] if len(text) > 45000 else text
 
-        headers = {
-            "Authorization": f"Bearer {actual_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Văn bản tài liệu cần tóm tắt:\n\n{context_text}"}
-            ],
-            "temperature": 0.3,
-            "stream": False
-        }
-
         try:
-            resp = requests.post(cls.DEEPSEEK_API_URL, headers=headers, json=payload, timeout=90)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data["choices"][0]["message"]["content"].strip()
-            else:
-                return cls.local_extractive_summary(text)
+            data = cls.call_deepseek_api(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Văn bản tài liệu cần tóm tắt:\n\n{context_text}"}
+                ],
+                api_key=actual_key,
+                model=cls.PRIMARY_MODEL,
+                temperature=0.1,
+                timeout=90
+            )
+            return data["choices"][0]["message"]["content"].strip()
         except Exception:
             return cls.local_extractive_summary(text)
 

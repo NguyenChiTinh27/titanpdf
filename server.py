@@ -789,7 +789,7 @@ def process_pdf_to_word(
     mode: str = Form("auto"),
     ai_control: bool = Form(False),
     api_key: Optional[str] = Form(None),
-    model: str = Form("deepseek-flash")
+    model: str = Form("DeepSeek-V4.1-Flash")
 ):
     saved_path = save_upload_file(file, TEMP_DIR)
     base_name = os.path.splitext(file.filename)[0]
@@ -1059,7 +1059,7 @@ def process_ocr(
     engine: str = Form("deepseek"),
     api_key: Optional[str] = Form(None),
     output_format: Optional[str] = Form(None),
-    model: str = Form("deepseek-flash"),
+    model: str = Form("DeepSeek-V4.1-Flash"),
     lang: str = Form("vie+eng"),
     page_range: str = Form("all")
 ):

@@ -115,7 +115,7 @@ class AIAnalyzeRequest(BaseModel):
     imageData: Optional[str] = Field(default="")
     hint: Optional[str] = Field(default="")
     aiHint: Optional[str] = Field(default="")
-    model: Optional[str] = Field(default="deepseek-chat")
+    model: Optional[str] = Field(default="DeepSeek-V4.1-Flash")
     context: Optional[str] = Field(default="")
 
     def get_image_data(self) -> str:
@@ -155,7 +155,7 @@ class TranslateRequest(BaseModel):
 class AIConfigModel(BaseModel):
     api_key: Optional[str] = Field(default="")
     base_url: Optional[str] = Field(default="https://api.deepseek.com/v1")
-    model: Optional[str] = Field(default="deepseek-chat")
+    model: Optional[str] = Field(default="DeepSeek-V4.1-Flash")
 
 
 class OpenFolderRequest(BaseModel):
@@ -398,7 +398,7 @@ def get_ai_config():
         "api_key": api_key,
         "deepseek_api_key_masked": masked,
         "base_url": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
-        "model": data.get("deepseek_model", "deepseek-chat"),
+        "model": data.get("deepseek_model", "DeepSeek-V4.1-Flash"),
         "endpoint": data.get("deepseek_base_url", "https://api.deepseek.com/v1")
     }
 

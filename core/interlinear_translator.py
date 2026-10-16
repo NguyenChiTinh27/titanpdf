@@ -389,6 +389,9 @@ class InterlinearTranslator:
 
     DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 
+    DEFAULT_MODEL = "DeepSeek-V4.1-Flash"
+    FALLBACK_MODEL = "deepseek-chat"
+
     @classmethod
     def translate_texts_deepseek(
         cls, 
@@ -396,7 +399,7 @@ class InterlinearTranslator:
         api_key: str, 
         source_lang: str = "en",
         target_lang: str = "vi",
-        model: str = "deepseek-chat"
+        model: str = "DeepSeek-V4.1-Flash"
     ) -> List[str]:
         """Dịch danh sách các đoạn văn bản bằng DeepSeek AI JSON mode."""
         if not texts:
@@ -423,18 +426,25 @@ class InterlinearTranslator:
             "Authorization": f"Bearer {api_key.strip()}",
             "Content-Type": "application/json"
         }
+        target_model = model or cls.DEFAULT_MODEL
         body = {
-            "model": model,
+            "model": target_model,
             "messages": [
                 {"role": "system", "content": prompt_sys},
                 {"role": "user", "content": json.dumps(payload_dict, ensure_ascii=False)}
             ],
             "response_format": {"type": "json_object"},
-            "temperature": 0.2
+            "temperature": 0.1
         }
 
         try:
-            resp = requests.post(cls.DEEPSEEK_API_URL, headers=headers, json=body, timeout=10)
+            resp = requests.post(cls.DEEPSEEK_API_URL, headers=headers, json=body, timeout=15)
+            if resp.status_code != 200 and target_model != cls.FALLBACK_MODEL:
+                err_text = resp.text.lower()
+                if any(k in err_text for k in ("model", "not found", "invalid_request", "does not exist", "unsupported")) or resp.status_code in (400, 404):
+                    body["model"] = cls.FALLBACK_MODEL
+                    resp = requests.post(cls.DEEPSEEK_API_URL, headers=headers, json=body, timeout=15)
+
             if resp.status_code != 200:
                 raise ValueError(f"DeepSeek API trả về lỗi HTTP {resp.status_code}: {resp.text}")
 
@@ -702,7 +712,7 @@ class InterlinearTranslator:
         source_lang: str = "en",
         target_lang: str = "vi",
         output_mode: str = "bilingual",
-        model: str = "deepseek-flash",
+        model: str = "DeepSeek-V4.1-Flash",
         dpi: int = 200,
         page_range: str = "all"
     ) -> Dict[str, Any]:
