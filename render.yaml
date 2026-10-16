@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: titanpdf-hse
+    name: tinh-of
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free

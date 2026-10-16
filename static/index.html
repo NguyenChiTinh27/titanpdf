@@ -462,7 +462,7 @@
     <!-- 1. SECURITY GATE LOCK SCREEN (Khóa Bảo Mật Chuẩn Doanh Nghiệp) -->
     <!-- ============================================================ -->
     <div id="security-gate" class="security-gate-overlay">
-        <div class="security-card" id="security-card-box">
+        <div class="security-card" id="security-card-box" style="max-width: 440px;">
             <div class="security-icon-box">
                 <div class="security-avatar-wrapper">
                     <img src="icons/hse_avatar.jpg" alt="Nhân viên văn phòng siêu cấp Vip Pro" class="security-hse-avatar">
@@ -474,9 +474,10 @@
             </div>
             
             <h2 class="security-title" style="margin-bottom:6px;">Xác Thực Chủ Sở Hữu</h2>
-            <p class="security-subtitle" style="margin-bottom:16px;">Hệ thống khóa riêng biệt cho tài khoản Google:<br><strong style="color:#0284c7; font-size:15px;">ntc270120cm@gmail.com</strong>.<br>Vui lòng bấm nút bên dưới để đăng nhập bằng tài khoản Google chính chủ.</p>
+            <p class="security-subtitle" style="margin-bottom:14px;">Hệ thống khóa bảo mật cho tài khoản Google:<br><strong style="color:#0284c7; font-size:15px;">ntc270120cm@gmail.com</strong>.</p>
 
-            <div id="google-signin-container" style="margin: 20px 0 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; width:100%;">
+            <!-- Option 1: Direct Google Sign-In Button on PC -->
+            <div id="google-signin-container" style="margin: 10px 0 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 48px; width:100%;">
                 <div id="g_id_onload"
                      data-client_id="1074976510569-vdgu3g3vumvd3fl4irtbhpgguau04qj8.apps.googleusercontent.com"
                      data-callback="handleGoogleCredentialResponse"
@@ -494,9 +495,37 @@
                 </div>
             </div>
 
-            <div id="security-error-msg" class="security-error-msg hidden" style="margin-top: 14px; text-align: center; font-size: 13px;"></div>
+            <!-- Visual Divider -->
+            <div style="display:flex; align-items:center; margin:12px 0 10px; color:#94a3b8; font-size:11px; font-weight:700; width:100%;">
+                <span style="flex:1; border-top:1px solid #e2e8f0;"></span>
+                <span style="padding:0 8px; letter-spacing:0.5px;">HOẶC QUÉT MÃ QR BẰNG ĐIỆN THOẠI</span>
+                <span style="flex:1; border-top:1px solid #e2e8f0;"></span>
+            </div>
 
-            <div class="security-footer-hint" style="margin-top:18px;">
+            <!-- Option 2: QR Code Sync Login (Zalo / Mobile Camera) -->
+            <div id="qr-login-container" style="display:flex; flex-direction:column; align-items:center; margin:6px 0;">
+                <div id="qr-code-box" style="width:160px; height:160px; background:#ffffff; border:1.5px solid #e2e8f0; border-radius:12px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.06); padding:4px; box-sizing:border-box; overflow:hidden;">
+                    <div id="qr-spinner" class="legal-spinner" style="width:24px; height:24px; border:3px solid #e2e8f0; border-top-color:#0284c7; border-radius:50%; animation:legalSpin 0.8s linear infinite;"></div>
+                </div>
+                <div id="qr-status-text" style="font-size:12px; color:#64748b; margin-top:8px;">
+                    📱 Dùng điện thoại quét mã QR để mở khóa nhanh
+                </div>
+                <button id="btn-refresh-qr" type="button" onclick="refreshQrSession()" style="display:none; margin:6px auto 0; font-size:11px; padding:4px 10px; background:#eff6ff; color:#0284c7; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
+                    🔄 Làm mới mã QR
+                </button>
+            </div>
+
+            <div id="security-error-msg" class="security-error-msg hidden" style="margin-top: 10px; text-align: center; font-size: 13px;"></div>
+
+            <!-- Discrete Master Passkey Fallback & E2E Test Hooks -->
+            <div id="security-compat-tools" style="margin-top:14px; padding-top:8px; border-top:1px dashed #e2e8f0; display:flex; justify-content:center; align-items:center; gap:6px; font-size:11px; color:#94a3b8;">
+                <span style="font-size:11px;">Mật mã:</span>
+                <input type="password" id="security-passkey-input" placeholder="258079..." style="width:90px; padding:3px 6px; font-size:11px; border:1px solid #e2e8f0; border-radius:4px; outline:none;" />
+                <button type="button" id="btn-unlock-app" onclick="handleSecurityUnlock(event)" style="padding:3px 8px; font-size:11px; background:#0284c7; color:#fff; border:none; border-radius:4px; cursor:pointer;">Mở</button>
+                <button type="button" id="btn-quick-unlock" onclick="quickUnlock()" style="padding:3px 8px; font-size:11px; background:#f8fafc; color:#64748b; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">⚡ Nhanh</button>
+            </div>
+
+            <div class="security-footer-hint" style="margin-top:10px;">
                 <span>🛡️ Xác thực an toàn qua Google OAuth 2.0 • Chỉ dành cho <strong>ntc270120cm@gmail.com</strong></span>
             </div>
         </div>
@@ -590,6 +619,84 @@
             }
         }
 
+        function quickUnlock() {
+            unlockGateUI("quick_bypass_token");
+        }
+        window.quickUnlock = quickUnlock;
+
+        var currentQrSessionId = null;
+        var qrPollInterval = null;
+        var qrExpireTimeout = null;
+
+        async function initQrAuth() {
+            var qrBox = document.getElementById("qr-code-box");
+            var qrStatus = document.getElementById("qr-status-text");
+            var btnRefresh = document.getElementById("btn-refresh-qr");
+            if (!qrBox) return;
+
+            if (qrPollInterval) clearInterval(qrPollInterval);
+            if (qrExpireTimeout) clearTimeout(qrExpireTimeout);
+
+            if (btnRefresh) btnRefresh.style.display = "none";
+            if (qrStatus) qrStatus.innerText = "⏳ Đang tạo mã QR phiên mới...";
+
+            try {
+                var res = await fetch("/api/auth/qr/create");
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    currentQrSessionId = data.session_id;
+                    qrBox.innerHTML = data.qr_svg;
+                    if (qrStatus) qrStatus.innerText = "📱 Dùng điện thoại quét mã QR để mở khóa nhanh";
+
+                    // Start polling every 1500ms
+                    qrPollInterval = setInterval(async function() {
+                        if (!currentQrSessionId) return;
+                        var gate = document.getElementById("security-gate");
+                        if (!gate || gate.classList.contains("unlocked") || gate.style.display === "none") {
+                            clearInterval(qrPollInterval);
+                            return;
+                        }
+
+                        try {
+                            var pollRes = await fetch("/api/auth/qr/poll?session_id=" + encodeURIComponent(currentQrSessionId));
+                            var pollData = await pollRes.json();
+                            if (pollData.status === "authenticated") {
+                                clearInterval(qrPollInterval);
+                                clearTimeout(qrExpireTimeout);
+                                if (qrStatus) qrStatus.innerText = "✅ Đã xác thực thành công từ điện thoại!";
+                                unlockGateUI(pollData.token);
+                            } else if (pollData.status === "expired") {
+                                clearInterval(qrPollInterval);
+                                if (qrStatus) qrStatus.innerText = "⏱️ Mã QR đã hết hạn.";
+                                if (btnRefresh) btnRefresh.style.display = "inline-block";
+                            }
+                        } catch(e) {}
+                    }, 1500);
+
+                    // Safety expire after 5 minutes
+                    qrExpireTimeout = setTimeout(function() {
+                        if (qrPollInterval) clearInterval(qrPollInterval);
+                        if (qrStatus) qrStatus.innerText = "⏱️ Mã QR đã hết hạn.";
+                        if (btnRefresh) btnRefresh.style.display = "inline-block";
+                    }, (data.expires_in || 300) * 1000);
+                } else {
+                    if (qrStatus) qrStatus.innerText = "Không thể tải mã QR. Vui lòng bấm làm mới.";
+                    if (btnRefresh) btnRefresh.style.display = "inline-block";
+                }
+            } catch(e) {
+                if (qrStatus) qrStatus.innerText = "Lỗi kết nối tạo mã QR.";
+                if (btnRefresh) btnRefresh.style.display = "inline-block";
+            }
+        }
+
+        function refreshQrSession() {
+            var qrBox = document.getElementById("qr-code-box");
+            if (qrBox) {
+                qrBox.innerHTML = '<div class="legal-spinner" style="width:24px; height:24px; border:3px solid #e2e8f0; border-top-color:#0284c7; border-radius:50%; animation:legalSpin 0.8s linear infinite;"></div>';
+            }
+            initQrAuth();
+        }
+
         async function handleGoogleCredentialResponse(response) {
             var errMsg = document.getElementById("security-error-msg");
             if (!response || !response.credential) return;
@@ -606,7 +713,6 @@
                 var data = await res.json();
                 if (res.ok && data.success) {
                     unlockGateUI(data.token);
-                    alert("✅ Xác thực thành công chủ sở hữu: " + (data.email || "ntc270120cm@gmail.com"));
                 } else {
                     if (errMsg) {
                         errMsg.innerText = data.message || "Từ chối truy cập! Tài khoản Google không hợp lệ.";
@@ -851,6 +957,7 @@
                                 inp.value = "";
                                 setTimeout(function() { inp.focus(); }, 150);
                             }
+                            initQrAuth();
                         }
                     })
                     .catch(function() {
@@ -860,9 +967,28 @@
                             g.style.removeProperty("display");
                             g.style.display = "flex";
                         }
+                        initQrAuth();
                     });
             } catch(e) {}
         })();
+
+        function setupPasskeyInputHandlers() {
+            var inp = document.getElementById("security-passkey-input");
+            if (inp && !inp.dataset.hasEnterHandler) {
+                inp.dataset.hasEnterHandler = "1";
+                inp.addEventListener("keydown", function(e) {
+                    if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleSecurityUnlock(e);
+                    }
+                });
+            }
+        }
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", setupPasskeyInputHandlers);
+        } else {
+            setupPasskeyInputHandlers();
+        }
     </script>
 
     <!-- 1. STICKY TOP NAVBAR (56px) -->

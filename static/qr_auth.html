@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác Thực Đăng Nhập TitanPDF & HSE Studio</title>
+    <link rel="icon" type="image/jpeg" href="icons/hse_avatar.jpg">
+    <link rel="shortcut icon" href="icons/hse_avatar.jpg">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #1e293b;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        .qr-card {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 32px 24px;
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: cardFadeIn 0.35s ease-out;
+        }
+        @keyframes cardFadeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .avatar-box {
+            width: 76px;
+            height: 76px;
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 0 auto 16px;
+            border: 3px solid #0284c7;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
+        }
+        .avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            border: 1px solid #bfdbfe;
+        }
+        .card-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0 0 8px;
+        }
+        .card-desc {
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.5;
+            margin: 0 0 20px;
+        }
+        .session-info {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #475569;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .btn-confirm-primary {
+            width: 100%;
+            padding: 12px 18px;
+            background: #0284c7;
+            color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+            margin-top: 12px;
+        }
+        .btn-confirm-primary:hover {
+            background: #0369a1;
+        }
+        .btn-confirm-primary:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .status-box {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            display: none;
+        }
+        .status-success {
+            display: block;
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+        }
+        .status-error {
+            display: block;
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+        .status-loading {
+            display: block;
+            background: #f0f9ff;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 18px 0;
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .divider:not(:empty)::before {
+            margin-right: 10px;
+        }
+        .divider:not(:empty)::after {
+            margin-left: 10px;
+        }
+        .passkey-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .passkey-input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+        }
+        .passkey-input:focus {
+            border-color: #0284c7;
+        }
+        .passkey-btn {
+            padding: 10px 14px;
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .passkey-btn:hover {
+            background: #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="qr-card" id="qr-auth-card">
+        <div class="avatar-box">
+            <img src="icons/hse_avatar.jpg" alt="TitanPDF" class="avatar-img">
+        </div>
+
+        <div class="badge-pill">
+            <span>🛡️ XÁC THỰC THIẾT BỊ TỪ XA</span>
+        </div>
+
+        <h1 class="card-title">Yêu Cầu Mở Khóa Máy Tính</h1>
+        <p class="card-desc">
+            Máy tính đang chờ xác nhận từ điện thoại của bạn.<br>
+            Tài khoản ủy quyền: <strong style="color:#0284c7;">ntc270120cm@gmail.com</strong>
+        </p>
+
+        <div class="session-info">
+            <span>Mã phiên: <strong id="lbl-session-id">...</strong></span>
+            <span id="lbl-timer" style="color:#0284c7; font-weight:600;">5:00</span>
+        </div>
+
+        <!-- Option 1: Sign in with Google (Primary) -->
+        <div id="google-login-section" style="margin: 16px 0;">
+            <div id="g_id_onload"
+                 data-client_id="1074976510569-vdgu3g3vumvd3fl4irtbhpgguau04qj8.apps.googleusercontent.com"
+                 data-callback="handleMobileGoogleLogin"
+                 data-auto_prompt="false">
+            </div>
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-shape="pill"
+                 data-theme="outline"
+                 data-text="signin_with"
+                 data-size="large"
+                 data-logo_alignment="left"
+                 data-width="320">
+            </div>
+        </div>
+
+        <!-- Quick Unlock if phone has saved token -->
+        <div id="saved-session-section" style="display:none;">
+            <button type="button" class="btn-confirm-primary" id="btn-quick-confirm" onclick="handleQuickApprove()">
+                <span>⚡ Xác Nhận Mở Khóa Ngay</span>
+            </button>
+            <div style="font-size:11px; color:#64748b; margin-top:4px;">(Sử dụng phiên ntc270120cm@gmail.com đã lưu)</div>
+        </div>
+
+        <!-- Option 2: Fallback Passkey -->
+        <div class="divider">HOẶC NHẬP MẬT MÃ DỰ PHÒNG</div>
+        <form id="form-mobile-passkey" onsubmit="handlePasskeyApprove(event)">
+            <div class="passkey-row">
+                <input type="password" id="mobile-passkey-input" class="passkey-input" placeholder="Nhập mật mã 258079..." required />
+                <button type="submit" class="passkey-btn" id="btn-mobile-passkey">Xác nhận</button>
+            </div>
+        </form>
+
+        <!-- Status Message -->
+        <div id="status-box" class="status-box"></div>
+    </div>
+
+    <script>
+        var urlParams = new URLSearchParams(window.location.search);
+        var sessionId = urlParams.get('session_id') || urlParams.get('s') || '';
+        document.getElementById('lbl-session-id').innerText = sessionId || 'Không xác định';
+
+        // Check if phone has local session token
+        var savedToken = localStorage.getItem('luv_auth_token') || sessionStorage.getItem('luv_auth_token');
+        if (savedToken) {
+            document.getElementById('saved-session-section').style.display = 'block';
+        }
+
+        // Countdown timer (5 minutes)
+        var remainingSeconds = 300;
+        var timerInterval = setInterval(function() {
+            remainingSeconds--;
+            if (remainingSeconds <= 0) {
+                clearInterval(timerInterval);
+                document.getElementById('lbl-timer').innerText = 'Hết hạn';
+                showStatus('Mã QR đã hết hạn. Vui lòng tải lại trang trên máy tính để tạo mã mới.', 'error');
+                disableAllButtons();
+                return;
+            }
+            var m = Math.floor(remainingSeconds / 60);
+            var s = remainingSeconds % 60;
+            document.getElementById('lbl-timer').innerText = m + ':' + (s < 10 ? '0' : '') + s;
+        }, 1000);
+
+        function showStatus(msg, type) {
+            var box = document.getElementById('status-box');
+            box.className = 'status-box status-' + type;
+            box.innerHTML = msg;
+        }
+
+        function disableAllButtons() {
+            var btnQuick = document.getElementById('btn-quick-confirm');
+            if (btnQuick) btnQuick.disabled = true;
+            var btnPass = document.getElementById('btn-mobile-passkey');
+            if (btnPass) btnPass.disabled = true;
+        }
+
+        function markSuccess(msg) {
+            clearInterval(timerInterval);
+            var card = document.getElementById('qr-auth-card');
+            card.innerHTML = `
+                <div style="padding: 20px 0;">
+                    <div style="width:72px; height:72px; border-radius:50%; background:#dcfce7; color:#16a34a; display:flex; align-items:center; justify-content:center; margin:0 auto 16px; font-size:36px;">
+                        ✓
+                    </div>
+                    <h2 style="font-size:22px; font-weight:700; color:#15803d; margin:0 0 8px;">Mở Khóa Thành Công!</h2>
+                    <p style="font-size:14px; color:#475569; line-height:1.6; margin:0 0 20px;">
+                        Màn hình máy tính của bạn đã được mở khóa tự động.<br>
+                        Tài khoản: <strong style="color:#0284c7;">ntc270120cm@gmail.com</strong>
+                    </p>
+                    <div style="font-size:12px; color:#94a3b8;">Bạn có thể đóng tab trình duyệt này trên điện thoại.</div>
+                </div>
+            `;
+        }
+
+        async function handleMobileGoogleLogin(response) {
+            if (!response || !response.credential) return;
+            showStatus('⏳ Đang đối soát danh tính Google với máy chủ...', 'loading');
+
+            try {
+                var fd = new FormData();
+                fd.append('session_id', sessionId);
+                fd.append('credential', response.credential);
+
+                var res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    if (data.token) {
+                        try {
+                            localStorage.setItem('luv_auth_token', data.token);
+                            localStorage.setItem('luv_owner_authorized', 'ntc270120cm@gmail.com');
+                        } catch(e) {}
+                    }
+                    markSuccess(data.message);
+                } else {
+                    showStatus('❌ ' + (data.message || 'Xác thực Google thất bại!'), 'error');
+                }
+            } catch(e) {
+                showStatus('❌ Lỗi kết nối máy chủ: ' + e.message, 'error');
+            }
+        }
+
+        async function handleQuickApprove() {
+            showStatus('⏳ Đang truyền tín hiệu mở khóa tới máy tính...', 'loading');
+            try {
+                var fd = new FormData();
+                fd.append('session_id', sessionId);
+                fd.append('phone_token', savedToken || 'verified');
+
+                var res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    markSuccess(data.message);
+                } else {
+                    showStatus('❌ ' + (data.message || 'Phê duyệt thất bại!'), 'error');
+                }
+            } catch(e) {
+                showStatus('❌ Lỗi kết nối: ' + e.message, 'error');
+            }
+        }
+
+        async function handlePasskeyApprove(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            var pass = document.getElementById('mobile-passkey-input').value.trim();
+            if (!pass) return;
+
+            showStatus('⏳ Đang kiểm tra mật mã...', 'loading');
+            try {
+                var fd = new FormData();
+                fd.append('session_id', sessionId);
+                fd.append('passkey', pass);
+
+                var res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    if (data.token) {
+                        try {
+                            localStorage.setItem('luv_auth_token', data.token);
+                        } catch(e) {}
+                    }
+                    markSuccess(data.message);
+                } else {
+                    showStatus('❌ ' + (data.message || 'Mật mã không đúng!'), 'error');
+                }
+            } catch(e) {
+                showStatus('❌ Lỗi kết nối: ' + e.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
