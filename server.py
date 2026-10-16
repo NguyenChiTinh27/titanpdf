@@ -11,6 +11,8 @@ import traceback
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pathlib import Path
+import socket
+import secrets
 import subprocess
 from pydantic import BaseModel
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Body, Request, Response
@@ -388,33 +390,81 @@ def auth_lock(token: str = Form("")):
 QR_SESSIONS: Dict[str, Dict[str, Any]] = {}
 QR_SESSION_TTL = 300  # 5 minutes safety timeout
 
+def get_local_ip() -> str:
+    """Retrieve machine's LAN IP address for same-WiFi mobile access."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+def is_url_alive(url: str, timeout: float = 1.0) -> bool:
+    """Quick probe to verify if a tunnel or public URL is actually reachable."""
+    try:
+        req = urllib.request.Request(f"{url.rstrip('/')}/api/health", headers={"User-Agent": "TitanPDF-Probe/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
 def get_titan_base_url(request: Request) -> str:
     """Determine best publicly accessible base URL for QR code."""
-    # 1. Environment variable if configured
+    # 1. Environment variable if explicitly configured
     env_url = os.environ.get("TITAN_BASE_URL", "").strip().rstrip("/")
     if env_url:
         return env_url
-    
-    # 2. Check tunnel_url.txt if active
-    try:
-        if os.path.exists("tunnel_url.txt"):
-            with open("tunnel_url.txt", "r", encoding="utf-8") as f:
-                t = f.read().strip().rstrip("/")
-                if t.startswith("http"):
-                    return t
-    except Exception:
-        pass
 
-    # 3. Request headers (Render / Reverse Proxy)
+    # 2. Render external URL (Render automatically injects RENDER_EXTERNAL_URL)
+    render_url = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+    if render_url:
+        return render_url
+
+    # 3. Check reverse proxy / forwarded headers (e.g. Render, Cloudflare, Nginx)
     forwarded_host = request.headers.get("x-forwarded-host")
     forwarded_proto = request.headers.get("x-forwarded-proto", "https")
     if forwarded_host:
         return f"{forwarded_proto}://{forwarded_host}"
 
-    # 4. Fallback to host header
-    host = request.headers.get("host", "127.0.0.1:8888")
+    host = request.headers.get("host", "").strip()
     scheme = request.url.scheme or "http"
-    return f"{scheme}://{host}"
+    if host and not host.startswith("127.0.0.1") and not host.startswith("localhost"):
+        # Incoming host is already an external hostname or LAN IP
+        return f"{scheme}://{host}"
+
+    # 4. If request came from localhost/127.0.0.1:
+    # Check if a live tunnel is active in tunnel_url.txt
+    if os.path.exists("tunnel_url.txt"):
+        try:
+            with open("tunnel_url.txt", "r", encoding="utf-8") as f:
+                t = f.read().strip().rstrip("/")
+                if t.startswith("http"):
+                    if is_url_alive(t, timeout=1.0):
+                        return t
+                    else:
+                        # Stale tunnel file: remove it to prevent mobile scan dead ends
+                        try:
+                            os.remove("tunnel_url.txt")
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    # 5. LAN IP Fallback: Allows phone on the same WiFi to access desktop
+    lan_ip = get_local_ip()
+    port = 8888
+    if host and ":" in host:
+        try:
+            port = int(host.split(":")[-1])
+        except Exception:
+            pass
+    if lan_ip and lan_ip != "127.0.0.1":
+        return f"http://{lan_ip}:{port}"
+
+    # 6. Absolute local fallback
+    return f"{scheme}://{host or '127.0.0.1:8888'}"
 
 def generate_qr_svg(url: str, size: int = 180) -> str:
     """Generate crisp SVG QR Code using ReportLab with zero network."""
@@ -447,7 +497,7 @@ def cleanup_qr_sessions():
 def auth_qr_create(request: Request):
     """Generate dynamic unique QR session with SVG payload."""
     cleanup_qr_sessions()
-    session_id = f"qr_{uuid.uuid4().hex[:12]}"
+    session_id = f"qr_{secrets.token_hex(12)}"
     now = time.time()
     base_url = get_titan_base_url(request)
     auth_url = f"{base_url}/qr-auth?session_id={session_id}"
@@ -482,13 +532,22 @@ def auth_qr_poll(session_id: str):
         sess["status"] = "expired"
         return {"status": "expired", "message": "Mã QR đã hết hạn. Vui lòng làm mới!"}
 
+    if sess.get("status") == "consumed":
+        return {"status": "expired", "message": "Phiên QR đã được sử dụng thành công."}
+
     if sess["status"] == "authenticated":
-        return {
+        resp = {
             "status": "authenticated",
             "token": sess["token"],
             "email": sess.get("email") or "ntc270120cm@gmail.com",
             "message": "Xác thực thành công!"
         }
+        # Grace window of 10s for poll retries, then mark consumed
+        if "delivered_at" not in sess:
+            sess["delivered_at"] = time.time()
+        elif time.time() - sess["delivered_at"] > 10:
+            sess["status"] = "consumed"
+        return resp
 
     return {"status": "pending", "expires_in": max(0, int(sess["expires_at"] - time.time()))}
 
@@ -510,6 +569,17 @@ def auth_qr_approve(
         return JSONResponse(status_code=400, content={"success": False, "message": "Phiên QR đã hết hạn. Vui lòng làm mới trên máy tính."})
 
     ALLOWED_EMAIL = "ntc270120cm@gmail.com"
+
+    if sess.get("status") == "consumed":
+        return JSONResponse(status_code=400, content={"success": False, "message": "Phiên QR này đã được hoàn tất và không thể tái sử dụng."})
+
+    if sess.get("status") == "authenticated":
+        return {
+            "success": True,
+            "token": sess["token"],
+            "email": sess.get("email") or ALLOWED_EMAIL,
+            "message": "Phiên QR này đã được phê duyệt thành công trước đó."
+        }
 
     # 1. Google OAuth Credential
     if credential:
@@ -545,14 +615,18 @@ def auth_qr_approve(
         except Exception as e:
             return JSONResponse(status_code=400, content={"success": False, "message": f"Lỗi xác thực Google: {str(e)}"})
 
-    # 2. Saved phone session token
+    # 2. Saved phone session token (MUST be an authentic active session)
     if phone_token:
         pt = phone_token.strip()
-        if pt in ACTIVE_SESSIONS or pt.startswith("luv_") or pt.startswith("quick_") or pt in ["verified", "local_bypass"]:
+        if pt in ACTIVE_SESSIONS:
+            token = f"luv_sess_qr_sync_{uuid.uuid4().hex}"
+            persist_session(token)
             sess["status"] = "authenticated"
-            sess["token"] = pt
+            sess["token"] = token
             sess["email"] = ALLOWED_EMAIL
-            return {"success": True, "token": pt, "message": "Xác nhận mở khóa từ xa thành công!"}
+            return {"success": True, "token": token, "message": "Xác nhận mở khóa từ xa thành công!"}
+        else:
+            return JSONResponse(status_code=401, content={"success": False, "message": "Phiên lưu trên điện thoại không hợp lệ hoặc đã hết hạn."})
 
     # 3. Master Passkey fallback
     if passkey:

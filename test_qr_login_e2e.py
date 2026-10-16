@@ -104,6 +104,37 @@ async def test_qr_flow():
         await desktop_page.screenshot(path='e2e_qr_sync_unlock_verified.png')
         await mobile_page.screenshot(path='e2e_qr_mobile_approved_verified.png')
 
+        # 7. Adversarial Security Edge Cases Verification
+        print("[STEP 7] Running Adversarial Security & Edge Cases Suite...")
+        import urllib.request
+        import urllib.parse
+        import json
+
+        # A. Backdoor attempt with phone_token="verified" must be REJECTED (HTTP 401)
+        create_req = json.loads(urllib.request.urlopen("http://127.0.0.1:8888/api/auth/qr/create").read())
+        test_sid = create_req["session_id"]
+        bad_token_data = urllib.parse.urlencode({"session_id": test_sid, "phone_token": "verified"}).encode()
+        try:
+            urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8888/api/auth/qr/approve", data=bad_token_data))
+            assert False, "Security vulnerability: Unauthenticated phone_token accepted!"
+        except urllib.error.HTTPError as he:
+            assert he.code == 401, f"Expected 401 for unauthorized phone_token, got {he.code}"
+            print("  ✓ Backdoor exploit (phone_token='verified') safely blocked with 401 Unauthorized")
+
+        # B. Wrong passkey must be REJECTED (HTTP 400)
+        wrong_pass_data = urllib.parse.urlencode({"session_id": test_sid, "passkey": "wrong_pass_9999"}).encode()
+        try:
+            urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8888/api/auth/qr/approve", data=wrong_pass_data))
+            assert False, "Security failure: Wrong passkey was accepted!"
+        except urllib.error.HTTPError as he:
+            assert he.code == 400, f"Expected 400 for wrong passkey, got {he.code}"
+            print("  ✓ Invalid passkey correctly rejected with 400 Bad Request")
+
+        # C. Non-existent session must return expired
+        poll_fake = json.loads(urllib.request.urlopen("http://127.0.0.1:8888/api/auth/qr/poll?session_id=qr_nonexistent").read())
+        assert poll_fake.get("status") == "expired"
+        print("  ✓ Non-existent session correctly handled as expired")
+
         print(f"Total Console Errors: {len(console_errors)}")
         for e in console_errors:
             print(" ", e)

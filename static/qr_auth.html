@@ -259,9 +259,16 @@
         var sessionId = urlParams.get('session_id') || urlParams.get('s') || '';
         document.getElementById('lbl-session-id').innerText = sessionId || 'Không xác định';
 
+        if (!sessionId) {
+            window.addEventListener('DOMContentLoaded', function() {
+                showStatus('⚠️ Không tìm thấy mã phiên quét hợp lệ. Vui lòng quét lại mã QR trên máy tính.', 'error');
+                disableAllButtons();
+            });
+        }
+
         // Check if phone has local session token
         var savedToken = localStorage.getItem('luv_auth_token') || sessionStorage.getItem('luv_auth_token');
-        if (savedToken) {
+        if (savedToken && sessionId) {
             document.getElementById('saved-session-section').style.display = 'block';
         }
 
@@ -345,7 +352,7 @@
             try {
                 var fd = new FormData();
                 fd.append('session_id', sessionId);
-                fd.append('phone_token', savedToken || 'verified');
+                fd.append('phone_token', savedToken || '');
 
                 var res = await fetch('/api/auth/qr/approve', { method: 'POST', body: fd });
                 var data = await res.json();

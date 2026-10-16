@@ -667,17 +667,29 @@
                                 unlockGateUI(pollData.token);
                             } else if (pollData.status === "expired") {
                                 clearInterval(qrPollInterval);
-                                if (qrStatus) qrStatus.innerText = "⏱️ Mã QR đã hết hạn.";
-                                if (btnRefresh) btnRefresh.style.display = "inline-block";
+                                var gateEl = document.getElementById("security-gate");
+                                if (gateEl && !gateEl.classList.contains("unlocked") && gateEl.style.display !== "none") {
+                                    if (qrStatus) qrStatus.innerText = "🔄 Đang tự động làm mới mã QR...";
+                                    initQrAuth();
+                                } else {
+                                    if (qrStatus) qrStatus.innerText = "⏱️ Mã QR đã hết hạn.";
+                                    if (btnRefresh) btnRefresh.style.display = "inline-block";
+                                }
                             }
                         } catch(e) {}
                     }, 1500);
 
-                    // Safety expire after 5 minutes
+                    // Safety auto-refresh after 5 minutes TTL
                     qrExpireTimeout = setTimeout(function() {
                         if (qrPollInterval) clearInterval(qrPollInterval);
-                        if (qrStatus) qrStatus.innerText = "⏱️ Mã QR đã hết hạn.";
-                        if (btnRefresh) btnRefresh.style.display = "inline-block";
+                        var gateEl = document.getElementById("security-gate");
+                        if (gateEl && !gateEl.classList.contains("unlocked") && gateEl.style.display !== "none") {
+                            if (qrStatus) qrStatus.innerText = "🔄 Đang tự động làm mới mã QR...";
+                            initQrAuth();
+                        } else {
+                            if (qrStatus) qrStatus.innerText = "⏱️ Mã QR đã hết hạn.";
+                            if (btnRefresh) btnRefresh.style.display = "inline-block";
+                        }
                     }, (data.expires_in || 300) * 1000);
                 } else {
                     if (qrStatus) qrStatus.innerText = "Không thể tải mã QR. Vui lòng bấm làm mới.";

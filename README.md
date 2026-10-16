@@ -61,6 +61,22 @@ python server.py
 
 ---
 
+## 🌐 Cấu hình Tên Miền Render (`tinh-of.onrender.com`)
+Để đổi tên miền máy chủ Render từ `titanpdf-hse.onrender.com` sang `tinh-of.onrender.com`, thực hiện 2 thao tác trên Render Dashboard:
+1. **Thao tác 1:** Đăng nhập vào [Render Dashboard](https://dashboard.render.com), chọn Web Service hiện tại của dự án (`titanpdf-hse`).
+2. **Thao tác 2:** Chọn mục **Settings** (Cài đặt) -> Tìm trường **Name** (Tên dịch vụ) -> Nhập `tinh-of` -> Cuộn xuống cuối trang bấm **Save Changes**.
+   - Render sẽ tự động gán tên miền chính thức mới là: **`https://tinh-of.onrender.com`**.
+   - Cấu hình file `render.yaml` trong repo đã được đồng bộ `name: tinh-of`.
+
+---
+
+## 📱 Đăng Nhập Bằng Quét Mã QR Đồng Bộ (Cross-Device QR Login)
+- **Cơ chế hoạt động**: Tương tự Zalo/WhatsApp Web. Màn hình khóa máy tính hiển thị mã QR vector SVG động với thời gian an toàn 5 phút.
+- **Thao tác**: Dùng điện thoại quét mã QR -> mở trang `/qr-auth` -> Xác thực tài khoản Google (`ntc270120cm@gmail.com`) hoặc nhập mật mã quản trị -> Máy tính tự động mở khóa tức thì (< 2 giây) mà không cần chạm máy tính.
+- **Tự động làm mới**: Mã QR tự động sinh phiên mới sau 5 phút nếu chưa được quét.
+
+---
+
 ## 🔒 Bảo mật và Dọn dẹp
 - Các tệp tạm tải lên được lưu tại thư mục `TitanPDF/temp/`.
 - Các tệp kết quả xuất ra được lưu tại `TitanPDF/output/`.
