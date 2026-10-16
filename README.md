@@ -10,6 +10,8 @@ pinned: false
 
 # TitanPDF - Private Suite (Bản sao hoàn hảo của iLovePDF)
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/NguyenChiTinh27/titanpdf)
+
 > **Bộ công cụ xử lý PDF toàn diện chuẩn doanh nghiệp — 100% Offline, Bảo mật tuyệt đối, Tốc độ mili-giây.**
 
 ---
