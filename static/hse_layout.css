@@ -1,0 +1,1381 @@
+/* ==========================================================================
+   HSE SAFETY LAYOUT PLANNER PRO (TOOL #33) — MASTER STYLESHEET
+   Architecture: High-Performance CAD Workspace with 100% Isolated Namespace
+   Theme Synchronization: Light Clean SaaS, Bento Carbon, Liquid Glass, Nordic Aurora
+   Zero-Collision Engine • Responsive Glassmorphism • Hardware Accelerated
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. DESIGN TOKENS & THEME VARIABLES (--layout-*)
+   -------------------------------------------------------------------------- */
+
+/* --- 1.1 DEFAULT THEME: LIGHT CLEAN SAAS (:root & [data-theme="clean"]) --- */
+:root,
+html[data-theme="clean"],
+[data-theme="clean"] {
+  /* Surfaces & Canvas */
+  --layout-bg: #f8fafc;
+  --layout-panel: #ffffff;
+  --layout-panel-card: #f8fafc;
+  --layout-panel-hover: #f1f5f9;
+  --layout-panel-active: #e2e8f0;
+  --layout-canvas-bg: #e2e8f0;
+  --layout-canvas-paper: #ffffff;
+
+  /* Borders & Dividers */
+  --layout-border: #e2e8f0;
+  --layout-border-light: #cbd5e1;
+  --layout-border-focus: #0f172a;
+
+  /* Typography */
+  --layout-text: #0f172a;
+  --layout-text-secondary: #475569;
+  --layout-text-muted: #94a3b8;
+  --layout-text-inverse: #ffffff;
+
+  /* Brand Accents (Safety Emerald CAD) */
+  --layout-brand: #059669;
+  --layout-brand-dark: #047857;
+  --layout-brand-glow: rgba(5, 150, 105, 0.22);
+  --layout-brand-subtle: #ecfdf5;
+  --layout-accent: #f97316;
+  --layout-accent-glow: rgba(249, 115, 22, 0.25);
+
+  /* Grid & Rulers */
+  --layout-grid-major: rgba(100, 116, 139, 0.35);
+  --layout-grid-minor: rgba(148, 163, 184, 0.18);
+  --layout-ruler-bg: #ffffff;
+  --layout-ruler-tick: #94a3b8;
+  --layout-ruler-text: #64748b;
+
+  /* Minimap & Floating Toolbar */
+  --layout-minimap-bg: #ffffff;
+  --layout-minimap-border: #cbd5e1;
+  --layout-minimap-viewport: rgba(5, 150, 105, 0.35);
+  --layout-toolbar-bg: rgba(255, 255, 255, 0.90);
+  --layout-toolbar-border: #cbd5e1;
+  --layout-toolbar-text: #0f172a;
+
+  /* Modals & Dialogs */
+  --layout-modal-bg: #ffffff;
+  --layout-modal-card: #f8fafc;
+  --layout-modal-backdrop: rgba(15, 23, 42, 0.65);
+
+  /* Status Colors */
+  --layout-danger: #dc2626;
+  --layout-danger-bg: rgba(220, 38, 38, 0.10);
+  --layout-warning: #d97706;
+  --layout-warning-bg: rgba(217, 119, 6, 0.10);
+  --layout-info: #0284c7;
+  --layout-info-bg: rgba(2, 132, 199, 0.10);
+  --layout-success: #16a34a;
+  --layout-success-bg: rgba(22, 163, 74, 0.10);
+
+  /* Shadows & Elevation */
+  --layout-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --layout-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --layout-shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.12);
+  --layout-shadow-floating: 0 10px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.10);
+
+  /* Radii & Transitions */
+  --layout-radius-xs: 4px;
+  --layout-radius-sm: 6px;
+  --layout-radius-md: 10px;
+  --layout-radius-lg: 14px;
+  --layout-radius-full: 9999px;
+  --layout-trans-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --layout-trans-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- 1.2 THEME: BENTO GRID CARBON (#121316) --- */
+html[data-theme="bento"],
+[data-theme="bento"] {
+  --layout-bg: #121316;
+  --layout-panel: #181a20;
+  --layout-panel-card: #20242c;
+  --layout-panel-hover: #292e38;
+  --layout-panel-active: #323846;
+  --layout-canvas-bg: #15171d;
+  --layout-canvas-paper: #1b1e26;
+
+  --layout-border: #282c37;
+  --layout-border-light: #383e4e;
+  --layout-border-focus: #10b981;
+
+  --layout-text: #f8fafc;
+  --layout-text-secondary: #94a3b8;
+  --layout-text-muted: #64748b;
+  --layout-text-inverse: #0f172a;
+
+  --layout-brand: #10b981;
+  --layout-brand-dark: #059669;
+  --layout-brand-glow: rgba(16, 185, 129, 0.35);
+  --layout-brand-subtle: rgba(16, 185, 129, 0.12);
+  --layout-accent: #f97316;
+  --layout-accent-glow: rgba(249, 115, 22, 0.35);
+
+  --layout-grid-major: rgba(255, 255, 255, 0.12);
+  --layout-grid-minor: rgba(255, 255, 255, 0.05);
+  --layout-ruler-bg: #181a20;
+  --layout-ruler-tick: #64748b;
+  --layout-ruler-text: #94a3b8;
+
+  --layout-minimap-bg: #181a20;
+  --layout-minimap-border: #282c37;
+  --layout-minimap-viewport: rgba(16, 185, 129, 0.40);
+  --layout-toolbar-bg: rgba(24, 26, 32, 0.90);
+  --layout-toolbar-border: #383e4e;
+  --layout-toolbar-text: #f8fafc;
+
+  --layout-modal-bg: #181a20;
+  --layout-modal-card: #20242c;
+  --layout-modal-backdrop: rgba(0, 0, 0, 0.80);
+
+  --layout-danger: #ef4444;
+  --layout-danger-bg: rgba(239, 68, 68, 0.16);
+  --layout-warning: #f59e0b;
+  --layout-warning-bg: rgba(245, 158, 11, 0.16);
+  --layout-info: #38bdf8;
+  --layout-info-bg: rgba(56, 189, 248, 0.16);
+  --layout-success: #10b981;
+  --layout-success-bg: rgba(16, 185, 129, 0.16);
+
+  --layout-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --layout-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --layout-shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.65);
+  --layout-shadow-floating: 0 12px 30px rgba(0, 0, 0, 0.65), 0 0 15px rgba(16, 185, 129, 0.15);
+}
+
+/* --- 1.3 THEME: LIQUID GLASS DARK (#0B0F19) --- */
+html[data-theme="glass"],
+[data-theme="glass"],
+html[data-theme="dark"],
+[data-theme="dark"] {
+  --layout-bg: #0b0f19;
+  --layout-panel: rgba(15, 23, 42, 0.78);
+  --layout-panel-card: rgba(30, 41, 59, 0.65);
+  --layout-panel-hover: rgba(51, 65, 85, 0.75);
+  --layout-panel-active: rgba(71, 85, 105, 0.85);
+  --layout-canvas-bg: #070a12;
+  --layout-canvas-paper: #0f172a;
+
+  --layout-border: rgba(255, 255, 255, 0.12);
+  --layout-border-light: rgba(56, 189, 248, 0.30);
+  --layout-border-focus: #38bdf8;
+
+  --layout-text: #ffffff;
+  --layout-text-secondary: rgba(255, 255, 255, 0.75);
+  --layout-text-muted: rgba(255, 255, 255, 0.45);
+  --layout-text-inverse: #0b0f19;
+
+  --layout-brand: #38bdf8;
+  --layout-brand-dark: #0284c7;
+  --layout-brand-glow: rgba(56, 189, 248, 0.42);
+  --layout-brand-subtle: rgba(56, 189, 248, 0.15);
+  --layout-accent: #f97316;
+  --layout-accent-glow: rgba(249, 115, 22, 0.40);
+
+  --layout-grid-major: rgba(56, 189, 248, 0.14);
+  --layout-grid-minor: rgba(56, 189, 248, 0.06);
+  --layout-ruler-bg: rgba(15, 23, 42, 0.85);
+  --layout-ruler-tick: rgba(255, 255, 255, 0.35);
+  --layout-ruler-text: rgba(255, 255, 255, 0.70);
+
+  --layout-minimap-bg: rgba(15, 23, 42, 0.80);
+  --layout-minimap-border: rgba(56, 189, 248, 0.32);
+  --layout-minimap-viewport: rgba(56, 189, 248, 0.45);
+  --layout-toolbar-bg: rgba(15, 23, 42, 0.82);
+  --layout-toolbar-border: rgba(255, 255, 255, 0.18);
+  --layout-toolbar-text: #ffffff;
+
+  --layout-modal-bg: rgba(15, 23, 42, 0.92);
+  --layout-modal-card: rgba(30, 41, 59, 0.75);
+  --layout-modal-backdrop: rgba(0, 0, 0, 0.85);
+
+  --layout-danger: #f87171;
+  --layout-danger-bg: rgba(248, 113, 113, 0.18);
+  --layout-warning: #fbbf24;
+  --layout-warning-bg: rgba(251, 191, 36, 0.18);
+  --layout-info: #38bdf8;
+  --layout-info-bg: rgba(56, 189, 248, 0.18);
+  --layout-success: #34d399;
+  --layout-success-bg: rgba(52, 211, 153, 0.18);
+
+  --layout-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.5);
+  --layout-shadow-md: 0 6px 16px rgba(0, 0, 0, 0.6);
+  --layout-shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.75);
+  --layout-shadow-floating: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 22px rgba(56, 189, 248, 0.20);
+}
+
+/* --- 1.4 THEME: NORDIC AURORA LIGHT (#FFFFFF) --- */
+html[data-theme="aurora"],
+[data-theme="aurora"],
+html[data-theme="light"],
+[data-theme="light"] {
+  --layout-bg: #ffffff;
+  --layout-panel: rgba(255, 255, 255, 0.94);
+  --layout-panel-card: #f8fafc;
+  --layout-panel-hover: #f1f5f9;
+  --layout-panel-active: #e2e8f0;
+  --layout-canvas-bg: #f8fafc;
+  --layout-canvas-paper: #ffffff;
+
+  --layout-border: #e2e8f0;
+  --layout-border-light: rgba(16, 185, 129, 0.35);
+  --layout-border-focus: #059669;
+
+  --layout-text: #0f172a;
+  --layout-text-secondary: #334155;
+  --layout-text-muted: #64748b;
+  --layout-text-inverse: #ffffff;
+
+  --layout-brand: #059669;
+  --layout-brand-dark: #047857;
+  --layout-brand-glow: rgba(5, 150, 105, 0.25);
+  --layout-brand-subtle: #ecfdf5;
+  --layout-accent: #ea580c;
+  --layout-accent-glow: rgba(234, 88, 12, 0.20);
+
+  --layout-grid-major: rgba(100, 116, 139, 0.22);
+  --layout-grid-minor: rgba(148, 163, 184, 0.12);
+  --layout-ruler-bg: #ffffff;
+  --layout-ruler-tick: #94a3b8;
+  --layout-ruler-text: #64748b;
+
+  --layout-minimap-bg: #ffffff;
+  --layout-minimap-border: #cbd5e1;
+  --layout-minimap-viewport: rgba(5, 150, 105, 0.35);
+  --layout-toolbar-bg: rgba(255, 255, 255, 0.92);
+  --layout-toolbar-border: #cbd5e1;
+  --layout-toolbar-text: #0f172a;
+
+  --layout-modal-bg: #ffffff;
+  --layout-modal-card: #f8fafc;
+  --layout-modal-backdrop: rgba(15, 23, 42, 0.50);
+
+  --layout-danger: #dc2626;
+  --layout-danger-bg: rgba(220, 38, 38, 0.10);
+  --layout-warning: #d97706;
+  --layout-warning-bg: rgba(217, 119, 6, 0.10);
+  --layout-info: #0284c7;
+  --layout-info-bg: rgba(2, 132, 199, 0.10);
+  --layout-success: #16a34a;
+  --layout-success-bg: rgba(22, 163, 74, 0.10);
+
+  --layout-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --layout-shadow-md: 0 3px 10px rgba(0, 0, 0, 0.08);
+  --layout-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.10);
+  --layout-shadow-floating: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+
+/* --- 1.5 THEME: VIBRANT POP (BACKWARD COMPATIBILITY) --- */
+html[data-theme="vibrant"],
+[data-theme="vibrant"] {
+  --layout-bg: #f8fafc;
+  --layout-panel: #ffffff;
+  --layout-panel-card: #f8fafc;
+  --layout-panel-hover: #f1f5f9;
+  --layout-panel-active: #e2e8f0;
+  --layout-canvas-bg: #e2e8f0;
+  --layout-canvas-paper: #ffffff;
+
+  --layout-border: #e2e8f0;
+  --layout-border-light: rgba(139, 92, 246, 0.28);
+  --layout-border-focus: #8b5cf6;
+
+  --layout-text: #0f172a;
+  --layout-text-secondary: #475569;
+  --layout-text-muted: #94a3b8;
+  --layout-text-inverse: #ffffff;
+
+  --layout-brand: #06b6d4;
+  --layout-brand-dark: #0891b2;
+  --layout-brand-glow: rgba(6, 182, 212, 0.30);
+  --layout-brand-subtle: rgba(6, 182, 212, 0.10);
+  --layout-accent: #f97316;
+  --layout-accent-glow: rgba(249, 115, 22, 0.25);
+
+  --layout-toolbar-bg: rgba(255, 255, 255, 0.94);
+  --layout-toolbar-border: #cbd5e1;
+  --layout-toolbar-text: #0f172a;
+}
+
+/* --------------------------------------------------------------------------
+   2. MASTER WORKSPACE CONTAINER (#hse-layout-workspace)
+   -------------------------------------------------------------------------- */
+#hse-layout-workspace {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--layout-bg);
+  color: var(--layout-text);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+#hse-layout-workspace.hidden {
+  display: none !important;
+}
+
+/* Body state lock when workspace is active */
+body.hse-layout-active {
+  overflow: hidden !important;
+  height: 100vh !important;
+}
+body.hse-layout-active .navbar,
+body.hse-layout-active .footer {
+  display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. TOP CAD NAVIGATION & ACTION HEADER (.layout-topbar)
+   -------------------------------------------------------------------------- */
+.layout-topbar {
+  flex-shrink: 0;
+  height: 48px;
+  min-height: 48px;
+  background-color: var(--layout-panel);
+  border-bottom: 1px solid var(--layout-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  gap: 8px;
+  z-index: 50;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--layout-shadow-sm);
+  box-sizing: border-box;
+}
+
+.layout-topbar-left,
+.layout-topbar-center,
+.layout-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layout-vdivider {
+  width: 1px;
+  height: 22px;
+  background-color: var(--layout-border);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+/* Back Button */
+.layout-btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--layout-radius-sm);
+  background: var(--layout-panel-card);
+  border: 1px solid var(--layout-border);
+  color: var(--layout-text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--layout-trans-fast);
+  white-space: nowrap;
+}
+.layout-btn-back:hover {
+  background: var(--layout-panel-hover);
+  border-color: var(--layout-border-light);
+  color: var(--layout-brand);
+}
+
+/* Brand Pill */
+.layout-brand-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  border-radius: var(--layout-radius-sm);
+}
+
+.layout-brand-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.layout-brand-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layout-brand-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.layout-brand-badge {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--layout-radius-xs);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Plant Selector Tabs */
+.layout-plant-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.layout-plant-tab {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--layout-radius-xs);
+  border: 1px solid var(--layout-border);
+  background: var(--layout-panel-card);
+  color: var(--layout-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--layout-trans-fast);
+}
+.layout-plant-tab:hover {
+  color: var(--layout-text);
+  border-color: var(--layout-border-light);
+}
+.layout-plant-tab.active {
+  background: var(--layout-brand);
+  border-color: var(--layout-brand);
+  color: #ffffff;
+  box-shadow: 0 1px 4px var(--layout-brand-glow);
+}
+
+/* Tool & Action Buttons */
+.layout-btn,
+.layout-tool-btn,
+.layout-toggle-btn,
+.layout-zoom-btn,
+.layout-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: var(--layout-radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--layout-border);
+  background: var(--layout-panel-card);
+  color: var(--layout-text);
+  transition: all var(--layout-trans-fast);
+  user-select: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.layout-btn:hover,
+.layout-tool-btn:hover,
+.layout-toggle-btn:hover,
+.layout-icon-btn:hover:not(:disabled) {
+  border-color: var(--layout-border-light);
+  background: var(--layout-panel-hover);
+}
+
+.layout-icon-btn {
+  width: 30px;
+  padding: 0;
+}
+.layout-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.layout-tool-btn.active,
+.layout-toggle-btn.active {
+  background: var(--layout-brand);
+  color: #ffffff;
+  border-color: var(--layout-brand);
+  box-shadow: 0 1px 4px var(--layout-brand-glow);
+}
+
+.layout-tool-group,
+.layout-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Zoom Box */
+.layout-zoom-box {
+  display: flex;
+  align-items: center;
+  background: var(--layout-panel-card);
+  border: 1px solid var(--layout-border);
+  border-radius: var(--layout-radius-sm);
+  padding: 1px 2px;
+  gap: 2px;
+}
+
+.layout-zoom-btn {
+  height: 24px;
+  width: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: var(--layout-radius-xs);
+}
+.layout-zoom-btn:hover {
+  background: var(--layout-panel-hover);
+}
+
+.layout-zoom-text {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 4px;
+  min-width: 38px;
+  text-align: center;
+  cursor: pointer;
+}
+.layout-zoom-text:hover {
+  color: var(--layout-brand);
+}
+
+/* Header Action Highlights */
+.layout-btn-upload {
+  cursor: pointer;
+}
+
+.layout-btn-bom {
+  position: relative;
+}
+
+.layout-badge-count {
+  background: var(--layout-danger);
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: var(--layout-radius-full);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.layout-btn-export {
+  background: var(--layout-brand);
+  border-color: var(--layout-brand);
+  color: #ffffff;
+}
+.layout-btn-export:hover {
+  background: var(--layout-brand-dark);
+  border-color: var(--layout-brand-dark);
+}
+
+/* --------------------------------------------------------------------------
+   4. MAIN 3-COLUMN CAD WORKSPACE BODY (.layout-workspace-body)
+   -------------------------------------------------------------------------- */
+.layout-workspace-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  background: var(--layout-bg);
+}
+
+/* Left Sidebar: Symbol Catalog */
+.layout-sidebar-left {
+  width: 270px;
+  min-width: 220px;
+  max-width: 340px;
+  background: var(--layout-panel);
+  border-right: 1px solid var(--layout-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  z-index: 20;
+  box-sizing: border-box;
+}
+
+.layout-catalog-search {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--layout-border);
+}
+
+.layout-catalog-search input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  border-radius: var(--layout-radius-xs);
+  border: 1px solid var(--layout-border);
+  background: var(--layout-panel-card);
+  color: var(--layout-text);
+  font-size: 11.5px;
+  padding: 0 8px;
+  outline: none;
+  transition: border-color var(--layout-trans-fast);
+}
+.layout-catalog-search input:focus {
+  border-color: var(--layout-brand);
+}
+
+.layout-catalog-tabs {
+  display: flex;
+  padding: 6px 10px;
+  gap: 4px;
+  border-bottom: 1px solid var(--layout-border);
+  overflow-x: auto;
+}
+
+.layout-cat-pill {
+  padding: 3px 8px;
+  border-radius: var(--layout-radius-xs);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--layout-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--layout-trans-fast);
+}
+.layout-cat-pill:hover {
+  color: var(--layout-text);
+}
+.layout-cat-pill.active {
+  background: var(--layout-panel-card);
+  border-color: var(--layout-border);
+  color: var(--layout-brand);
+  font-weight: 700;
+}
+
+.layout-symbols-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  align-content: start;
+}
+
+.layout-symbol-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  background: var(--layout-panel-card);
+  border: 1px solid var(--layout-border);
+  border-radius: var(--layout-radius-sm);
+  cursor: grab;
+  transition: all var(--layout-trans-fast);
+  text-align: center;
+}
+.layout-symbol-item:hover {
+  border-color: var(--layout-brand);
+  background: var(--layout-panel-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--layout-shadow-sm);
+}
+.layout-symbol-item svg {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 4px;
+}
+.layout-symbol-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--layout-text);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+/* Center: Dual-Layer Interactive Viewport Area */
+.layout-viewport-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--layout-canvas-bg);
+  cursor: default;
+  outline: none;
+}
+
+/* Engineering Metric Rulers */
+.layout-ruler-h {
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 0;
+  height: 20px;
+  background: var(--layout-ruler-bg);
+  border-bottom: 1px solid var(--layout-border);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.layout-ruler-v {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  bottom: 0;
+  width: 20px;
+  background: var(--layout-ruler-bg);
+  border-right: 1px solid var(--layout-border);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Stage Wrapper */
+.layout-stage-wrapper {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.layout-canvas-transform {
+  position: absolute;
+  width: 1000px;
+  height: 1000px;
+  transform-origin: 0 0;
+  background: var(--layout-canvas-paper);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.layout-floorplan-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.layout-svg-stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  overflow: visible;
+}
+
+/* Evacuation Route Dynamic Flow */
+@keyframes flowLine {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.layout-route-flow {
+  animation: flowLine 1.2s linear infinite;
+}
+
+/* Floating Minimap */
+.layout-minimap-card {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 160px;
+  background: var(--layout-minimap-bg);
+  border: 1px solid var(--layout-minimap-border);
+  border-radius: var(--layout-radius-sm);
+  box-shadow: var(--layout-shadow-md);
+  z-index: 15;
+  overflow: hidden;
+  transition: all var(--layout-trans-fast);
+}
+.layout-minimap-card.collapsed #layout-minimap-canvas {
+  display: none;
+}
+
+.layout-minimap-header {
+  height: 22px;
+  background: var(--layout-panel-card);
+  border-bottom: 1px solid var(--layout-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--layout-text-muted);
+}
+
+.layout-minimap-toggle {
+  background: transparent;
+  border: none;
+  color: var(--layout-text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+#layout-minimap-canvas {
+  display: block;
+  width: 160px;
+  height: 110px;
+}
+
+/* Right Sidebar: Property Inspector */
+.layout-sidebar-right {
+  width: 290px;
+  min-width: 240px;
+  max-width: 360px;
+  background: var(--layout-panel);
+  border-left: 1px solid var(--layout-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  z-index: 20;
+  box-sizing: border-box;
+}
+
+.layout-inspector-header {
+  height: 42px;
+  border-bottom: 1px solid var(--layout-border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+.layout-inspector-header h3 {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--layout-text-muted);
+  margin: 0;
+}
+
+.layout-inspector-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.layout-inspector-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60%;
+  color: var(--layout-text-muted);
+  text-align: center;
+  gap: 8px;
+}
+.layout-inspector-empty svg {
+  opacity: 0.4;
+}
+.layout-inspector-empty p {
+  font-size: 11.5px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0 10px;
+}
+
+.layout-inspector-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layout-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.layout-form-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--layout-text-secondary);
+}
+.layout-form-group input,
+.layout-form-group select {
+  height: 28px;
+  border-radius: var(--layout-radius-xs);
+  border: 1px solid var(--layout-border);
+  background: var(--layout-panel-card);
+  color: var(--layout-text);
+  font-size: 12px;
+  padding: 0 8px;
+  outline: none;
+}
+.layout-form-group input:focus,
+.layout-form-group select:focus {
+  border-color: var(--layout-brand);
+}
+
+/* --------------------------------------------------------------------------
+   5. MODAL DIALOGS (BOM, Export, Calibration)
+   -------------------------------------------------------------------------- */
+.layout-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--layout-modal-backdrop);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.layout-modal-backdrop.hidden {
+  display: none !important;
+}
+
+.layout-modal-card {
+  background: var(--layout-modal-bg);
+  border: 1px solid var(--layout-border);
+  border-radius: var(--layout-radius-md);
+  box-shadow: var(--layout-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  overflow: hidden;
+  animation: layoutModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes layoutModalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.layout-bom-modal-card {
+  width: 90vw;
+  max-width: 820px;
+}
+
+.layout-export-modal-card {
+  width: 90vw;
+  max-width: 680px;
+}
+
+.layout-modal-header {
+  height: 48px;
+  border-bottom: 1px solid var(--layout-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+.layout-modal-header h2 {
+  font-size: 13.5px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.layout-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--layout-text-muted);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--layout-radius-xs);
+}
+.layout-modal-close:hover {
+  background: var(--layout-panel-hover);
+  color: var(--layout-text);
+}
+
+.layout-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.layout-modal-footer {
+  height: 48px;
+  border-top: 1px solid var(--layout-border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px;
+  flex-shrink: 0;
+  background: var(--layout-panel-card);
+}
+
+/* Export Options Grid */
+.layout-export-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.layout-export-option-card {
+  background: var(--layout-panel-card);
+  border: 1px solid var(--layout-border);
+  border-radius: var(--layout-radius-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--layout-trans-fast);
+}
+.layout-export-option-card:hover {
+  border-color: var(--layout-brand);
+  background: var(--layout-panel-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--layout-shadow-sm);
+}
+.layout-export-option-card .export-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+.layout-export-option-card h4 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--layout-text);
+}
+.layout-export-option-card p {
+  font-size: 11px;
+  color: var(--layout-text-muted);
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* Outline & Primary Buttons */
+.layout-btn-outline {
+  background: transparent;
+  border: 1px solid var(--layout-border);
+  color: var(--layout-text);
+}
+.layout-btn-outline:hover {
+  background: var(--layout-panel-hover);
+  border-color: var(--layout-border-light);
+}
+
+.layout-btn-primary {
+  background: var(--layout-brand);
+  border: 1px solid var(--layout-brand);
+  color: #ffffff;
+}
+.layout-btn-primary:hover {
+  background: var(--layout-brand-dark);
+  border-color: var(--layout-brand-dark);
+}
+
+/* BOM Table Styling */
+.layout-bom-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.layout-bom-table th {
+  background: var(--layout-panel-card);
+  border: 1px solid var(--layout-border);
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--layout-text-secondary);
+}
+.layout-bom-table td {
+  border: 1px solid var(--layout-border);
+  padding: 7px 10px;
+  color: var(--layout-text);
+}
+.layout-bom-table tr:hover td {
+  background: var(--layout-panel-hover);
+}
+
+/* Tool card badge in tools-grid */
+.badge-cad {
+  background: linear-gradient(135deg, #059669, #0284c7) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. RESPONSIVE DESIGN (Tablets & Mobile)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .layout-sidebar-left {
+    width: 220px;
+  }
+  .layout-sidebar-right {
+    width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .layout-topbar-center .layout-toggle-group,
+  .layout-plant-tabs,
+  .layout-brand-pill {
+    display: none;
+  }
+  .layout-sidebar-left {
+    position: absolute;
+    left: 0;
+    top: 48px;
+    bottom: 0;
+    width: 240px;
+    box-shadow: var(--layout-shadow-lg);
+    transform: translateX(-100%);
+    transition: transform var(--layout-trans-base);
+  }
+  .layout-sidebar-left.open {
+    transform: translateX(0);
+  }
+  .layout-sidebar-right {
+    position: absolute;
+    right: 0;
+    top: 48px;
+    bottom: 0;
+    width: 260px;
+    box-shadow: var(--layout-shadow-lg);
+    transform: translateX(100%);
+    transition: transform var(--layout-trans-base);
+  }
+  .layout-sidebar-right.open {
+    transform: translateX(0);
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   7. VECTOR STAGE ELEMENTS: MARKERS, ROUTES & HAZARD ZONES
+   -------------------------------------------------------------------------- */
+@keyframes routeFlow {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+.route-poly-outline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.route-poly-main {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.route-poly-animated {
+  stroke-dasharray: 8 6;
+  animation: routeFlow 1.2s linear infinite;
+}
+
+.route-hit-target {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 24;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.route-hit-target:hover {
+  stroke: rgba(59, 130, 246, 0.25);
+}
+
+.route-hit-target.selected {
+  stroke: rgba(59, 130, 246, 0.45);
+}
+
+.route-vertex-handle {
+  fill: #3b82f6;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  cursor: move;
+  transition: transform 0.12s ease;
+}
+
+.route-vertex-handle:hover {
+  transform: scale(1.3);
+  fill: #2563eb;
+}
+
+/* Hazard Zones */
+.zone-polygon {
+  cursor: pointer;
+  stroke-width: 2;
+  transition: fill 0.15s ease, stroke-width 0.15s ease;
+}
+
+.zone-polygon:hover {
+  stroke-width: 3.5;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.2));
+}
+
+.zone-polygon.selected {
+  stroke-width: 3.5;
+  stroke-dasharray: 6 4;
+}
+
+/* Markers */
+.layout-marker-g {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease;
+}
+
+.layout-marker-g:hover {
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.3));
+}
+
+.layout-marker-g.selected .marker-selection-ring {
+  stroke: #3b82f6 !important;
+  stroke-width: 3.5 !important;
+  stroke-dasharray: 5 3;
+}
+
+.marker-label-text {
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  fill: #ffffff;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.marker-radius-circle {
+  fill: rgba(239, 68, 68, 0.08);
+  stroke: rgba(239, 68, 68, 0.35);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+/* Palette Active Placement Highlight */
+.layout-symbol-item.active-tool {
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.18) !important;
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+/* --------------------------------------------------------------------------
+   8. CAD TECHNICAL PRINT & EXPORT STYLES (A3/A4 Landscape)
+   -------------------------------------------------------------------------- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printRoot, #printRoot * {
+    visibility: visible;
+  }
+  #printRoot {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #ffffff !important;
+  }
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+}
+
+.print-cad-sheet {
+  width: 100%;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #0f172a;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  page-break-after: always;
+}
+
+.print-cad-border {
+  border: 2px solid #0f172a;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  height: 98vh;
+  box-sizing: border-box;
+}
+
+.print-cad-canvas-wrapper {
+  flex: 1;
+  position: relative;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.print-cad-bottom {
+  display: flex;
+  gap: 8px;
+  height: 120px;
+  margin-top: 8px;
+}
+
+.print-cad-legend {
+  flex: 1;
+  border: 1px solid #0f172a;
+  padding: 6px;
+  font-size: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  overflow: hidden;
+}
+
+.print-cad-titleblock {
+  width: 320px;
+  border: 2px solid #0f172a;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  font-size: 10px;
+}
+
+.print-tb-cell {
+  border: 1px solid #0f172a;
+  padding: 4px 6px;
+}
+
+.print-tb-cell.full {
+  grid-column: span 2;
+}
+
+.print-tb-title {
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #0f172a;
+}
