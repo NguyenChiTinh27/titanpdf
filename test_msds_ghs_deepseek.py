@@ -97,7 +97,7 @@ def test_prune_phantom_ghs_codes():
         doc.save(temp_docx)
         # Monkey patch parse_with_deepseek để trả về mock_ai_output
         orig_fn = MSDSExtractorEngine.parse_with_deepseek
-        MSDSExtractorEngine.parse_with_deepseek = lambda text, api_key=None: mock_ai_output
+        MSDSExtractorEngine.parse_with_deepseek = lambda *args, **kwargs: mock_ai_output
         
         res = MSDSExtractorEngine.process_file(temp_docx, original_filename="ZN009.docx", engine="deepseek")
         ghs_codes = res.get("ghs_codes", [])

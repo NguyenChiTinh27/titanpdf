@@ -847,7 +847,7 @@ class MSDSExtractorEngine:
         file_code = ""
         if filename:
             stem = Path(filename).stem
-            stem = re.sub(r"^(?:temp_[0-9a-fA-F]{6,10}_|[0-9a-fA-F]{8,32}_|DATA_)", "", stem, flags=re.IGNORECASE)
+            stem = re.sub(r"^(?:temp_[0-9a-fA-F]{6,10}_|[0-9a-fA-F]{8,32}_|0{5,20}[0-9]*_|DATA_)", "", stem, flags=re.IGNORECASE)
             tokens = re.split(r"[\s\-_.,()\[\]]+", stem)
             ignore_tokens = {
                 "MSDS", "SDS", "TDS", "COA", "EN", "VN", "VI", "CN", "ZH", "CH",
@@ -862,9 +862,13 @@ class MSDSExtractorEngine:
                     break
 
         if text_code and file_code:
+            if re.match(r"^0{4,}", text_code) and not re.match(r"^0{4,}", file_code):
+                return file_code
             if text_code.endswith("X") and file_code.startswith(text_code[:-1]):
                 return file_code
             return text_code
+        if text_code and re.match(r"^0{4,}", text_code) and file_code:
+            return file_code
         return text_code or file_code
 
     @classmethod
@@ -1060,7 +1064,7 @@ class MSDSExtractorEngine:
         }
 
     @classmethod
-    def parse_with_deepseek(cls, text: str, api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def parse_with_deepseek(cls, text: str, api_key: Optional[str] = None, visual_ghs_hint: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """Sử dụng AI DeepSeek-V4.1-Flash để trích xuất 16 mục GHS và dữ liệu có cấu trúc từ MSDS."""
         from core.ai_text_engine import AITextEngine
         actual_key = AITextEngine.get_deepseek_key(api_key)
@@ -1071,6 +1075,15 @@ class MSDSExtractorEngine:
         if len(text) > 18000:
             sample_text += "\n\n[... CẮT BỚT VĂN BẢN Ở GIỮA ...]\n\n" + text[-7000:]
 
+        ghs_visual_instruction = ""
+        if visual_ghs_hint:
+            ghs_visual_instruction = (
+                f"\nQUY TẮC ĐẶC BIỆT TỪ QUÉT ẢNH THỊ GIÁC TRỰC TIẾP TRÊN TÀI LIỆU:\n"
+                f"- Hệ thống đã quét và nhận diện chính xác các hình đồ GHS vật lý được in trên nhãn Mục 2 của tài liệu: {visual_ghs_hint}.\n"
+                f"- BẮT BUỘC chỉ trả về trường 'ghs_codes': {visual_ghs_hint}.\n"
+                f"- TUYỆT ĐỐI KHÔNG tự ý suy diễn hoặc thêm bớt các mã GHS khác từ câu chữ (ví dụ: tài liệu chỉ in hình đồ GHS02 thì chỉ có GHS02, không được thêm GHS05, GHS06, GHS08).\n"
+            )
+
         system_prompt = (
             "Bạn là chuyên gia phân tích an toàn hóa chất (EHS / MSDS Specialist) hàng đầu thế giới. "
             "Nhiệm vụ của bạn là đọc hiểu toàn văn bản MSDS/SDS được cung cấp và trích xuất dữ liệu chuẩn 16 mục GHS thành định dạng JSON hợp lệ duy nhất.\n"
@@ -1079,6 +1092,7 @@ class MSDSExtractorEngine:
             "2. NẾU SẢN PHẨM CÓ TÍNH DỄ CHÁY (Flammable liquid/gas/solid, H220-H228, Dễ cháy, Điểm chớp cháy < 60°C), BẮT BUỘC PHẢI CÓ MÃ GHS02 TRONG 'ghs_codes'. TUYỆT ĐỐI KHÔNG TRẢ VỀ NON DG KHI SẢN PHẨM CÓ ĐẶC TÍNH DỄ CHÁY HOẶC NGUY HIỂM.\n"
             "3. Chỉ gán các mã GHS (GHS01..GHS09) khi có bằng chứng rõ ràng (câu cảnh báo nguy cơ H-code, từ cảnh báo Danger/Warning, hoặc mô tả nguy hại chính thức ở Mục 2). TUYỆT ĐỐI KHÔNG TỰ BỊA ĐẶT CÁC MÃ GHS KHÔNG CÓ TRONG TÀI LIỆU (ví dụ không tự ý thêm GHS05, GHS06, GHS08 khi tài liệu chỉ có GHS02).\n"
             "4. Nếu ở Mục 2 ghi rõ 'Không phải là chất hay hỗn hợp nguy hại', 'Not classified as hazardous', 'Not a hazardous substance or mixture', 'No symbol', và hoàn toàn không có bất kỳ mối nguy hại nào, BẮT BUỘC trả về: \"ghs_codes\": [\"NON DG\"] và \"signal_word\": \"NON DG\".\n"
+            f"{ghs_visual_instruction}"
             "5. Toàn bộ các trường mô tả an toàn, tên tiếng Việt, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n"
             "Yêu cầu các trường dữ liệu:\n"
             "{\n"
@@ -1644,18 +1658,39 @@ class MSDSExtractorEngine:
         engine: Optional[str] = "deepseek",
         original_filename: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Quy trình trích xuất hoàn chỉnh: Text Extract -> Heuristic Baseline + DeepSeek AI -> Chuẩn hóa Tiếng Việt & Checksum."""
+        """Quy trình trích xuất hoàn chỉnh: Visual GHS Scan -> Text Extract -> Heuristic Baseline + DeepSeek AI -> Chuẩn hóa Tiếng Việt & Checksum."""
         text = cls.extract_text_from_file(file_path)
         p = Path(file_path)
         eff_filename = original_filename or p.name
+
+        # 0. QUY TẮC NHẬN DIỆN HÌNH ĐỒ GHS TRỰC TIẾP TỪ ẢNH TRONG TÀI LIỆU (THEO YÊU CẦU NGƯỜI DÙNG)
+        # Nhận diện chính xác dựa theo các hình đồ GHS thực tế mà tệp đang có (ở Mục 2),
+        # KHÔNG dựa vào các mã/câu chữ phân loại để suy diễn thêm hình đồ.
+        image_ghs = []
+        try:
+            from core.ghs_image_detector import GHSImageDetector
+            image_ghs = GHSImageDetector.detect_ghs_pictograms_from_file(file_path)
+        except Exception as img_err:
+            print(f"[GHS_IMAGE_DETECT_WARN] {img_err}", flush=True)
 
         # Luôn chạy Heuristic để lấy chuẩn xác Mã sản phẩm, Phần 2 GHS (hoặc NON DG) và các trường bảng biểu
         heuristic_data = cls.parse_with_heuristic(text, filename=eff_filename)
         sec2_ghs = cls.classify_ghs_from_section_2(text)
 
+        # Nếu có hình đồ thực tế từ ảnh, áp dụng ngay vào heuristic_data
+        if image_ghs:
+            heuristic_data["ghs_codes"] = list(image_ghs)
+            heuristic_data["ghs_codes_list"] = list(image_ghs)
+            if any(g in image_ghs for g in ("GHS01", "GHS02", "GHS05", "GHS06")):
+                heuristic_data["signal_word"] = "Nguy hiểm (Danger)"
+            elif any(g in image_ghs for g in ("GHS07", "GHS09")):
+                heuristic_data["signal_word"] = "Cảnh báo (Warning)"
+            else:
+                heuristic_data["signal_word"] = "NON DG"
+
         parsed = None
         if engine != "heuristic":
-            parsed = cls.parse_with_deepseek(text, api_key)
+            parsed = cls.parse_with_deepseek(text, api_key, visual_ghs_hint=image_ghs)
 
         if parsed and isinstance(parsed, dict):
             for k, v in heuristic_data.items():
@@ -1664,81 +1699,128 @@ class MSDSExtractorEngine:
             if heuristic_data.get("product_code"):
                 parsed["product_code"] = heuristic_data["product_code"]
 
-            # Kiểm tra đặc tính dễ cháy toàn tài liệu (bảo vệ chống gán nhầm NON DG)
-            is_doc_flammable = bool(re.search(
-                r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|cháy\s+được|H22[0-8]|chớp\s+cháy\s*(?:<|nhỏ\s+hơn)?\s*(?:[1-5]?[0-9]|60)\s*°?C|flash\s*point\s*(?:<|below)?\s*(?:[1-5]?[0-9]|60)\s*°?C|易燃)\b",
-                text,
-                re.IGNORECASE
-            ))
-
-            # Lấy danh sách GHS thô từ AI và từ Heuristic Mục 2
-            raw_ai_ghs = [str(c).strip().upper() for c in (parsed.get("ghs_codes") or []) if str(c).strip()]
-            raw_heu_ghs = [str(c).strip().upper() for c in (sec2_ghs.get("ghs_codes") or []) if str(c).strip()]
-            valid_ai_ghs = [g for g in raw_ai_ghs if g in GHS_MAP and g != "NON DG"]
-            valid_heu_ghs = [g for g in raw_heu_ghs if g in GHS_MAP and g != "NON DG"]
-
-            # Nếu tài liệu có đặc tính dễ cháy rõ ràng, bắt buộc bổ sung GHS02
-            if is_doc_flammable:
-                if "GHS02" not in valid_ai_ghs:
-                    valid_ai_ghs.append("GHS02")
-                if "GHS02" not in valid_heu_ghs:
-                    valid_heu_ghs.append("GHS02")
-
-            # Khử triệt để "hình đồ từa lưa" (Cross-validation):
-            # Chỉ giữ lại các mã GHS có căn cứ từ khóa cảnh báo cụ thể trong văn bản
-            selected_ghs = []
-            cand_ghs = list(dict.fromkeys(valid_ai_ghs + valid_heu_ghs))
-            for g in cand_ghs:
-                if g == "GHS02" and is_doc_flammable:
-                    selected_ghs.append(g)
-                elif g == "GHS05" and (re.search(r"\b(?:corrosive|ăn\s+mòn|H314|H318|bỏng\s+da)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                    selected_ghs.append(g)
-                elif g == "GHS06" and (re.search(r"\b(?:acute\s+tox|độc\s+cấp|H300|H301|H310|H330|H331|fatal)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                    selected_ghs.append(g)
-                elif g == "GHS07" and (re.search(r"\b(?:irritan|kích\s+ứng|harmful|H302|H312|H315|H319|H335|H336)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                    selected_ghs.append(g)
-                elif g == "GHS08" and (re.search(r"\b(?:aspiration|carcinogen|reproductive|nguy\s+hại\s+sức\s+khỏe|H304|H340|H350|H360|H370|H372)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                    selected_ghs.append(g)
-                elif g == "GHS09" and (re.search(r"\b(?:aquatic|môi\s+trường|thủy\s+sinh|H400|H410|H411)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
-                    selected_ghs.append(g)
-                elif g in ("GHS01", "GHS03", "GHS04") and (g in valid_heu_ghs or g in text.upper()):
-                    selected_ghs.append(g)
-
-            # Nếu không tìm thấy mã nguy hại nào nhưng tài liệu dễ cháy -> GHS02, ngược lại mới là NON DG
-            if not selected_ghs:
-                if is_doc_flammable:
-                    selected_ghs = ["GHS02"]
-                else:
-                    selected_ghs = ["NON DG"]
-
-            parsed["ghs_codes"] = sorted(list(set(selected_ghs)))
-            if "NON DG" in parsed["ghs_codes"] and len(parsed["ghs_codes"]) > 1:
-                parsed["ghs_codes"] = [g for g in parsed["ghs_codes"] if g != "NON DG"]
-
-            # Đồng bộ Từ cảnh báo (Signal Word) và Cảnh báo nguy hại tương ứng
-            if "GHS02" in parsed["ghs_codes"] or any(g in parsed["ghs_codes"] for g in ("GHS01", "GHS05", "GHS06")):
-                if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+            # ƯU TIÊN TUYỆT ĐỐI HÌNH ĐỒ THỰC TẾ TRÊN TÀI LIỆU:
+            # Nếu tệp vật lý có chứa hình đồ GHS ở Mục 2 (ví dụ: ZNZX009 chỉ có GHS02):
+            # Bộ hình đồ nhận diện từ ảnh là DUY NHẤT và CHI PHỐI KẾT QUẢ,
+            # TUYỆT ĐỐI KHÔNG thêm bất kỳ mã GHS nào từ câu chữ mô tả nguy cơ (loại bỏ hoàn toàn hình đồ từa lưa).
+            if image_ghs:
+                parsed["ghs_codes"] = list(image_ghs)
+                parsed["ghs_codes_list"] = list(image_ghs)
+                if any(g in image_ghs for g in ("GHS01", "GHS02", "GHS05", "GHS06")):
                     parsed["signal_word"] = "Nguy hiểm (Danger)"
-            elif any(g in parsed["ghs_codes"] for g in ("GHS07", "GHS09")):
-                if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                elif any(g in image_ghs for g in ("GHS07", "GHS09")):
                     parsed["signal_word"] = "Cảnh báo (Warning)"
-            elif parsed["ghs_codes"] == ["NON DG"]:
-                parsed["signal_word"] = "NON DG"
-                parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
+                else:
+                    parsed["signal_word"] = "NON DG"
+            else:
+                # Kiểm tra tuyên bố NON DG tường minh ở Mục 2
+                is_explicit_non_dg = bool(sec2_ghs.get("is_non_dg"))
+
+                # Kiểm tra đặc tính dễ cháy toàn tài liệu (bảo vệ chống gán nhầm NON DG)
+                has_flam_h = bool(re.search(r"\bH22[0-8]\b", text, re.IGNORECASE))
+                has_flam_phrase = bool(re.search(
+                    r"\b(?:chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+(?:rất\s+)?dễ\s+cháy|flammable\s+(?:liquid|gas|solid|aerosol)|highly\s+flammable|extremely\s+flammable|易燃液体|易燃气体|易燃固体)\b",
+                    text,
+                    re.IGNORECASE
+                ))
+                fp_m = re.search(r"(?:flash\s*point|điểm\s*chớp\s*cháy)[^\n\d]*([<>]?\s*-?\d+(?:\.\d+)?)\s*°?C", text, re.IGNORECASE)
+                has_low_fp = False
+                if fp_m:
+                    try:
+                        fp_val = float(re.sub(r"[^\d.-]", "", fp_m.group(1)))
+                        if fp_val <= 60.0:
+                            has_low_fp = True
+                    except Exception:
+                        pass
+
+                is_doc_flammable = (has_flam_h or has_flam_phrase or has_low_fp) and not is_explicit_non_dg
+
+                if is_explicit_non_dg and not is_doc_flammable:
+                    selected_ghs = ["NON DG"]
+                else:
+                    # Lấy danh sách GHS thô từ AI và từ Heuristic Mục 2
+                    raw_ai_ghs = [str(c).strip().upper() for c in (parsed.get("ghs_codes") or []) if str(c).strip()]
+                    raw_heu_ghs = [str(c).strip().upper() for c in (sec2_ghs.get("ghs_codes") or []) if str(c).strip()]
+                    valid_ai_ghs = [g for g in raw_ai_ghs if g in GHS_MAP and g != "NON DG"]
+                    valid_heu_ghs = [g for g in raw_heu_ghs if g in GHS_MAP and g != "NON DG"]
+
+                    # Nếu tài liệu có đặc tính dễ cháy rõ ràng, bắt buộc bổ sung GHS02
+                    if is_doc_flammable:
+                        if "GHS02" not in valid_ai_ghs:
+                            valid_ai_ghs.append("GHS02")
+                        if "GHS02" not in valid_heu_ghs:
+                            valid_heu_ghs.append("GHS02")
+
+                    # Khử triệt để "hình đồ từa lưa" (Cross-validation):
+                    # Chỉ giữ lại các mã GHS có căn cứ từ khóa cảnh báo cụ thể trong văn bản
+                    selected_ghs = []
+                    cand_ghs = list(dict.fromkeys(valid_ai_ghs + valid_heu_ghs))
+                    for g in cand_ghs:
+                        if g == "GHS02" and is_doc_flammable:
+                            selected_ghs.append(g)
+                        elif g == "GHS05" and (re.search(r"\b(?:corrosive|ăn\s+mòn|H314|H318|bỏng\s+da)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                            selected_ghs.append(g)
+                        elif g == "GHS06" and (re.search(r"\b(?:acute\s+tox|độc\s+cấp|H300|H301|H310|H330|H331|fatal)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                            selected_ghs.append(g)
+                        elif g == "GHS07" and (re.search(r"\b(?:irritan|kích\s+ứng|harmful|H302|H312|H315|H319|H335|H336)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                            selected_ghs.append(g)
+                        elif g == "GHS08" and (re.search(r"\b(?:aspiration|carcinogen|reproductive|nguy\s+hại\s+sức\s+khỏe|H304|H340|H350|H360|H370|H372)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                            selected_ghs.append(g)
+                        elif g == "GHS09" and (re.search(r"\b(?:aquatic|môi\s+trường|thủy\s+sinh|H400|H410|H411)\b", text, re.IGNORECASE) or g in valid_heu_ghs):
+                            selected_ghs.append(g)
+                        elif g in ("GHS01", "GHS03", "GHS04") and (g in valid_heu_ghs or g in text.upper()):
+                            selected_ghs.append(g)
+
+                    if not selected_ghs:
+                        if is_doc_flammable:
+                            selected_ghs = ["GHS02"]
+                        else:
+                            selected_ghs = ["NON DG"]
+
+                parsed["ghs_codes"] = sorted(list(set(selected_ghs)))
+                if "NON DG" in parsed["ghs_codes"] and len(parsed["ghs_codes"]) > 1:
+                    parsed["ghs_codes"] = [g for g in parsed["ghs_codes"] if g != "NON DG"]
+
+                # Đồng bộ Từ cảnh báo (Signal Word) và Cảnh báo nguy hại tương ứng
+                if "GHS02" in parsed["ghs_codes"] or any(g in parsed["ghs_codes"] for g in ("GHS01", "GHS05", "GHS06")):
+                    if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                        parsed["signal_word"] = "Nguy hiểm (Danger)"
+                elif any(g in parsed["ghs_codes"] for g in ("GHS07", "GHS09")):
+                    if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                        parsed["signal_word"] = "Cảnh báo (Warning)"
+                elif parsed["ghs_codes"] == ["NON DG"]:
+                    parsed["signal_word"] = "NON DG"
+                    parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
         else:
             parsed = heuristic_data
-            # Bảo vệ fallback ngoại tuyến nếu tài liệu có tính chất dễ cháy
-            is_doc_flammable = bool(re.search(
-                r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|cháy\s+được|H22[0-8]|chớp\s+cháy\s*(?:<|nhỏ\s+hơn)?\s*(?:[1-5]?[0-9]|60)\s*°?C|flash\s*point\s*(?:<|below)?\s*(?:[1-5]?[0-9]|60)\s*°?C|易燃)\b",
-                text,
-                re.IGNORECASE
-            ))
-            if is_doc_flammable and "GHS02" not in parsed.get("ghs_codes", []):
-                parsed["ghs_codes"] = ["GHS02"]
-                if not parsed.get("signal_word") or parsed["signal_word"] == "NON DG":
+            if image_ghs:
+                parsed["ghs_codes"] = list(image_ghs)
+                parsed["ghs_codes_list"] = list(image_ghs)
+                if any(g in image_ghs for g in ("GHS01", "GHS02", "GHS05", "GHS06")):
                     parsed["signal_word"] = "Nguy hiểm (Danger)"
-                if not parsed.get("hazard_statements") or parsed.get("hazard_statements") == "NON DG":
-                    parsed["hazard_statements"] = "H225: Chất lỏng và hơi rất dễ cháy."
+                elif any(g in image_ghs for g in ("GHS07", "GHS09")):
+                    parsed["signal_word"] = "Cảnh báo (Warning)"
+                else:
+                    parsed["signal_word"] = "NON DG"
+            else:
+                is_explicit_non_dg = bool(sec2_ghs.get("is_non_dg"))
+                has_flam_h = bool(re.search(r"\bH22[0-8]\b", text, re.IGNORECASE))
+                has_flam_phrase = bool(re.search(
+                    r"\b(?:chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+(?:rất\s+)?dễ\s+cháy|flammable\s+(?:liquid|gas|solid|aerosol)|highly\s+flammable|extremely\s+flammable|易燃液体|易燃气体|易燃固体)\b",
+                    text,
+                    re.IGNORECASE
+                ))
+                is_doc_flammable = (has_flam_h or has_flam_phrase) and not is_explicit_non_dg
+                if is_explicit_non_dg:
+                    parsed["ghs_codes"] = ["NON DG"]
+                    parsed["signal_word"] = "NON DG"
+                    parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
+                elif is_doc_flammable and "GHS02" not in parsed.get("ghs_codes", []):
+                    parsed["ghs_codes"] = ["GHS02"]
+                    if not parsed.get("signal_word") or parsed["signal_word"] == "NON DG":
+                        parsed["signal_word"] = "Nguy hiểm (Danger)"
+                    if not parsed.get("hazard_statements") or parsed.get("hazard_statements") == "NON DG":
+                        parsed["hazard_statements"] = "H225: Chất lỏng và hơi rất dễ cháy."
 
         # Quy tắc bắt buộc: Mã hóa chất và Mã MSDS lấy theo Mã sản phẩm (ví dụ: FTU0005)
         final_code = cls._clean_product_code_candidate(str(parsed.get("product_code") or "")) or heuristic_data.get("product_code") or ""
