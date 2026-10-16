@@ -33,6 +33,12 @@ test_cases = [
         "path": r"c:\Users\ntc27\OneDrive\文件\TitanPDF\data\msds_files\MSDS-FTU0005.docx",
         "expected_ghs": ["GHS07", "GHS09"],
         "expected_code": "FTU0005"
+    },
+    {
+        "name": "ZNZX009 OLE2 Doc (.doc)",
+        "path": r"c:\Users\ntc27\OneDrive\文件\TitanPDF\data\msds_files\MSDS-ZNZX009-EN.doc",
+        "expected_ghs": ["GHS02"],
+        "expected_code": "ZNZX009"
     }
 ]
 

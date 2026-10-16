@@ -930,10 +930,30 @@ class MSDSExtractorEngine:
         if not sec2:
             return {"is_non_dg": True, "ghs_codes": ["NON DG"], "signal_word": "NON DG", "h_codes": []}
 
+        # Tách Phần 2 thành khối 'Yếu tố nhãn' (Label elements) và khối 'Phân loại lý thuyết' (Theoretical classification)
+        m_label = re.search(
+            r"(?:^|\n)[^\n]*?(?:label\s+elements?|yếu\s+tố\s+nhãn|thành\s+phần\s+nhãn|nhãn\s+ghs|标签要素)[^\n]*",
+            sec2,
+            re.IGNORECASE
+        )
+        if m_label:
+            label_block = sec2[m_label.start():]
+            theory_block = sec2[:m_label.start()]
+            has_label_block = True
+        else:
+            label_block = sec2
+            theory_block = ""
+            has_label_block = False
+
         # 1. Tìm mã H-codes (H200..H413) và mã GHS01..GHS09 tường minh trong Phần 2
-        raw_h = re.findall(r"\b(H[234]\d{2}[A-Za-z]*)\b", sec2, re.IGNORECASE)
+        raw_h = re.findall(r"\b(H[234]\d{2}[A-Za-z]*)\b", label_block, re.IGNORECASE)
+        if not raw_h and not has_label_block:
+            raw_h = re.findall(r"\b(H[234]\d{2}[A-Za-z]*)\b", sec2, re.IGNORECASE)
         h_base = sorted(list(set(c[:4].upper() for c in raw_h)))
-        explicit_ghs = set(g.upper() for g in re.findall(r"\b(GHS0[1-9])\b", sec2, re.IGNORECASE))
+
+        explicit_ghs = set(g.upper() for g in re.findall(r"\b(GHS0[1-9])\b", label_block, re.IGNORECASE))
+        if not explicit_ghs and not has_label_block:
+            explicit_ghs = set(g.upper() for g in re.findall(r"\b(GHS0[1-9])\b", sec2, re.IGNORECASE))
 
         # 2. Kiểm tra tuyên bố Không Nguy Hại (NON DG) tường minh trong Phần 2
         non_dg_patterns = [
@@ -953,6 +973,16 @@ class MSDSExtractorEngine:
             r"\bnon[\s\-]*dg\b",
         ]
         is_explicit_non_dg = any(re.search(p, sec2, re.IGNORECASE) for p in non_dg_patterns)
+
+        # Kiểm tra tính dễ cháy toàn tài liệu / Phần 2
+        has_flam = bool(re.search(
+            r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|H22[0-8]|chớp\s+cháy\s*(?:<|nhỏ\s+hơn)?\s*(?:[1-5]?[0-9]|60)\s*°?C|flash\s*point\s*(?:<|below)?\s*(?:[1-5]?[0-9]|60)\s*°?C|易燃)\b",
+            sec2,
+            re.IGNORECASE
+        ))
+        if has_flam:
+            is_explicit_non_dg = False
+
         if is_explicit_non_dg and not h_base and not explicit_ghs:
             return {
                 "is_non_dg": True,
@@ -979,43 +1009,74 @@ class MSDSExtractorEngine:
             if any(h in h_set for h in h_base):
                 ghs_found.add(g_code)
 
-        # 4. Nếu Phần 2 không ghi mã H3xx mà chỉ ghi tên phân loại nguy hại (như chuẩn GB/T 16483), phân tích cú pháp Phần 2
-        if not h_base and not ghs_found:
-            if re.search(r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|cháy\s+được|flash\s*point|điểm\s+chớp\s+cháy|易燃)\b", sec2, re.IGNORECASE):
-                ghs_found.add("GHS02")
-            if re.search(r"\b(?:oxidizing|oxidizer|chất\s+oxy\s+hóa|氧化性)\b", sec2, re.IGNORECASE):
-                ghs_found.add("GHS03")
-            if re.search(r"\b(?:gas(?:es)?\s+under\s+pressure|compressed\s+gas|khí\s+dưới\s+áp\s+suất|khí\s+nén|加压气体)\b", sec2, re.IGNORECASE):
-                ghs_found.add("GHS04")
-            if (
-                re.search(r"\b(?:corrosive\s+to\s+metals|ăn\s+mòn\s+kim\s+loại|causes\s+severe\s+skin\s+burns|causes\s+serious\s+eye\s+damage|gây\s+bỏng\s+da\s+nghiêm\s+trọng)\b", sec2, re.IGNORECASE)
-                or re.search(r"(?:skin\s+corrosion|ăn\s+mòn(?:/kích\s+ứng)?\s+da|serious\s+eye\s+damage|tổn\s+thương\s+mắt\s+nghiêm\s+trọng)[^.\n]{0,35}?(?:category|cat\.?|cấp|loại)\s*1[ABC]?\b", sec2, re.IGNORECASE)
-            ):
-                ghs_found.add("GHS05")
-            if (
-                re.search(r"(?:acute\s+toxicity|độc\s+cấp\s+tính)[^.\n]{0,40}?(?:category|cat\.?|cấp|loại)\s*[123]\b", sec2, re.IGNORECASE)
-                or re.search(r"\b(?:fatal|toxic)\s+if\s+(?:swallowed|inhaled)\b|\b(?:fatal|toxic)\s+in\s+contact\s+with\s+skin\b", sec2, re.IGNORECASE)
-            ):
-                ghs_found.add("GHS06")
-            if (
-                re.search(r"(?:acute\s+toxicity|độc\s+cấp\s+tính)[^.\n]{0,40}?(?:category|cat\.?|cấp|loại)\s*4\b", sec2, re.IGNORECASE)
-                or re.search(r"(?:corrosion/irritation|skin\s+irritation|ăn\s+mòn/kích\s+ứng\s+da|kích\s+ứng\s+da)[^.\n]{0,35}?(?:category|cat\.?|cấp|loại)\s*2\b", sec2, re.IGNORECASE)
-                or re.search(r"(?:eye\s+damage/eye\s+irritation|eye\s+irritation|kích\s+ứng\s+mắt)[^.\n]{0,35}?(?:category|cat\.?|cấp|loại)\s*2[AB]?\b", sec2, re.IGNORECASE)
-                or re.search(r"\b(?:harmful\s+if\s+(?:swallowed|inhaled)|harmful\s+in\s+contact\s+with\s+skin|causes\s+skin\s+irritation|causes\s+serious\s+eye\s+irritation|may\s+cause\s+respiratory\s+irritation|may\s+cause\s+drowsiness|may\s+cause\s+an\s+allergic\s+skin\s+reaction|gây\s+kích\s+ứng\s+(?:da|mắt|hô\s+hấp))\b", sec2, re.IGNORECASE)
-            ):
-                ghs_found.add("GHS07")
-            if (
-                re.search(r"\b(?:aspiration\s+hazard|nguy\s+hại\s+hô\s+hấp|carcinogenicity|reproductive\s+toxicity|độc\s+tính\s+sinh\s+sản|germ\s+cell\s+mutagenicity|respiratory\s+sensiti[sz]ation|may\s+be\s+fatal\s+if\s+swallowed\s+and\s+enters\s+airways|cause[sd]?\s+damage\s+to\s+organs)\b", sec2, re.IGNORECASE)
-                or re.search(r"(?:specific\s+target\s+organ\s+toxicity|độc\s+tính\s+đến\s+cơ\s+quan\s+cụ\s+thể)[^.\n]{0,55}?(?:repeated\s+exposure|lặp\s+lại|(?:category|cat\.?|cấp)\s*[12]\b)", sec2, re.IGNORECASE)
-            ):
-                ghs_found.add("GHS08")
-            if (
-                re.search(r"(?:aquatic\s+hazard|aquatic\s+toxicity|môi\s+trường\s+thủy\s+sinh|môi\s+trường\s+thuỷ\s+sinh)[^.\n]{0,45}?(?:category|cat\.?|cấp|loại)\s*[12]\b", sec2, re.IGNORECASE)
-                or re.search(r"\b(?:very\s+)?toxic\s+to\s+aquatic\s+life\b|\b(?:rất\s+)?độc\s+đối\s+với\s+sinh\s+vật\s+thu[ỷy]\s+sinh\b", sec2, re.IGNORECASE)
-            ):
-                ghs_found.add("GHS09")
+        # 4. Kiểm tra tên hình đồ / biểu trưng được mô tả trong khối Yếu tố nhãn
+        if has_label_block:
+            pic_line_m = re.search(
+                r"(?:hazard\s+pictograms?|hình\s+đồ\s+(?:cảnh\s+báo|nguy\s+hiểm)|biểu\s+trưng\s+(?:cảnh\s+báo|nguy\s+hại)|象形图)[\s|:\-：\n]{1,30}([^\n]+)",
+                label_block,
+                re.IGNORECASE
+            )
+            if pic_line_m:
+                pic_text = pic_line_m.group(1).lower()
+                if any(k in pic_text for k in ("flame", "ngọn lửa", "ngon lua", "火焰")) and "circle" not in pic_text:
+                    ghs_found.add("GHS02")
+                if any(k in pic_text for k in ("corrosion", "ăn mòn", "an mon", "腐蚀")):
+                    ghs_found.add("GHS05")
+                if any(k in pic_text for k in ("skull", "đầu lâu", "dau lau", "骷髅")):
+                    ghs_found.add("GHS06")
+                if any(k in pic_text for k in ("exclamation", "chấm than", "cham than", "感叹")):
+                    ghs_found.add("GHS07")
+                if any(k in pic_text for k in ("health hazard", "nguy hại sức khỏe", "suc khoe", "健康危害")):
+                    ghs_found.add("GHS08")
+                if any(k in pic_text for k in ("environment", "môi trường", "moi truong", "环境")):
+                    ghs_found.add("GHS09")
+                if any(k in pic_text for k in ("bomb", "nổ", "no", "爆炸")):
+                    ghs_found.add("GHS01")
 
-        # 5. Nếu Mục 2 bị cắt hụt do cấu trúc bảng Word, kiểm tra đối soát toàn văn bản có chỉ báo dễ cháy/nguy hại không
+        # 5. Phân tích cụm từ khi không có mã H-code và chưa có hình đồ
+        if not h_base and not ghs_found:
+            # QUY TẮC TỐI THƯỢNG: Nếu có khối Yếu tố nhãn, CHỈ phân tích trong khối nhãn đó,
+            # TUYỆT ĐỐI KHÔNG quét đoạn phân loại lý thuyết GB 30000 để tránh bơm dư hình đồ ảo.
+            target_text = label_block if has_label_block else sec2
+
+            if re.search(r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|cháy\s+được|flash\s*point|điểm\s+chớp\s+cháy|易燃)\b", target_text, re.IGNORECASE):
+                ghs_found.add("GHS02")
+
+            # Nếu KHÔNG có khối nhãn riêng (tài liệu kiểu cũ không phân tách nhãn), mới quét từ target_text
+            if not has_label_block:
+                if re.search(r"\b(?:oxidizing|oxidizer|chất\s+oxy\s+hóa|氧化性)\b", target_text, re.IGNORECASE):
+                    ghs_found.add("GHS03")
+                if re.search(r"\b(?:gas(?:es)?\s+under\s+pressure|compressed\s+gas|khí\s+dưới\s+áp\s+suất|khí\s+nén|加压气体)\b", target_text, re.IGNORECASE):
+                    ghs_found.add("GHS04")
+                if (
+                    re.search(r"\b(?:corrosive\s+to\s+metals|ăn\s+mòn\s+kim\s+loại|causes\s+severe\s+skin\s+burns|causes\s+serious\s+eye\s+damage|gây\s+bỏng\s+da\s+nghiêm\s+trọng)\b", target_text, re.IGNORECASE)
+                    or re.search(r"(?:skin\s+corrosion|ăn\s+mòn(?:/kích\s+ứng)?\s+da|serious\s+eye\s+damage|tổn\s+thương\s+mắt\s+nghiêm\s+trọng)[^.\n]{0,35}?(?:category|cat\.?|cấp|loại)\s*1[ABC]?\b", target_text, re.IGNORECASE)
+                ):
+                    ghs_found.add("GHS05")
+                if (
+                    re.search(r"(?:acute\s+toxicity|độc\s+cấp\s+tính)[^.\n]{0,40}?(?:category|cat\.?|cấp|loại)\s*[123]\b", target_text, re.IGNORECASE)
+                    or re.search(r"\b(?:fatal|toxic)\s+if\s+(?:swallowed|inhaled)\b|\b(?:fatal|toxic)\s+in\s+contact\s+with\s+skin\b", target_text, re.IGNORECASE)
+                ):
+                    ghs_found.add("GHS06")
+                if (
+                    re.search(r"(?:acute\s+toxicity|độc\s+cấp\s+tính)[^.\n]{0,40}?(?:category|cat\.?|cấp|loại)\s*4\b", target_text, re.IGNORECASE)
+                    or re.search(r"(?:corrosion/irritation|skin\s+irritation|ăn\s+mòn/kích\s+ứng\s+da|kích\s+ứng\s+da)[^.\n]{0,35}?(?:category|cat\.?|cấp|loại)\s*2\b", target_text, re.IGNORECASE)
+                    or re.search(r"(?:eye\s+damage/eye\s+irritation|eye\s+irritation|kích\s+ứng\s+mắt)[^.\n]{0,35}?(?:category|cat\.?|cấp|loại)\s*2[AB]?\b", target_text, re.IGNORECASE)
+                    or re.search(r"\b(?:harmful\s+if\s+(?:swallowed|inhaled)|harmful\s+in\s+contact\s+with\s+skin|causes\s+skin\s+irritation|causes\s+serious\s+eye\s+irritation|may\s+cause\s+respiratory\s+irritation|may\s+cause\s+drowsiness|may\s+cause\s+an\s+allergic\s+skin\s+reaction|gây\s+kích\s+ứng\s+(?:da|mắt|hô\s+hấp))\b", target_text, re.IGNORECASE)
+                ):
+                    ghs_found.add("GHS07")
+                if (
+                    re.search(r"\b(?:aspiration\s+hazard|nguy\s+hại\s+hô\s+hấp|carcinogenicity|reproductive\s+toxicity|độc\s+tính\s+sinh\s+sản|germ\s+cell\s+mutagenicity|respiratory\s+sensiti[sz]ation|may\s+be\s+fatal\s+if\s+swallowed\s+and\s+enters\s+airways|cause[sd]?\s+damage\s+to\s+organs)\b", target_text, re.IGNORECASE)
+                    or re.search(r"(?:specific\s+target\s+organ\s+toxicity|độc\s+tính\s+đến\s+cơ\s+quan\s+cụ\s+thể)[^.\n]{0,55}?(?:repeated\s+exposure|lặp\s+lại|(?:category|cat\.?|cấp)\s*[12]\b)", target_text, re.IGNORECASE)
+                ):
+                    ghs_found.add("GHS08")
+                if (
+                    re.search(r"(?:aquatic\s+hazard|aquatic\s+toxicity|môi\s+trường\s+thủy\s+sinh|môi\s+trường\s+thuỷ\s+sinh)[^.\n]{0,45}?(?:category|cat\.?|cấp|loại)\s*[12]\b", target_text, re.IGNORECASE)
+                    or re.search(r"\b(?:very\s+)?toxic\s+to\s+aquatic\s+life\b|\b(?:rất\s+)?độc\s+đối\s+với\s+sinh\s+vật\s+thu[ỷy]\s+sinh\b", target_text, re.IGNORECASE)
+                ):
+                    ghs_found.add("GHS09")
+
+        # 6. Nếu Mục 2 bị cắt hụt do cấu trúc bảng Word, kiểm tra đối soát toàn văn bản có chỉ báo dễ cháy/nguy hại không
         if not ghs_found:
             flammable_match = re.search(
                 r"\b(?:flammable(?:\s+(?:liquid|gas|solid|aerosol))?|chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+dễ\s+cháy|dễ\s+cháy|chất\s+dễ\s+cháy|chất\s+lỏng\s+có\s+thể\s+cháy|H22[0-8]|chớp\s+cháy\s*(?:<|nhỏ\s+hơn)?\s*(?:[1-5]?[0-9]|60)\s*°?C|flash\s*point\s*(?:<|below)?\s*(?:[1-5]?[0-9]|60)\s*°?C|易燃)\b",
@@ -1733,11 +1794,14 @@ class MSDSExtractorEngine:
                     except Exception:
                         pass
 
-                is_doc_flammable = (has_flam_h or has_flam_phrase or has_low_fp) and not is_explicit_non_dg
+                is_doc_flammable = bool(has_flam_h or has_flam_phrase or has_low_fp)
+                if is_doc_flammable:
+                    is_explicit_non_dg = False
 
                 if is_explicit_non_dg and not is_doc_flammable:
                     selected_ghs = ["NON DG"]
                 else:
+                    sec2_text = cls.extract_section_2_text(text)
                     # Lấy danh sách GHS thô từ AI và từ Heuristic Mục 2
                     raw_ai_ghs = [str(c).strip().upper() for c in (parsed.get("ghs_codes") or []) if str(c).strip()]
                     raw_heu_ghs = [str(c).strip().upper() for c in (sec2_ghs.get("ghs_codes") or []) if str(c).strip()]
@@ -1746,8 +1810,29 @@ class MSDSExtractorEngine:
 
                     # Tuân thủ mệnh lệnh người dùng: "trong file ở mục 2 có hiển thị hình đồ GHS thì hiển thị lại đúng hình đồ cảnh báo GHS đó, không hiển thị Dư"
                     if valid_ai_ghs:
-                        # Ưu tiên AI vì prompt AI đã được ràng buộc nghiêm ngặt theo đúng nhãn Mục 2, KHÔNG hiển thị dư
-                        selected_ghs = list(valid_ai_ghs)
+                        # Cross-validate AI codes against Section 2 / heuristic findings / text support
+                        pruned_ai_ghs = []
+                        for g in valid_ai_ghs:
+                            if g in valid_heu_ghs:
+                                pruned_ai_ghs.append(g)
+                            else:
+                                # Check if document Section 2 actually supports this specific code
+                                g_support = False
+                                if g == "GHS02" and is_doc_flammable:
+                                    g_support = True
+                                elif g == "GHS07" and re.search(r"\b(?:H302|H312|H332|H315|H319|H317|H335|H336|kích ứng|irritat)\b", sec2_text, re.I):
+                                    g_support = True
+                                elif g == "GHS05" and re.search(r"\b(?:H290|H314|H318|ăn mòn|corrosive)\b", sec2_text, re.I):
+                                    g_support = True
+                                elif g == "GHS06" and re.search(r"\b(?:H300|H301|H310|H311|H330|H331|độc cấp tính|toxic|fatal)\b", sec2_text, re.I):
+                                    g_support = True
+                                elif g == "GHS08" and re.search(r"\b(?:H304|H334|H340|H341|H350|H351|H360|H361|H370|H371|H372|H373)\b", sec2_text, re.I):
+                                    g_support = True
+                                elif g == "GHS09" and re.search(r"\b(?:H400|H410|H411|môi trường thủy sinh|aquatic)\b", sec2_text, re.I):
+                                    g_support = True
+                                if g_support:
+                                    pruned_ai_ghs.append(g)
+                        selected_ghs = pruned_ai_ghs if pruned_ai_ghs else list(valid_heu_ghs)
                     elif valid_heu_ghs:
                         selected_ghs = list(valid_heu_ghs)
                     else:
@@ -1796,17 +1881,39 @@ class MSDSExtractorEngine:
                     text,
                     re.IGNORECASE
                 ))
-                is_doc_flammable = (has_flam_h or has_flam_phrase) and not is_explicit_non_dg
+                fp_m = re.search(r"(?:flash\s*point|điểm\s*chớp\s*cháy)[^\n\d]*([<>]?\s*-?\d+(?:\.\d+)?)\s*°?C", text, re.IGNORECASE)
+                has_low_fp = False
+                if fp_m:
+                    try:
+                        fp_val = float(re.sub(r"[^\d.-]", "", fp_m.group(1)))
+                        if fp_val <= 60.0:
+                            has_low_fp = True
+                    except Exception:
+                        pass
+                is_doc_flammable = bool(has_flam_h or has_flam_phrase or has_low_fp)
+                if is_doc_flammable:
+                    is_explicit_non_dg = False
+
                 if is_explicit_non_dg:
                     parsed["ghs_codes"] = ["NON DG"]
                     parsed["signal_word"] = "NON DG"
                     parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
-                elif is_doc_flammable and "GHS02" not in parsed.get("ghs_codes", []):
-                    parsed["ghs_codes"] = ["GHS02"]
-                    if not parsed.get("signal_word") or parsed["signal_word"] == "NON DG":
-                        parsed["signal_word"] = "Nguy hiểm (Danger)"
-                    if not parsed.get("hazard_statements") or parsed.get("hazard_statements") == "NON DG":
-                        parsed["hazard_statements"] = "H225: Chất lỏng và hơi rất dễ cháy."
+                else:
+                    raw_heu_ghs = [str(c).strip().upper() for c in (sec2_ghs.get("ghs_codes") or []) if str(c).strip()]
+                    selected_ghs = [g for g in raw_heu_ghs if g in GHS_MAP and g != "NON DG"]
+                    if is_doc_flammable and "GHS02" not in selected_ghs:
+                        selected_ghs.append("GHS02")
+                    if not selected_ghs:
+                        selected_ghs = ["GHS02"] if is_doc_flammable else ["NON DG"]
+                    parsed["ghs_codes"] = sorted(list(set(selected_ghs)))
+                    if "GHS02" in parsed["ghs_codes"] or any(g in parsed["ghs_codes"] for g in ("GHS01", "GHS05", "GHS06")):
+                        if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                            parsed["signal_word"] = "Nguy hiểm (Danger)"
+                    elif any(g in parsed["ghs_codes"] for g in ("GHS07", "GHS09")):
+                        if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                            parsed["signal_word"] = "Cảnh báo (Warning)"
+                    elif parsed["ghs_codes"] == ["NON DG"]:
+                        parsed["signal_word"] = "NON DG"
 
         # Quy tắc bắt buộc: Mã hóa chất và Mã MSDS lấy theo Mã sản phẩm (ví dụ: FTU0005)
         final_code = cls._clean_product_code_candidate(str(parsed.get("product_code") or "")) or heuristic_data.get("product_code") or ""

@@ -812,6 +812,12 @@ class InterlinearTranslator:
             }
 
             resp = requests.post(DeepSeekOCR.DEFAULT_API_URL, headers=headers, json=payload, timeout=90)
+            if resp.status_code != 200 and model != DeepSeekOCR.FALLBACK_MODEL:
+                err_text = resp.text.lower()
+                if any(k in err_text for k in ("model", "not found", "invalid_request", "does not exist", "unsupported")) or resp.status_code in (400, 404):
+                    payload["model"] = DeepSeekOCR.FALLBACK_MODEL
+                    resp = requests.post(DeepSeekOCR.DEFAULT_API_URL, headers=headers, json=payload, timeout=90)
+
             if resp.status_code != 200:
                 raise ValueError(f"DeepSeek Vision API trả về lỗi ({resp.status_code}): {resp.text}")
 

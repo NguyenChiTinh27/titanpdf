@@ -290,28 +290,102 @@ class GHSImageDetector:
         Trích xuất trực tiếp các khối ảnh PNG/JPEG nhúng trong tệp nhị phân OLE2 .doc
         hoàn toàn bằng Pure Python, không phụ thuộc Windows Word COM (chạy tốt trên Linux/Render).
         """
+        extracted: List[bytes] = []
+        raw_candidates: List[bytes] = []
+
         try:
+            # 1. Nếu có thư viện olefile, ưu tiên giải nén stream 'Data' và 'WordDocument'
+            try:
+                import olefile
+                if olefile.isOleFile(doc_path):
+                    with olefile.OleFileIO(doc_path) as ole:
+                        for s_name in ["Data", "WordDocument", "1Table", "0Table"]:
+                            if ole.exists(s_name):
+                                raw_candidates.append(ole.openstream(s_name).read())
+            except Exception:
+                pass
+
+            # 2. Luôn nạp toàn bộ byte thô của tệp làm nguồn quét dự phòng
             with open(doc_path, "rb") as f:
-                raw = f.read()
-            extracted = []
-            # Tìm kiếm chữ ký PNG (\x89PNG\r\n\x1a\n)
-            for m in re.finditer(b"\x89PNG\r\n\x1a\n", raw):
-                start = m.start()
-                end = raw.find(b"IEND", start)
-                if end != -1:
-                    end += 8  # IEND + 4 bytes CRC
-                    png_data = raw[start:end]
-                    if cls.is_ghs_diamond_image(png_data):
-                        extracted.append(png_data)
-            # Tìm kiếm chữ ký JPEG (\xff\xd8\xff)
-            for m in re.finditer(b"\xff\xd8\xff", raw):
-                start = m.start()
-                end = raw.find(b"\xff\xd9", start)
-                if end != -1:
-                    end += 2
-                    jpg_data = raw[start:end]
-                    if cls.is_ghs_diamond_image(jpg_data):
-                        extracted.append(jpg_data)
+                raw_candidates.append(f.read())
+
+            seen_hashes = set()
+
+            for raw in raw_candidates:
+                # --- A. Quét chữ ký PNG (\x89PNG\r\n\x1a\n) bằng chunk-walking scanner ---
+                for m in re.finditer(b"\x89PNG\r\n\x1a\n", raw):
+                    start = m.start()
+                    # Quét tuần tự từng chunk PNG chuẩn quốc tế
+                    pos = start + 8
+                    png_end = -1
+                    max_len = min(len(raw), start + 25 * 1024 * 1024)
+                    while pos + 8 <= max_len:
+                        chunk_len = int.from_bytes(raw[pos:pos+4], 'big')
+                        chunk_type = raw[pos+4:pos+8]
+                        pos += 12 + chunk_len
+                        if chunk_type == b"IEND":
+                            png_end = pos
+                            break
+                        if chunk_len < 0 or pos > max_len:
+                            break
+
+                    if png_end == -1:
+                        iend_idx = raw.find(b"IEND", start)
+                        if iend_idx != -1 and iend_idx - start < 10 * 1024 * 1024:
+                            png_end = iend_idx + 8
+
+                    if png_end != -1:
+                        png_data = raw[start:png_end]
+                        h_val = hash(png_data[:256])
+                        if h_val not in seen_hashes and 500 <= len(png_data) <= 25 * 1024 * 1024:
+                            seen_hashes.add(h_val)
+                            try:
+                                im = Image.open(io.BytesIO(png_data))
+                                im.load()
+                                w, h = im.size
+                                if 25 <= w <= 3000 and 25 <= h <= 3000:
+                                    if cls.is_ghs_diamond_image(png_data):
+                                        extracted.append(png_data)
+                            except Exception:
+                                pass
+
+                # --- B. Quét chữ ký JPEG (\xff\xd8\xff) kết hợp kiểm chứng giải mã Pillow ---
+                idx = 0
+                while True:
+                    start = raw.find(b"\xff\xd8\xff", idx)
+                    if start == -1:
+                        break
+
+                    # Tìm marker EOI (\xff\xd9) an toàn kết hợp kiểm chứng giải mã
+                    search_pos = start + 2
+                    found_jpeg = False
+                    while search_pos < len(raw) and search_pos - start < 25 * 1024 * 1024:
+                        eoi = raw.find(b"\xff\xd9", search_pos)
+                        if eoi == -1:
+                            break
+                        end = eoi + 2
+                        candidate = raw[start:end]
+                        if 500 <= len(candidate) <= 25 * 1024 * 1024:
+                            try:
+                                im = Image.open(io.BytesIO(candidate))
+                                im.load()
+                                h_val = hash(candidate[:256])
+                                if h_val not in seen_hashes:
+                                    seen_hashes.add(h_val)
+                                    w, h = im.size
+                                    if 25 <= w <= 3000 and 25 <= h <= 3000:
+                                        if cls.is_ghs_diamond_image(candidate):
+                                            extracted.append(candidate)
+                                found_jpeg = True
+                                idx = end
+                                break
+                            except Exception:
+                                pass
+                        search_pos = end
+
+                    if not found_jpeg:
+                        idx = start + 3
+
             return extracted
         except Exception as e:
             print(f"[GHSImageDetector] Lỗi bóc tách ảnh nhị phân .doc: {e}")
