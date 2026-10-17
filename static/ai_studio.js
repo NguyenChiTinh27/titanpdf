@@ -1832,8 +1832,15 @@ async function deleteMsdsChemical(chemId) {
     }
 
     try {
+        const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
+        const role = sessionStorage.getItem("luv_user_role") || "owner";
         const resp = await fetch(`/api/msds/delete/${encodeURIComponent(chemId)}`, {
-            method: "DELETE"
+            method: "DELETE",
+            headers: {
+                "X-Titan-Session": token,
+                "X-Titan-Role": role,
+                "Authorization": "Bearer " + token
+            }
         });
         const res = await resp.json();
         if (!resp.ok || !res.success) {
@@ -1958,9 +1965,16 @@ async function deleteSelectedMsdsBatch() {
     }
 
     try {
+        const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
+        const role = sessionStorage.getItem("luv_user_role") || "owner";
         const resp = await fetch("/api/msds/delete-batch", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-Titan-Session": token,
+                "X-Titan-Role": role,
+                "Authorization": "Bearer " + token
+            },
             body: JSON.stringify({ ids: ids })
         });
         const res = await resp.json();
@@ -2127,9 +2141,16 @@ async function executeDeleteAllMsds() {
             btnConfirm.textContent = "⏳ Đang xóa sạch CSDL...";
         }
 
+        const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
+        const role = sessionStorage.getItem("luv_user_role") || "owner";
         const resp = await fetch("/api/msds/delete-all", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-Titan-Session": token,
+                "X-Titan-Role": role,
+                "Authorization": "Bearer " + token
+            },
             body: JSON.stringify({ password: pwd })
         });
         const res = await resp.json();

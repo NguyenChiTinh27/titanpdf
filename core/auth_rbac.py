@@ -164,12 +164,12 @@ def reset_guest_permissions() -> Dict[str, Any]:
 def extract_token(request: Request) -> Optional[str]:
     """
     Trích xuất token phiên từ các kênh:
-    1. Header: X-Titan-Session, X-Titan-Token, X-Session-Token
+    1. Header: X-Titan-Session, X-Titan-Token, X-Session-Token, X-Auth-Token, Token
     2. Header: Authorization (Bearer ...)
     3. Cookie: luv_auth_token, titan_session
     4. Query: token, session_token
     """
-    for h in ["x-titan-session", "x-titan-token", "x-session-token"]:
+    for h in ["x-titan-session", "x-titan-token", "x-session-token", "x-auth-token", "token"]:
         val = request.headers.get(h)
         if val and val.strip():
             return val.strip()
@@ -196,6 +196,7 @@ def get_current_role(request: Request) -> str:
     Xác định vai trò của phiên: 'owner' hoặc 'guest'.
     Quy tắc bảo mật Anti-Spoofing:
     - Nếu có X-Titan-Role: guest hoặc token guest -> chắc chắn 'guest'.
+    - Nếu hệ thống tắt hoàn toàn chế độ khóa bảo mật -> mặc định 'owner' (trừ khi yêu cầu là guest).
     - Quyền 'owner' CHỈ ĐƯỢC CẤP nếu token khớp với ACTIVE_SESSIONS của máy chủ
       hoặc danh sách token hợp lệ / internal bypass.
     - Token giả mạo hoặc không tồn tại sẽ tự động hạ cấp về 'guest'.
@@ -209,7 +210,16 @@ def get_current_role(request: Request) -> str:
     if role_hdr == "guest" or (token and (token.startswith("luv_guest_") or token == "guest")):
         return "guest"
 
-    # 2. Có token gửi lên -> kiểm tra tính xác thực của Owner
+    # 2. Kiểm tra nếu khóa bảo mật hệ thống đang tắt hoàn toàn
+    try:
+        import server
+        sec_cfg = getattr(server, "get_security_config", lambda: {})()
+        if not sec_cfg.get("enabled", True):
+            return "owner"
+    except Exception:
+        pass
+
+    # 3. Có token gửi lên -> kiểm tra tính xác thực của Owner
     if token:
         token = token.strip()
         # Kiểm tra ACTIVE_SESSIONS từ server module
@@ -228,7 +238,7 @@ def get_current_role(request: Request) -> str:
         # Anti-spoofing: Có token nhưng không hợp lệ -> 'guest'
         return "guest"
 
-    # 3. Không có token nào được gửi:
+    # 4. Không có token nào được gửi:
     # Kiểm tra xem đây có phải là cuộc gọi kiểm thử nội bộ/offline (FastAPI TestClient hoặc python runner)
     client_host = getattr(request.client, "host", "") if request.client else ""
     user_agent = (request.headers.get("user-agent") or "").lower()

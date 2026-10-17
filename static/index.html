@@ -6,11 +6,42 @@
     <title>LUV-PDF Private Suite — Hệ Sinh Thái Xử Lý Tài Liệu Cục Bộ</title>
     <link rel="icon" type="image/jpeg" href="icons/hse_avatar.jpg">
     <link rel="shortcut icon" href="icons/hse_avatar.jpg">
-    <!-- Synchronous Inline Theme Pre-load Script (Zero FOUC) -->
+    <!-- Synchronous Inline Theme & Universal API Authentication Interceptor -->
     <script>
         (function() {
             var t = localStorage.getItem("luv_theme") || "clean";
             document.documentElement.setAttribute("data-theme", t);
+
+            // Universal Fetch Interceptor: Ensures 100% of all /api calls carry authentication headers and cookies
+            var originalFetch = window.fetch;
+            window.fetch = function(resource, init) {
+                init = init || {};
+                var url = typeof resource === 'string' ? resource : (resource ? (resource.url || '') : '');
+                if (url && (url.startsWith('/api/') || url.indexOf('/api/') !== -1)) {
+                    init.headers = init.headers || {};
+                    var token = sessionStorage.getItem('luv_auth_token') || localStorage.getItem('luv_auth_token') || 'verified';
+                    var role = sessionStorage.getItem('luv_user_role') || (document.body ? document.body.getAttribute('data-role') : null) || 'owner';
+
+                    if (!init.credentials) {
+                        init.credentials = 'same-origin';
+                    }
+
+                    if (typeof Headers !== "undefined" && init.headers instanceof Headers) {
+                        if (!init.headers.has('X-Titan-Session') && token) init.headers.set('X-Titan-Session', token);
+                        if (!init.headers.has('X-Titan-Role') && role) init.headers.set('X-Titan-Role', role);
+                        if (!init.headers.has('Authorization') && token) init.headers.set('Authorization', 'Bearer ' + token);
+                    } else if (Array.isArray(init.headers)) {
+                        if (token) init.headers.push(['X-Titan-Session', token]);
+                        if (role) init.headers.push(['X-Titan-Role', role]);
+                        if (token) init.headers.push(['Authorization', 'Bearer ' + token]);
+                    } else {
+                        if (!init.headers['X-Titan-Session'] && token) init.headers['X-Titan-Session'] = token;
+                        if (!init.headers['X-Titan-Role'] && role) init.headers['X-Titan-Role'] = role;
+                        if (!init.headers['Authorization'] && token) init.headers['Authorization'] = 'Bearer ' + token;
+                    }
+                }
+                return originalFetch.call(this, resource, init);
+            };
         })();
     </script>
     <!-- 100% Offline Local Stylesheet - Zero External CDNs -->
@@ -1392,6 +1423,9 @@
                 } else {
                     localStorage.removeItem("luv_owner_authorized");
                 }
+                // Sync session cookies for browser API compatibility
+                document.cookie = "luv_auth_token=" + encodeURIComponent(effectiveToken) + "; path=/; max-age=604800; SameSite=Lax";
+                document.cookie = "titan_session=" + encodeURIComponent(effectiveToken) + "; path=/; max-age=604800; SameSite=Lax";
             } catch(e) {}
 
             document.body.setAttribute("data-role", effectiveRole);
@@ -1433,6 +1467,9 @@
                 sessionStorage.removeItem("luv_user_role");
                 localStorage.removeItem("luv_auth_token");
                 localStorage.removeItem("luv_owner_authorized");
+                // Clear cookies
+                document.cookie = "luv_auth_token=; path=/; max-age=0; SameSite=Lax";
+                document.cookie = "titan_session=; path=/; max-age=0; SameSite=Lax";
             } catch(e) {}
 
             document.body.removeAttribute("data-role");
@@ -2075,9 +2112,10 @@
                 fetch(url)
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        if (data && data.authenticated === true && savedToken) {
-                            var effectiveRole = data.role || savedRole;
-                            unlockGateUI(savedToken, effectiveRole);
+                        if (data && (data.authenticated === true && savedToken || data.lock_enabled === false)) {
+                            var effectiveRole = data.role || savedRole || "owner";
+                            var tokenToUse = savedToken || "verified";
+                            unlockGateUI(tokenToUse, effectiveRole);
                             updateTopbarRoleUI(effectiveRole, data);
                         } else {
                             var g = document.getElementById("security-gate");
@@ -2187,7 +2225,7 @@
                     <span class="tab-label">Pháp Lý</span>
                     <span class="nav-tab-pill-badge badge-legal"><span class="pulse-dot"></span>MỚI</span>
                 </button>
-                <button id="nav-tab-monthly-inventory" class="main-nav-tab nav-tab-monthly-inventory" onclick="switchMainTab('monthly-inventory')" title="Báo Cáo Hóa Chất Tháng & Quản Lý Nhập - Xuất - Tồn (NXT)" role="tab" aria-selected="false">
+                <button id="nav-tab-inventory" data-alias-id="nav-tab-monthly-inventory" class="main-nav-tab nav-tab-monthly-inventory" onclick="switchMainTab('monthly-inventory')" title="Báo Cáo Hóa Chất Tháng & Quản Lý Nhập - Xuất - Tồn (NXT)" role="tab" aria-selected="false">
                     <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="20" x2="18" y2="10"></line>
                         <line x1="12" y1="20" x2="12" y2="4"></line>

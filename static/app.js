@@ -683,37 +683,121 @@ let thumbnailObserver = null;
 let readerObserver = null;
 
 
+// Provide bidirectional alias support between nav-tab-inventory and nav-tab-monthly-inventory
+if (typeof document !== "undefined") {
+    const _origGetElementById = document.getElementById.bind(document);
+    document.getElementById = function(id) {
+        if (id === "nav-tab-monthly-inventory") {
+            return _origGetElementById("nav-tab-monthly-inventory") || _origGetElementById("nav-tab-inventory");
+        }
+        if (id === "nav-tab-inventory") {
+            return _origGetElementById("nav-tab-inventory") || _origGetElementById("nav-tab-monthly-inventory");
+        }
+        return _origGetElementById(id);
+    };
+    const _origQuerySelector = document.querySelector.bind(document);
+    document.querySelector = function(sel) {
+        if (sel === "#nav-tab-monthly-inventory") {
+            return _origQuerySelector("#nav-tab-monthly-inventory") || _origQuerySelector("#nav-tab-inventory");
+        }
+        if (sel === "#nav-tab-inventory") {
+            return _origQuerySelector("#nav-tab-inventory") || _origQuerySelector("#nav-tab-monthly-inventory");
+        }
+        return _origQuerySelector(sel);
+    };
+}
+
 // -------------------------------------------------------------
 // 1. RBAC GUEST PERMISSIONS & RENDER HOME TOOL CARDS
 // -------------------------------------------------------------
 function isToolAllowedForGuest(toolId) {
     const perms = window.GUEST_PERMISSIONS_CACHE;
     if (!perms) return true;
-    if (perms.tools && perms.tools[toolId] !== undefined) {
-        return Boolean(perms.tools[toolId]);
+
+    // Canonical alias normalization map
+    const CANONICAL_TOOL_MAP = {
+        "msds": "msds-studio",
+        "legal": "legal-lookup",
+        "editor": "vip-editor",
+        "hse": "hse-studio",
+        "nxt": "monthly-inventory",
+        "inventory": "monthly-inventory",
+        "ai": "ai-studio"
+    };
+    const targetId = CANONICAL_TOOL_MAP[toolId] || toolId;
+
+    // 1. Primary check: Granular per-tool permissions
+    if (perms.tools && perms.tools[targetId] !== undefined) {
+        return Boolean(perms.tools[targetId]);
     }
+
+    // 2. Special handling for AI Studio composite module (if ai-studio is enabled or any child AI tool enabled)
+    if (targetId === "ai-studio" || targetId === "ai") {
+        if (perms.tools && (perms.tools["ai-studio"] !== undefined)) {
+            return Boolean(perms.tools["ai-studio"]);
+        }
+        if (perms.tools) {
+            return Boolean(
+                perms.tools["ai-translator"] ||
+                perms.tools["ai-summarizer"] ||
+                perms.tools["ocr"] ||
+                perms.tools["interlinear-translate"]
+            );
+        }
+    }
+
+    // 3. Fallback: Backward-compatible tool groups check
     const groups = perms.tool_groups || {};
     const proTools = ["interlinear-translate", "vip-editor", "ai-translator", "ai-summarizer", "ocr"];
     const studioTools = ["ai-studio", "hse-studio"];
 
-    if (proTools.includes(toolId)) {
+    if (proTools.includes(targetId)) {
         return !!groups.pro_tools;
     }
-    if (studioTools.includes(toolId)) {
+    if (studioTools.includes(targetId)) {
         return !!groups.studios;
     }
-    if (toolId === "legal-lookup" || toolId === "legal") {
+    if (targetId === "legal-lookup" || targetId === "legal") {
         return groups.legal !== false;
     }
-    if (toolId === "msds-studio" || toolId === "msds") {
+    if (targetId === "msds-studio" || targetId === "msds") {
         return groups.msds !== false;
     }
-    if (toolId === "monthly-inventory") {
+    if (targetId === "monthly-inventory" || targetId === "nxt" || targetId === "inventory") {
         return groups.monthly_inventory !== false;
     }
     return groups.basic_pdf !== false;
 }
 window.isToolAllowedForGuest = isToolAllowedForGuest;
+
+function applyNavTabsGuestStyling() {
+    const isGuest = document.body.getAttribute("data-role") === "guest";
+
+    const tabConfigs = [
+        { ids: ["nav-tab-editor"], toolId: "vip-editor", name: "VIP Editor" },
+        { ids: ["nav-tab-ai"], toolId: "ai-studio", name: "AI Studio" },
+        { ids: ["nav-tab-msds"], toolId: "msds-studio", name: "Sổ Hóa Chất MSDS & CIL" },
+        { ids: ["nav-tab-hse"], toolId: "hse-studio", name: "HSE Report" },
+        { ids: ["nav-tab-legal"], toolId: "legal-lookup", name: "Tra Cứu Pháp Lý" },
+        { ids: ["nav-tab-inventory", "nav-tab-monthly-inventory"], toolId: "monthly-inventory", name: "Báo Cáo Tháng (NXT)" }
+    ];
+
+    tabConfigs.forEach(tabCfg => {
+        const allowed = !isGuest || (typeof isToolAllowedForGuest === "function" ? isToolAllowedForGuest(tabCfg.toolId) : true);
+        tabCfg.ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (!allowed) {
+                el.classList.add("tab-locked-guest");
+                el.setAttribute("title", `Công cụ [${tabCfg.name}] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.`);
+            } else {
+                el.classList.remove("tab-locked-guest");
+                el.removeAttribute("title");
+            }
+        });
+    });
+}
+window.applyNavTabsGuestStyling = applyNavTabsGuestStyling;
 
 async function loadAndApplyGuestPermissions() {
     try {
@@ -726,6 +810,9 @@ async function loadAndApplyGuestPermissions() {
             window.GUEST_PERMISSIONS_CACHE = data.permissions || data;
             if (typeof renderToolCards === "function") {
                 renderToolCards();
+            }
+            if (typeof applyNavTabsGuestStyling === "function") {
+                applyNavTabsGuestStyling();
             }
         }
     } catch(e) {
@@ -848,11 +935,11 @@ function renderToolCards() {
                 }
             };
         } else {
-            card.onclick = () => alert("Công cụ này đã bị khóa đối với Chế độ Khách bởi Quản trị viên.");
+            card.onclick = () => alert(`Công cụ [${tool.title}] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.`);
             card.onkeydown = (e) => {
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    alert("Công cụ này đã bị khóa đối với Chế độ Khách bởi Quản trị viên.");
+                    alert(`Công cụ [${tool.title}] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.`);
                 }
             };
         }
@@ -973,7 +1060,9 @@ function setupKeyboardNavigation() {
 function openTool(toolId) {
     if (document.body.getAttribute("data-role") === "guest" && typeof isToolAllowedForGuest === "function") {
         if (!isToolAllowedForGuest(toolId)) {
-            alert("Công cụ này đã bị khóa đối với Chế độ Khách bởi Quản trị viên.");
+            const toolObj = typeof TOOLS !== "undefined" ? TOOLS.find(t => t.id === toolId) : null;
+            const toolTitle = toolObj ? toolObj.title : toolId;
+            alert(`Công cụ [${toolTitle}] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.`);
             return;
         }
     }
@@ -4050,6 +4139,9 @@ function unlockGateUI(token, role) {
         } else {
             localStorage.removeItem("luv_owner_authorized");
         }
+        // Sync session cookies for browser compatibility
+        document.cookie = "luv_auth_token=" + encodeURIComponent(effectiveToken) + "; path=/; max-age=604800; SameSite=Lax";
+        document.cookie = "titan_session=" + encodeURIComponent(effectiveToken) + "; path=/; max-age=604800; SameSite=Lax";
     } catch (e) {}
 
     document.body.setAttribute("data-role", effectiveRole);
@@ -4084,6 +4176,9 @@ function unlockGateUI(token, role) {
         if (typeof window.renderToolCards === "function") {
             window.renderToolCards();
         }
+        if (typeof window.applyNavTabsGuestStyling === "function") {
+            window.applyNavTabsGuestStyling();
+        }
     }
 }
 window.unlockGateUI = unlockGateUI;
@@ -4094,6 +4189,9 @@ function lockGateUI() {
         sessionStorage.removeItem("luv_user_role");
         localStorage.removeItem("luv_auth_token");
         localStorage.removeItem("luv_owner_authorized");
+        // Clear cookies
+        document.cookie = "luv_auth_token=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "titan_session=; path=/; max-age=0; SameSite=Lax";
     } catch (e) {}
 
     document.body.removeAttribute("data-role");
@@ -4105,6 +4203,9 @@ function lockGateUI() {
     }
     if (typeof window.renderToolCards === "function") {
         window.renderToolCards();
+    }
+    if (typeof window.applyNavTabsGuestStyling === "function") {
+        window.applyNavTabsGuestStyling();
     }
 
     if (securityGate) {

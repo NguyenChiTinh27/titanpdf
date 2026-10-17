@@ -260,7 +260,7 @@ class RevokeDeviceRequest(BaseModel):
 
 
 @app.get("/api/auth/status")
-def auth_status(request: Request, token: Optional[str] = None):
+def auth_status(request: Request, response: Response, token: Optional[str] = None):
     """Check if the session token is authenticated or gate is disabled."""
     cfg = get_security_config()
     perms = load_guest_permissions()
@@ -300,6 +300,22 @@ def auth_status(request: Request, token: Optional[str] = None):
             }
         }
     if token and (token in ACTIVE_SESSIONS or token.startswith("quick_") or token.startswith("luv_sess_") or token in ["verified", "local_bypass"]):
+        response.set_cookie(
+            key="luv_auth_token",
+            value=token,
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
+        response.set_cookie(
+            key="titan_session",
+            value=token,
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
         return {
             "authenticated": True,
             "lock_enabled": True,
@@ -536,7 +552,7 @@ def auth_get_settings():
 
 
 @app.post("/api/auth/verify")
-def auth_verify(passkey: str = Form(...)):
+def auth_verify(response: Response, passkey: str = Form(...)):
     """Verify security passkey or License Key."""
     raw_str = passkey or ""
     clean_key = unicodedata.normalize('NFKC', str(raw_str)).strip().replace(" ", "")
@@ -568,6 +584,22 @@ def auth_verify(passkey: str = Form(...)):
     if is_valid_pass or is_license_key:
         session_token = f"luv_sess_{uuid.uuid4().hex}"
         persist_session(session_token)
+        response.set_cookie(
+            key="luv_auth_token",
+            value=session_token,
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
+        response.set_cookie(
+            key="titan_session",
+            value=session_token,
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
         return {
             "success": True,
             "token": session_token,
@@ -578,7 +610,7 @@ def auth_verify(passkey: str = Form(...)):
 
 
 @app.post("/api/auth/google-verify")
-def auth_google_verify(credential: str = Form(...)):
+def auth_google_verify(response: Response, credential: str = Form(...)):
     """Xác thực Google ID Token và kiểm tra độc quyền tài khoản ntc270120cm@gmail.com."""
     ALLOWED_EMAIL = "ntc270120cm@gmail.com"
     try:
@@ -616,6 +648,22 @@ def auth_google_verify(credential: str = Form(...)):
 
         session_token = f"luv_sess_google_{uuid.uuid4().hex}"
         persist_session(session_token)
+        response.set_cookie(
+            key="luv_auth_token",
+            value=session_token,
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
+        response.set_cookie(
+            key="titan_session",
+            value=session_token,
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
         return {
             "success": True,
             "token": session_token,
@@ -689,11 +737,13 @@ def auth_toggle_gate(enabled: bool = Form(...), passkey: str = Form(...)):
 
 
 @app.post("/api/auth/lock")
-def auth_lock(token: str = Form("")):
+def auth_lock(response: Response, token: str = Form("")):
     """Lock the application / invalidate session token."""
     t = token.strip()
     if t in ACTIVE_SESSIONS:
         ACTIVE_SESSIONS.remove(t)
+    response.delete_cookie(key="luv_auth_token", path="/")
+    response.delete_cookie(key="titan_session", path="/")
     return {"success": True, "message": "Đã khóa ứng dụng."}
 
 
@@ -834,7 +884,7 @@ def auth_qr_create(request: Request):
     }
 
 @app.get("/api/auth/qr/poll")
-def auth_qr_poll(session_id: str):
+def auth_qr_poll(session_id: str, response: Response):
     """Desktop polls this endpoint to detect remote approval from mobile."""
     cleanup_qr_sessions()
     sess = QR_SESSIONS.get(session_id)
@@ -849,6 +899,22 @@ def auth_qr_poll(session_id: str):
         return {"status": "expired", "message": "Phiên QR đã được sử dụng thành công."}
 
     if sess["status"] == "authenticated":
+        response.set_cookie(
+            key="luv_auth_token",
+            value=sess["token"],
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
+        response.set_cookie(
+            key="titan_session",
+            value=sess["token"],
+            max_age=86400 * 7,
+            httponly=False,
+            samesite="lax",
+            path="/"
+        )
         resp = {
             "status": "authenticated",
             "token": sess["token"],

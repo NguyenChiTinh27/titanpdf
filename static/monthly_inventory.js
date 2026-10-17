@@ -747,7 +747,16 @@
     if (!confirm('Bạn có chắc chắn muốn bỏ hóa chất này khỏi kỳ báo cáo hiện tại?')) return;
 
     try {
-      const res = await fetch(`${API_BASE}/records/${recordId}`, { method: 'DELETE' });
+      const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
+      const role = sessionStorage.getItem("luv_user_role") || "owner";
+      const res = await fetch(`${API_BASE}/records/${recordId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Titan-Session': token,
+          'X-Titan-Role': role,
+          'Authorization': 'Bearer ' + token
+        }
+      });
       if (!res.ok) throw new Error('Không thể xóa hóa chất khỏi kỳ');
       showToast('Đã xóa hóa chất khỏi kỳ báo cáo', 'success');
       await loadPeriodData(state.currentPeriodKey);
@@ -764,7 +773,16 @@
     if (!confirm('Bạn có chắc muốn xóa phiếu giao dịch này? Số dư kỳ sẽ được tự động tính toán lại.')) return;
 
     try {
-      const res = await fetch(`${API_BASE}/transactions/${transactionId}`, { method: 'DELETE' });
+      const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
+      const role = sessionStorage.getItem("luv_user_role") || "owner";
+      const res = await fetch(`${API_BASE}/transactions/${transactionId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Titan-Session': token,
+          'X-Titan-Role': role,
+          'Authorization': 'Bearer ' + token
+        }
+      });
       if (!res.ok) throw new Error('Không thể xóa giao dịch');
       showToast('Đã xóa phiếu giao dịch thành công!', 'success');
       await loadPeriodData(state.currentPeriodKey);

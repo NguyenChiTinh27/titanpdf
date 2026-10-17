@@ -46,58 +46,59 @@ function switchMainTab(tab, subTab = null) {
     if (tab === 'legal-lookup') tab = 'legal';
     if (tab === 'ai-studio') tab = 'ai';
     if (tab === 'vip-editor') tab = 'editor';
+    if (tab === 'inventory' || tab === 'nxt') tab = 'monthly-inventory';
 
     // RBAC: Check guest permissions before switching tabs
     if (document.body.getAttribute('data-role') === 'guest' && window.GUEST_PERMISSIONS_CACHE) {
         if (typeof isToolAllowedForGuest === "function") {
             if (tab === 'editor' && !isToolAllowedForGuest('vip-editor')) {
-                alert('Phân hệ VIP Editor đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [VIP Editor] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'ai' && !isToolAllowedForGuest('ai-studio') && !isToolAllowedForGuest('ai-translator') && !isToolAllowedForGuest('ai-summarizer') && !isToolAllowedForGuest('ocr') && !isToolAllowedForGuest('interlinear-translate')) {
-                alert('Phân hệ AI Studio đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [AI Studio] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'hse' && !isToolAllowedForGuest('hse-studio')) {
-                alert('Phân hệ HSE Report đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [HSE Report Studio] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'legal' && !isToolAllowedForGuest('legal-lookup')) {
-                alert('Phân hệ Tra Cứu Pháp Lý đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [Tra Cứu Pháp Lý] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'msds' && !isToolAllowedForGuest('msds-studio')) {
-                alert('Phân hệ Sổ Hóa Chất MSDS & CIL đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [Sổ Hóa Chất MSDS & CIL] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'monthly-inventory' && !isToolAllowedForGuest('monthly-inventory')) {
-                alert('Phân hệ Báo Cáo Tháng (NXT) đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [Báo Cáo Tháng (NXT)] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
         } else {
             const groups = window.GUEST_PERMISSIONS_CACHE.tool_groups || {};
             if (tab === 'editor' && groups.pro_tools === false) {
-                alert('Phân hệ VIP Editor đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [VIP Editor] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'ai' && groups.studios === false && groups.pro_tools === false) {
-                alert('Phân hệ AI Studio đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [AI Studio] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'hse' && groups.studios === false) {
-                alert('Phân hệ HSE Report đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [HSE Report Studio] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'legal' && groups.legal === false) {
-                alert('Phân hệ Tra Cứu Pháp Lý đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [Tra Cứu Pháp Lý] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'msds' && groups.msds === false) {
-                alert('Phân hệ Sổ Hóa Chất MSDS & CIL đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [Sổ Hóa Chất MSDS & CIL] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
             if (tab === 'monthly-inventory' && groups.monthly_inventory === false) {
-                alert('Phân hệ Báo Cáo Tháng (NXT) đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                alert('Công cụ [Báo Cáo Tháng (NXT)] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
         }
@@ -117,7 +118,7 @@ function switchMainTab(tab, subTab = null) {
     const navMsds = document.getElementById("nav-tab-msds");
     const navHse = document.getElementById("nav-tab-hse");
     const navLegal = document.getElementById("nav-tab-legal");
-    const navMonthly = document.getElementById("nav-tab-monthly-inventory");
+    const navMonthly = document.getElementById("nav-tab-inventory") || document.getElementById("nav-tab-monthly-inventory");
     const footer = document.querySelector(".footer");
 
     // Reset active nav states
@@ -252,6 +253,10 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("msds-studio-active");
 
         if (navTools) navTools.classList.add("active");
+    }
+
+    if (typeof window.applyNavTabsGuestStyling === "function") {
+        window.applyNavTabsGuestStyling();
     }
 }
 

@@ -7396,6 +7396,62 @@ body[data-role="guest"] .nxt-num-input {
   font-family: monospace;
 }
 
+/* ============================================================
+   GUEST LOCKED TOOL CARDS & TOPBAR NAVIGATION TABS
+   ============================================================ */
+.tool-card.tool-locked-guest {
+  opacity: 0.58 !important;
+  filter: grayscale(80%) !important;
+  cursor: not-allowed !important;
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+}
 
+.tool-card.tool-locked-guest:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background: #f8fafc !important;
+}
 
+.badge-locked {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  border: 1px solid #cbd5e1 !important;
+  font-weight: 700 !important;
+}
+
+.main-nav-tab.tab-locked-guest {
+  opacity: 0.55 !important;
+  filter: grayscale(80%) !important;
+  cursor: not-allowed !important;
+  position: relative !important;
+}
+
+.main-nav-tab.tab-locked-guest:hover {
+  transform: none !important;
+  background: transparent !important;
+}
+
+.main-nav-tab.tab-locked-guest .nav-tab-pill-badge {
+  background: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.main-nav-tab.tab-locked-guest::after {
+  content: "🔒";
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.main-nav-tab#nav-tab-inventory.active,
+.main-nav-tab#nav-tab-monthly-inventory.active {
+  color: #0891b2 !important;
+}
+.main-nav-tab#nav-tab-inventory.active .tab-icon,
+.main-nav-tab#nav-tab-monthly-inventory.active .tab-icon {
+  color: #06b6d4;
+}
 
