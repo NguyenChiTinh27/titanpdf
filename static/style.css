@@ -6368,6 +6368,27 @@ body.msds-studio-active {
   color: #9a3412;
 }
 
+.msds-btn-matrix-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msds-btn-matrix-row:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
 /* Modal Dialog */
 .msds-label-modal-dialog {
   background: #ffffff;

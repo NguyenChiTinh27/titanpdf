@@ -1472,6 +1472,9 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
                         <a href="${exportWordDocxUrl}" download="SafetyCard_${escapeHtml(displayCode)}.docx" class="msds-btn-export-docx" title="Xuất Thẻ An Toàn Word (.docx) chuẩn Mục 3 GHS có Checksum">
                             <span>📄 Xuất Word</span>
                         </a>
+                        <button type="button" class="msds-btn-matrix-row" onclick="openStorageMatrixModal('${safeChemId}')" title="Kiểm tra tương thích lưu kho hóa chất này (TCVN 5507:2002)">
+                            <span>🧭 Kho</span>
+                        </button>
                         <button type="button" class="msds-btn-del-row" onclick="deleteMsdsChemical('${safeChemId}')" title="Xóa hóa chất này khỏi sổ CIL">
                             🗑️
                         </button>
@@ -2496,8 +2499,8 @@ async function openStorageMatrixModal(preselectChemIdA = null, preselectChemIdB 
     const selectB = document.getElementById("storage-select-chem-b");
 
     if (selectA && selectB) {
-        let list = Array.isArray(MSDS_CHEMICALS_DATA) && MSDS_CHEMICALS_DATA.length > 0 
-            ? MSDS_CHEMICALS_DATA 
+        let list = (typeof ALL_MSDS_CHEMICALS_CACHE !== "undefined" && Array.isArray(ALL_MSDS_CHEMICALS_CACHE) && ALL_MSDS_CHEMICALS_CACHE.length > 0)
+            ? ALL_MSDS_CHEMICALS_CACHE
             : [];
 
         if (!list.length) {
@@ -2506,7 +2509,9 @@ async function openStorageMatrixModal(preselectChemIdA = null, preselectChemIdB 
                 if (resp.ok) {
                     const data = await resp.json();
                     list = data.data || [];
-                    MSDS_CHEMICALS_DATA = list;
+                    if (typeof ALL_MSDS_CHEMICALS_CACHE !== "undefined") {
+                        ALL_MSDS_CHEMICALS_CACHE = list;
+                    }
                 }
             } catch (err) {
                 console.error("Error fetching chemical list for matrix modal:", err);
@@ -2518,8 +2523,10 @@ async function openStorageMatrixModal(preselectChemIdA = null, preselectChemIdB 
         let optionsHtml = "";
         list.forEach((c) => {
             const cid = c.chem_id || c.chemical_id || c.product_code || "";
-            const name = c.product_name || c.product_name_vi || c.product_name_original || cid;
-            optionsHtml += `<option value="${escapeHtml(cid)}">${escapeHtml(cid)} — ${escapeHtml(name)}</option>`;
+            const name = c.product_name_vi || c.product_name || c.product_name_original || cid;
+            const cas = c.cas_primary || c.cas_numbers || "";
+            const casLabel = cas ? ` (CAS: ${cas})` : "";
+            optionsHtml += `<option value="${escapeHtml(cid)}">${escapeHtml(cid)} — ${escapeHtml(name)}${escapeHtml(casLabel)}</option>`;
         });
 
         if (!list.length) {
@@ -2638,13 +2645,27 @@ async function evaluatePairwiseStorage() {
         }
 
         if (wrapA && pair.chem_a) {
-            const classesA = pair.chem_a.storage_classes || ["NON_DG"];
-            wrapA.innerHTML = classesA.map(c => `<span style="font-size:11px; font-weight:700; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">${escapeHtml(c)}</span>`).join(" ");
+            const classesInfoA = (Array.isArray(pair.chem_a.classes_info) && pair.chem_a.classes_info.length > 0)
+                ? pair.chem_a.classes_info
+                : (pair.chem_a.storage_classes || ["NON_DG"]).map(c => ({ code: c, label_vi: c, icon: "🏷️" }));
+            wrapA.innerHTML = classesInfoA.map(info => {
+                const icon = info.icon || "🏷️";
+                const label = info.label_vi || info.code || "NON_DG";
+                const code = info.code || "";
+                return `<span style="font-size:11px; font-weight:700; background:#f0fdf4; color:#166534; padding:3px 8px; border-radius:5px; border:1px solid #bbf7d0;" title="${escapeHtml(info.description || '')}">${icon} ${escapeHtml(code ? code + ' - ' + label : label)}</span>`;
+            }).join(" ");
         }
 
         if (wrapB && pair.chem_b) {
-            const classesB = pair.chem_b.storage_classes || ["NON_DG"];
-            wrapB.innerHTML = classesB.map(c => `<span style="font-size:11px; font-weight:700; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">${escapeHtml(c)}</span>`).join(" ");
+            const classesInfoB = (Array.isArray(pair.chem_b.classes_info) && pair.chem_b.classes_info.length > 0)
+                ? pair.chem_b.classes_info
+                : (pair.chem_b.storage_classes || ["NON_DG"]).map(c => ({ code: c, label_vi: c, icon: "🏷️" }));
+            wrapB.innerHTML = classesInfoB.map(info => {
+                const icon = info.icon || "🏷️";
+                const label = info.label_vi || info.code || "NON_DG";
+                const code = info.code || "";
+                return `<span style="font-size:11px; font-weight:700; background:#f0fdf4; color:#166534; padding:3px 8px; border-radius:5px; border:1px solid #bbf7d0;" title="${escapeHtml(info.description || '')}">${icon} ${escapeHtml(code ? code + ' - ' + label : label)}</span>`;
+            }).join(" ");
         }
 
     } catch (err) {
