@@ -480,27 +480,7 @@ const TOOLS = [
         keywords: ["msds", "sds", "cil", "hoa chat", "chemical", "cas", "ghs", "so hoa chat", "nghi dinh 113", "an toan hoa chat"]
     },
 
-    // 12. HSE SAFETY LAYOUT PLANNER PRO - Tool 33
-    {
-        id: "hse-layout",
-        title: "HSE Safety Layout Planner PRO",
-        desc: "Thiết kế sơ đồ an toàn PCCC, phân vùng nguy hại & tuyến thoát hiểm đa nhà máy",
-        iconImg: "/icons/hse_avatar.jpg",
-        category: "organize",
-        badge: "PRO CAD",
-        accept: ".json,.pdf,.png,.jpg,.jpeg,.svg",
-        multiple: false,
-        actionText: "Khởi Chạy HSE Layout Planner",
-        endpoint: "/api/layout/export/pdf",
-        customAction: () => openHseLayoutWorkspace(),
-        keywords: [
-            "hse", "layout", "mat bang", "so do", "pccc", "thoat hiem", 
-            "evacuation", "binh chua chay", "tru chua chay", "phan vung", 
-            "hazard", "safety", "cad", "planner", "vision", "nha may", "workshop", "pro cad"
-        ]
-    },
-
-    // 13. HSE REPORT STUDIO - Tool 34
+    // 12. HSE REPORT STUDIO - Tool 33
     {
         id: "hse-studio",
         title: "HSE Report Studio",
@@ -712,8 +692,7 @@ function renderToolCards() {
     if (!grid) return;
     grid.innerHTML = "";
 
-    // Render 33 tools in home tools-grid (including Tool 33: hse-layout)
-    let list = TOOLS.slice(0, 33);
+    let list = TOOLS.slice(0, 31);
     if (currentCategory !== "all") {
         list = list.filter(t => t.category === currentCategory);
     }
@@ -749,8 +728,7 @@ function renderToolCards() {
         card.setAttribute("role", "button");
         card.setAttribute("aria-label", tool.title);
 
-        const badgeClass = tool.badge === "PRO CAD" ? "badge-cad" :
-                           tool.category === "ai" ? "badge-ai" :
+        const badgeClass = tool.category === "ai" ? "badge-ai" :
                            tool.category === "convert" ? "badge-office" :
                            tool.category === "security" ? "badge-security" :
                            tool.category === "optimize" ? "badge-optimize" : "badge-pdf";
@@ -850,12 +828,6 @@ function setupKeyboardNavigation() {
                 } else {
                     activeEl.blur();
                 }
-                if (typeof e.stopImmediatePropagation === "function") {
-                    e.stopImmediatePropagation();
-                }
-                if (typeof e.stopPropagation === "function") {
-                    e.stopPropagation();
-                }
                 return;
             }
 
@@ -944,13 +916,6 @@ function openTool(toolId) {
         return;
     }
 
-    if (toolId === "hse-layout") {
-        if (typeof openHseLayoutWorkspace === "function") {
-            openHseLayoutWorkspace();
-        }
-        return;
-    }
-
     currentTool = TOOLS.find(t => t.id === toolId);
     if (!currentTool) return;
 
@@ -990,10 +955,6 @@ function openTool(toolId) {
 }
 
 function goHome() {
-    const layoutWs = document.getElementById("hse-layout-workspace");
-    if (layoutWs) layoutWs.classList.add("hidden");
-    document.body.classList.remove("hse-layout-active");
-
     workspaceView.classList.add("hidden");
     homeView.classList.remove("hidden");
     currentTool = null;
@@ -4142,14 +4103,13 @@ window.toggleTheme = toggleTheme;
 
 function updateCategoryCounts() {
     if (typeof document === "undefined" || !document.querySelectorAll) return;
-    const visibleTools = TOOLS.slice(0, 33);
     const counts = {
-        all: visibleTools.length,
-        organize: visibleTools.filter(t => t.category === "organize").length,
-        convert: visibleTools.filter(t => t.category === "convert").length,
-        security: visibleTools.filter(t => t.category === "security").length,
-        optimize: visibleTools.filter(t => t.category === "optimize").length,
-        ai: visibleTools.filter(t => t.category === "ai").length
+        all: TOOLS.length,
+        organize: TOOLS.filter(t => t.category === "organize").length,
+        convert: TOOLS.filter(t => t.category === "convert").length,
+        security: TOOLS.filter(t => t.category === "security").length,
+        optimize: TOOLS.filter(t => t.category === "optimize").length,
+        ai: TOOLS.filter(t => t.category === "ai").length
     };
     const btns = document.querySelectorAll(".segment-btn");
     if (!btns || !btns.forEach) return;

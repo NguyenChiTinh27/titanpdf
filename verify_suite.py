@@ -31,7 +31,7 @@ async def verify_all():
         assert not gate_visible, "Gate must be hidden after 258079"
         cards = await page.query_selector_all('.tool-card')
         print(f"  Tool cards visible: {len(cards)}")
-        assert len(cards) in (27, 31, 32, 33), f"Expected 27, 31, 32 or 33 cards, found {len(cards)}"
+        assert len(cards) in (27, 31), f"Expected 27 or 31 cards, found {len(cards)}"
         await page.screenshot(path='e2e_test1_typed_unlock.png')
         print("  [PASS] Test 1 passed cleanly")
 
