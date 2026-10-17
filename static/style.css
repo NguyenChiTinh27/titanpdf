@@ -7202,5 +7202,200 @@ body[data-role="guest"] .nxt-num-input {
   user-select: text !important;
 }
 
+/* ============================================================
+   SECURITY SETTINGS & RBAC MODAL (FIX OVERFLOW & GRANULAR TABS)
+   ============================================================ */
+#security-settings-modal .vip-modal-content {
+  max-width: 860px !important;
+  width: 95% !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #ffffff !important;
+  border-radius: 14px !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35) !important;
+  overflow: hidden !important;
+}
+
+#security-settings-modal .vip-modal-header {
+  padding: 16px 22px !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  flex-shrink: 0 !important;
+}
+
+#security-settings-modal .vip-modal-body {
+  display: block !important;
+  text-align: left !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  padding: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #f8fafc !important;
+  flex: 1 1 auto !important;
+}
+
+/* Modal Inner Tabs */
+.sec-tab-nav {
+  display: flex;
+  background: #f1f5f9;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 8px 18px 0;
+  gap: 6px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.sec-tab-btn {
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sec-tab-btn:hover {
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.sec-tab-btn.active {
+  color: #2563eb;
+  background: #ffffff;
+  border-color: #cbd5e1 #cbd5e1 #ffffff;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.sec-tab-panel {
+  display: none;
+  padding: 20px 24px;
+}
+
+.sec-tab-panel.active {
+  display: block;
+}
+
+/* Granular Tool Matrix Styles */
+.tool-perm-group-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.tool-perm-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.tool-perm-group-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-perm-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-perm-btn-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tool-perm-btn-link:hover {
+  background: #eff6ff;
+  text-decoration: underline;
+}
+
+.tool-perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 10px;
+}
+
+.tool-perm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.tool-perm-item:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.tool-perm-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tool-perm-item-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.tool-perm-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.tool-perm-item-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-perm-item-id {
+  font-size: 10.5px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+
 
 

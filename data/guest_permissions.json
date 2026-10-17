@@ -1,12 +1,12 @@
 {
   "version": "1.0.0",
-  "updated_at": "2026-10-17T17:52:51.290623",
+  "updated_at": "2026-10-17T18:31:45.283938",
   "profile": {
     "guest_name": "Khách (Chỉ Xem & Tra Cứu)",
     "is_blocked": false,
     "max_visits": 0,
-    "current_visits": 23,
-    "last_visit_at": "2026-10-17T17:52:49.527129",
+    "current_visits": 30,
+    "last_visit_at": "2026-10-17T18:31:43.536887",
     "max_devices": 0,
     "registered_devices": [
       {
@@ -99,6 +99,20 @@
         "ip": "127.0.0.1",
         "registered_at": "2026-10-17T17:52:40.798316",
         "last_seen_at": "2026-10-17T17:52:49.527129"
+      },
+      {
+        "device_id": "dev_d10c26d2-21f2-428c-b4bd-7195617cb55a",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-17T18:19:55.319935",
+        "last_seen_at": "2026-10-17T18:20:05.362337"
+      },
+      {
+        "device_id": "dev_5d9773f7-b778-489a-acef-b48c22c3ea0f",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-17T18:31:29.058541",
+        "last_seen_at": "2026-10-17T18:31:43.536887"
       }
     ]
   },

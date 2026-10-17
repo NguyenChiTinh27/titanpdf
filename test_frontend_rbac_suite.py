@@ -100,7 +100,10 @@ async def test_frontend_rbac():
         # ---------------------------------------------------------------------
         # TEST M3: Security Modal Guest Profile, Devices & Permissions
         # ---------------------------------------------------------------------
-        print("\n[M3.1] Testing Security Settings Modal Section D (Guest Admin)...")
+        # ---------------------------------------------------------------------
+        # TEST M3: Security Modal Tabs, Guest Profile & Granular 35 Tools Matrix
+        # ---------------------------------------------------------------------
+        print("\n[M3.1] Testing Security Settings Modal Tabs & Granular 35-Tool Permissions...")
         btn_modal = page.locator("#btn-open-security-modal")
         await btn_modal.click()
         await page.wait_for_timeout(500)
@@ -108,7 +111,17 @@ async def test_frontend_rbac():
         modal = page.locator("#security-settings-modal")
         await expect(modal).to_be_visible()
 
-        # Check section D elements
+        # Verify Tab 1 (Auth)
+        tab_auth_btn = page.locator("#sec-tab-btn-auth")
+        tab_guest_btn = page.locator("#sec-tab-btn-guest")
+        tab_tools_btn = page.locator("#sec-tab-btn-tools")
+        await expect(tab_auth_btn).to_be_visible()
+        await expect(tab_guest_btn).to_be_visible()
+        await expect(tab_tools_btn).to_be_visible()
+
+        # Switch to Tab 2 (Guest Profile)
+        await tab_guest_btn.click()
+        await page.wait_for_timeout(300)
         name_inp = page.locator("#guest-name-input")
         blocked_switch = page.locator("#guest-blocked-switch")
         max_visits = page.locator("#guest-max-visits-input")
@@ -117,23 +130,87 @@ async def test_frontend_rbac():
         await expect(blocked_switch).to_be_attached()
         await expect(max_visits).to_be_visible()
         await expect(max_devices).to_be_visible()
+        print("  [PASS] Tab 2 (Guest Profile & Devices) verified visible.")
 
-        # Check 6 permission group toggles
-        for grp in ["basic", "pro", "studios", "legal", "msds", "nxt"]:
-            toggle = page.locator(f"#perm-grp-{grp}")
-            await expect(toggle).to_be_attached()
-        print("  [PASS] M3.1 All Section D Guest Admin controls verified present.")
+        # Switch to Tab 3 (Granular 35 Tools)
+        await tab_tools_btn.click()
+        await page.wait_for_timeout(300)
 
-        # Enable pro tools for guest so OCR tool can be accessed in test M4
-        await page.locator("#perm-grp-pro").check()
+        # Count individual tool checkboxes
+        tool_count = await page.locator(".guest-tool-chk").count()
+        print(f"  Total individual tool checkboxes rendered: {tool_count}")
+        assert tool_count == 35, f"Expected 35 tools, found {tool_count}"
+
+        # Capture screenshot of Modal Tab 3 to verify no text clipping
+        screenshot_path = "C:/Users/ntc27/.gemini/antigravity/brain/9166a9f1-2c38-41c5-967b-79b51c7e5cf6/e2e_granular_tools_modal.png"
+        await page.screenshot(path=screenshot_path)
+        print(f"  [SCREENSHOT] Saved modal screenshot to: {screenshot_path}")
+
+        # -------------------------------------------------------------
+        # TEST GRANULAR ISOLATION: Turn OFF all tools, enable ONLY 'merge'
+        # -------------------------------------------------------------
+        print("  Testing 1-Tool-Only Permission Isolation (Allow ONLY 'merge')...")
+        await page.evaluate("() => window.toggleAllSecTools(false)")
+        await page.locator("#perm-tool-merge").check()
         await page.locator("#btn-save-guest-perms").click()
-        await page.wait_for_timeout(400)
+        await page.wait_for_timeout(500)
 
         # Close modal
         close_btn = page.locator("#btn-close-security-modal")
         await close_btn.click()
         await page.wait_for_timeout(300)
         await expect(modal).to_be_hidden()
+
+        # Switch to guest mode
+        await page.locator("#btn-topbar-lock").click()
+        await page.wait_for_timeout(300)
+        await page.locator("#btn-guest-mode").click()
+        await page.wait_for_timeout(500)
+
+        # Verify only 'merge' is allowed in Guest permissions
+        is_merge_allowed = await page.evaluate("() => window.isToolAllowedForGuest('merge')")
+        is_split_allowed = await page.evaluate("() => window.isToolAllowedForGuest('split')")
+        is_compress_allowed = await page.evaluate("() => window.isToolAllowedForGuest('compress')")
+        print(f"  Guest permission state -> merge: {is_merge_allowed}, split: {is_split_allowed}, compress: {is_compress_allowed}")
+        assert is_merge_allowed == True, "Expected 'merge' to be allowed"
+        assert is_split_allowed == False, "Expected 'split' to be blocked"
+        assert is_compress_allowed == False, "Expected 'compress' to be blocked"
+
+        # Try to open 'split' as guest -> should trigger blocked alert
+        dialog_messages.clear()
+        await page.evaluate("() => window.openTool('split')")
+        await page.wait_for_timeout(300)
+        print(f"  Dialog when clicking blocked tool: {dialog_messages}")
+        assert any("bị khóa" in msg for msg in dialog_messages), "Expected alert when clicking blocked tool"
+
+        # Try to open 'merge' as guest -> should open workspace successfully!
+        await page.evaluate("() => window.openTool('merge')")
+        await page.wait_for_timeout(500)
+        ws_title = await page.locator("#ws-title").text_content()
+        print(f"  Opened 'merge' workspace title: '{ws_title.strip()}'")
+        assert "Ghép PDF" in ws_title
+
+        # Back to Home view
+        await page.evaluate("() => { if (window.closeWorkspace) window.closeWorkspace(); }")
+        await page.wait_for_timeout(300)
+
+        # Switch back to owner mode and restore needed permissions for M4-M6
+        await page.locator("#btn-switch-to-owner").click()
+        await page.wait_for_timeout(300)
+        await page.locator("#btn-quick-unlock").click()
+        await page.wait_for_timeout(500)
+
+        # Re-open modal and re-enable tools + pro tools
+        await page.locator("#btn-open-security-modal").click()
+        await page.wait_for_timeout(500)
+        await page.locator("#sec-tab-btn-tools").click()
+        await page.wait_for_timeout(300)
+        await page.evaluate("() => window.toggleAllSecTools(true)")
+        await page.locator("#btn-save-guest-perms").click()
+        await page.wait_for_timeout(500)
+        await page.locator("#btn-close-security-modal").click()
+        await page.wait_for_timeout(300)
+        print("  [PASS] M3.1 Granular 1-Tool-Only Permission & Tabbed Modal Verified 100%.")
 
         # ---------------------------------------------------------------------
         # TEST M4: DeepSeek Key Masking in Guest Mode

@@ -690,7 +690,7 @@ function isToolAllowedForGuest(toolId) {
     const perms = window.GUEST_PERMISSIONS_CACHE;
     if (!perms) return true;
     if (perms.tools && perms.tools[toolId] !== undefined) {
-        if (!perms.tools[toolId]) return false;
+        return Boolean(perms.tools[toolId]);
     }
     const groups = perms.tool_groups || {};
     const proTools = ["interlinear-translate", "vip-editor", "ai-translator", "ai-summarizer", "ocr"];

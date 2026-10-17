@@ -553,178 +553,569 @@
     <!-- 2. SECURITY SETTINGS & PASSWORD MANAGEMENT MODAL             -->
     <!-- ============================================================ -->
     <div id="security-settings-modal" class="vip-modal-backdrop hidden">
-        <div class="vip-modal-content" style="max-width: 540px; width: 92%; max-height: 88vh; display: flex; flex-direction: column; background:#ffffff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
-            <div class="vip-modal-header" style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+        <div class="vip-modal-content">
+            <div class="vip-modal-header">
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <div style="width:34px; height:34px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <div style="width:36px; height:36px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </div>
                     <div>
-                        <h3 style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">Quản Trị Mật Khẩu &amp; Bảo Mật</h3>
-                        <p style="margin:2px 0 0; font-size:11px; color:#64748b;">Tùy chỉnh mật mã riêng, phân quyền Khách và khóa ứng dụng</p>
+                        <h3 style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">Quản Trị Mật Khẩu, Khách &amp; Phân Quyền 35 Tools</h3>
+                        <p style="margin:2px 0 0; font-size:11.5px; color:#64748b;">Mật mã hệ thống, quản lý thiết bị khách và phân quyền chi tiết từng công cụ riêng lẻ</p>
                     </div>
                 </div>
-                <button type="button" id="btn-close-security-modal" onclick="closeSecurityModal()" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
+                <button type="button" id="btn-close-security-modal" onclick="closeSecurityModal()" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:#64748b; padding:4px 8px; border-radius:4px;">✕</button>
             </div>
 
-            <div class="vip-modal-body" style="padding: 18px 22px; overflow-y: auto; flex: 1;">
-                <!-- Section A: Toggle Startup Lock -->
-                <div style="padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="font-weight:600; font-size:13px; color:#1e293b;">Khóa ứng dụng khi khởi động</div>
-                            <div style="font-size:12px; color:#64748b; margin-top:2px;">Yêu cầu nhập mật mã khi mở LUV-PDF</div>
-                        </div>
-                        <label class="switch-toggle" style="position:relative; display:inline-block; width:44px; height:24px; cursor:pointer;">
-                            <input type="checkbox" id="sec-toggle-gate-chk" onchange="handleToggleGate(this.checked)" style="opacity:0; width:0; height:0;" />
-                            <span class="switch-slider" id="sec-toggle-slider" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:24px; transition:0.2s;"></span>
-                        </label>
-                    </div>
-                </div>
+            <!-- Tab Navigation Bar -->
+            <div class="sec-tab-nav" role="tablist">
+                <button type="button" class="sec-tab-btn active" id="sec-tab-btn-auth" onclick="switchSecTab('auth')">
+                    <span>🔐</span> Mật Mã &amp; Khóa Hệ Thống
+                </button>
+                <button type="button" class="sec-tab-btn" id="sec-tab-btn-guest" onclick="switchSecTab('guest')">
+                    <span>👤</span> Hồ Sơ &amp; Thiết Bị Khách
+                </button>
+                <button type="button" class="sec-tab-btn" id="sec-tab-btn-tools" onclick="switchSecTab('tools')">
+                    <span>🛠️</span> Phân Quyền Chi Tiết (35 Tools)
+                </button>
+            </div>
 
-                <!-- Section B: Change Master Password -->
-                <div style="margin-top: 16px;">
-                    <div style="font-weight:700; font-size:13px; color:#1e293b; margin-bottom:12px;">Đổi Mật Khẩu Quản Trị:</div>
-                    
-                    <form id="form-change-password" onsubmit="handleChangePassword(event)">
-                        <div style="margin-bottom: 10px;">
-                            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Mật khẩu hiện tại:</label>
-                            <input type="password" id="sec-curr-pass" class="input-text" placeholder="Nhập mật khẩu đang dùng..." required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
-                        </div>
-
-                        <div style="margin-bottom: 10px;">
-                            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Mật khẩu mới (Tối thiểu 4 ký tự):</label>
-                            <input type="password" id="sec-new-pass" class="input-text" placeholder="Nhập mật khẩu mới tùy chọn..." minlength="4" required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
-                        </div>
-
-                        <div style="margin-bottom: 12px;">
-                            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Xác nhận mật khẩu mới:</label>
-                            <input type="password" id="sec-confirm-pass" class="input-text" placeholder="Nhập lại mật khẩu mới..." minlength="4" required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
-                        </div>
-
-                        <div id="sec-change-msg" class="hidden" style="padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:12px;"></div>
-
-                        <button type="submit" id="btn-save-new-pass" class="btn-primary" style="width:100%; padding:10px; font-weight:700; font-size:13px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-                            <span>CẬP NHẬT MẬT KHẨU MỚI</span>
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Section C: Quick Lock App Button -->
-                <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:12px; color:#64748b;">Rời khỏi máy tính?</span>
-                    <button type="button" onclick="closeSecurityModal(); lockApp();" class="btn-secondary btn-sm" style="color:#ef4444; border:1px solid #fca5a5; background:#fff; padding:5px 10px; border-radius:6px; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                        Khóa màn hình ngay
-                    </button>
-                </div>
-
-                <!-- Section D: Quản Trị Khách Chuyên Sâu & Phân Quyền Tool -->
-                <div class="guest-admin-section" style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #e2e8f0;">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-                        <span style="font-size:18px;">👥</span>
-                        <div>
-                            <h4 style="margin:0; font-size:13.5px; font-weight:700; color:#0f172a;">Quản Trị Khách Chuyên Sâu &amp; Phân Quyền Tool</h4>
-                            <p style="margin:2px 0 0; font-size:11px; color:#64748b;">Hồ sơ, chặn khách, hạn mức lượt, giới hạn thiết bị &amp; phân quyền công cụ</p>
-                        </div>
-                    </div>
-
-                    <!-- Sub-section: Guest Profile & Quotas -->
-                    <div class="guest-admin-card" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; margin-bottom:12px;">
-                        <div style="font-weight:700; font-size:12.5px; color:#334155; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-                            <span>📋 Hồ Sơ &amp; Hạn Mức Truy Cập</span>
-                            <span id="guest-visits-stat-badge" style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; background:#e2e8f0; color:#475569;">Lượt: 0/0</span>
-                        </div>
-
-                        <div style="margin-bottom:10px;">
-                            <label style="font-size:11.5px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Tên định danh Khách:</label>
-                            <input type="text" id="guest-name-input" class="input-text" placeholder="Khách (Chỉ Xem &amp; Tra Cứu)" style="width:100%; font-size:12.5px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;" />
-                        </div>
-
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:8px 0; border-top:1px dashed #e2e8f0; border-bottom:1px dashed #e2e8f0;">
+            <div class="vip-modal-body">
+                <!-- TAB 1: MẬT MÃ & KHÓA HỆ THỐNG -->
+                <div class="sec-tab-panel active" id="sec-panel-auth">
+                    <!-- Section A: Toggle Startup Lock -->
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px; margin-bottom:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
-                                <div style="font-weight:600; font-size:12px; color:#1e293b;">Chặn toàn bộ Khách (Block Access)</div>
-                                <div style="font-size:11px; color:#64748b;">Tạm khóa cổng Chế độ Khách tại màn hình đăng nhập</div>
+                                <div style="font-weight:700; font-size:13.5px; color:#1e293b;">Khóa ứng dụng khi khởi động (Startup Lock Gate)</div>
+                                <div style="font-size:12px; color:#64748b; margin-top:2px;">Yêu cầu nhập mật mã quản trị hoặc quét QR phiên khi mở ứng dụng</div>
                             </div>
-                            <label class="switch-toggle" style="position:relative; display:inline-block; width:40px; height:22px; cursor:pointer;">
+                            <label class="switch-toggle" style="position:relative; display:inline-block; width:44px; height:24px; cursor:pointer; flex-shrink:0;">
+                                <input type="checkbox" id="sec-toggle-gate-chk" onchange="handleToggleGate(this.checked)" style="opacity:0; width:0; height:0;" />
+                                <span class="switch-slider" id="sec-toggle-slider" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:24px; transition:0.2s;"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Section B: Change Master Password -->
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px; margin-bottom:16px;">
+                        <div style="font-weight:700; font-size:13.5px; color:#1e293b; margin-bottom:14px; display:flex; align-items:center; gap:6px;">
+                            <span>🔑</span> Đổi Mật Khẩu Quản Trị (Chính Chủ):
+                        </div>
+                        
+                        <form id="form-change-password" onsubmit="handleChangePassword(event)">
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Mật khẩu hiện tại:</label>
+                                <input type="password" id="sec-curr-pass" class="input-text" placeholder="Nhập mật khẩu đang dùng..." required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                            </div>
+
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 12px;">
+                                <div>
+                                    <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Mật khẩu mới (Tối thiểu 4 ký tự):</label>
+                                    <input type="password" id="sec-new-pass" class="input-text" placeholder="Nhập mật khẩu mới..." minlength="4" required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                                </div>
+                                <div>
+                                    <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Xác nhận mật khẩu mới:</label>
+                                    <input type="password" id="sec-confirm-pass" class="input-text" placeholder="Nhập lại mật khẩu mới..." minlength="4" required style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                                </div>
+                            </div>
+
+                            <div id="sec-change-msg" class="hidden" style="padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:12px;"></div>
+
+                            <button type="submit" id="btn-save-new-pass" class="btn-primary" style="width:100%; padding:10px; font-weight:700; font-size:13px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                                <span>CẬP NHẬT MẬT KHẨU MỚI</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Section C: Quick Lock App Button -->
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12.5px; font-weight:600; color:#1e293b;">Rời khỏi máy tính?</div>
+                            <div style="font-size:11.5px; color:#64748b;">Khóa màn hình ngay lập tức để bảo vệ phiên làm việc của bạn</div>
+                        </div>
+                        <button type="button" onclick="closeSecurityModal(); lockApp();" class="btn-secondary btn-sm" style="color:#ef4444; border:1px solid #fca5a5; background:#fff; padding:7px 14px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                            Khóa Màn Hình Ngay
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TAB 2: HỒ SƠ & THIẾT BỊ KHÁCH -->
+                <div class="sec-tab-panel" id="sec-panel-guest">
+                    <!-- Guest Profile & Quotas -->
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px; margin-bottom:16px;">
+                        <div style="font-weight:700; font-size:13.5px; color:#0f172a; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📋 Hồ Sơ Định Danh &amp; Hạn Mức Truy Cập</span>
+                            <span id="guest-visits-stat-badge" style="font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #dbeafe;">Lượt: 0/0</span>
+                        </div>
+
+                        <div style="margin-bottom:12px;">
+                            <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Tên định danh hiển thị của Khách:</label>
+                            <input type="text" id="guest-name-input" class="input-text" placeholder="Khách (Chỉ Xem &amp; Tra Cứu)" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+                            <div>
+                                <div style="font-weight:600; font-size:12.5px; color:#1e293b;">Chặn toàn bộ Khách (Block Guest Access)</div>
+                                <div style="font-size:11.5px; color:#64748b;">Tạm thời vô hiệu hóa cổng truy cập Khách tại màn hình mở khóa</div>
+                            </div>
+                            <label class="switch-toggle" style="position:relative; display:inline-block; width:40px; height:22px; cursor:pointer; flex-shrink:0;">
                                 <input type="checkbox" id="guest-blocked-switch" style="opacity:0; width:0; height:0;" />
                                 <span class="switch-slider" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:22px; transition:0.2s;"></span>
                             </label>
                         </div>
 
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px;">
                             <div>
-                                <label style="font-size:11.5px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Giới hạn lượt (0 = không giới hạn):</label>
-                                <input type="number" id="guest-max-visits-input" class="input-text" min="0" value="0" style="width:100%; font-size:12.5px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;" />
+                                <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Giới hạn lượt truy cập (0 = Không giới hạn):</label>
+                                <input type="number" id="guest-max-visits-input" class="input-text" min="0" value="0" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
                             </div>
                             <div>
-                                <label style="font-size:11.5px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Giới hạn thiết bị (0 = không giới hạn):</label>
-                                <input type="number" id="guest-max-devices-input" class="input-text" min="0" value="0" style="width:100%; font-size:12.5px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;" />
+                                <label style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Giới hạn thiết bị kết nối (0 = Không giới hạn):</label>
+                                <input type="number" id="guest-max-devices-input" class="input-text" min="0" value="0" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
                             </div>
                         </div>
 
-                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                            <button type="button" id="btn-save-guest-profile" onclick="saveGuestProfileAdmin()" class="btn-primary" style="flex:1; padding:8px 12px; font-size:12px; font-weight:600; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-                                💾 Lưu Hồ Sơ
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <button type="button" id="btn-save-guest-profile" onclick="saveGuestProfileAdmin()" class="btn-primary" style="flex:1; padding:9px 14px; font-size:12.5px; font-weight:600; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                                💾 Lưu Hồ Sơ Khách
                             </button>
-                            <button type="button" id="btn-reset-guest-visits" onclick="resetGuestVisitsAdmin()" class="btn-secondary" style="padding:8px 12px; font-size:12px; font-weight:600; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;" title="Đưa lượt truy cập hiện tại về 0">
-                                🔄 Đặt Lại Lượt
+                            <button type="button" id="btn-reset-guest-visits" onclick="resetGuestVisitsAdmin()" class="btn-secondary" style="padding:9px 14px; font-size:12.5px; font-weight:600; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;" title="Đưa số lượt truy cập hiện tại về 0">
+                                🔄 Đặt Lại Số Lượt
                             </button>
-                            <button type="button" id="btn-delete-guest-profile" onclick="deleteGuestProfileAdmin()" class="btn-secondary" style="padding:8px 12px; font-size:12px; font-weight:600; background:#fff; color:#ef4444; border:1px solid #fca5a5; border-radius:6px; cursor:pointer;" title="Khôi phục hồ sơ và quyền khách về mặc định ban đầu">
+                            <button type="button" id="btn-delete-guest-profile" onclick="deleteGuestProfileAdmin()" class="btn-secondary" style="padding:9px 14px; font-size:12.5px; font-weight:600; background:#fff; color:#ef4444; border:1px solid #fca5a5; border-radius:6px; cursor:pointer;" title="Khôi phục hồ sơ và quyền khách về mặc định ban đầu">
                                 🗑️ Khôi Phục Mặc Định
                             </button>
                         </div>
-                        <div id="guest-profile-admin-msg" class="hidden" style="margin-top:8px; padding:6px 10px; border-radius:6px; font-size:11.5px;"></div>
+                        <div id="guest-profile-admin-msg" class="hidden" style="margin-top:10px; padding:8px 12px; border-radius:6px; font-size:12px;"></div>
                     </div>
 
-                    <!-- Sub-section: Device Management -->
-                    <div class="guest-admin-card" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; margin-bottom:12px;">
-                        <div style="font-weight:700; font-size:12.5px; color:#334155; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                            <span>📱 Quản Lý Thiết Bị Đã Đăng Ký</span>
-                            <button type="button" id="btn-reset-all-devices" onclick="resetAllGuestDevicesAdmin()" style="background:transparent; border:none; color:#ef4444; font-size:11.5px; font-weight:600; cursor:pointer; padding:2px 6px;">
-                                🔄 Đặt Lại Toàn Bộ
+                    <!-- Device Management -->
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+                        <div style="font-weight:700; font-size:13.5px; color:#0f172a; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📱 Danh Sách Thiết Bị Khách Đã Đăng Ký</span>
+                            <button type="button" id="btn-reset-all-devices" onclick="resetAllGuestDevicesAdmin()" style="background:#fef2f2; border:1px solid #fecaca; color:#dc2626; font-size:11.5px; font-weight:600; cursor:pointer; padding:4px 10px; border-radius:6px;">
+                                🔄 Đặt Lại Toàn Bộ Thiết Bị
                             </button>
                         </div>
-                        <div id="guest-devices-list" style="max-height:160px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; background:#fff; padding:6px;">
-                            <div style="font-size:11.5px; color:#94a3b8; text-align:center; padding:12px;">Đang tải danh sách thiết bị...</div>
+                        <div id="guest-devices-list" style="max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; background:#fff; padding:6px;">
+                            <div style="font-size:12px; color:#94a3b8; text-align:center; padding:16px;">Đang tải danh sách thiết bị...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: PHÂN QUYỀN CHI TIẾT 35 TOOLS -->
+                <div class="sec-tab-panel" id="sec-panel-tools">
+                    <!-- Top Action Bar -->
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="text" id="sec-tools-search" placeholder="🔍 Tìm kiếm công cụ..." oninput="filterSecTools(this.value)" style="padding:6px 12px; font-size:12px; border:1px solid #cbd5e1; border-radius:6px; width:200px;" />
+                            <span id="sec-tools-counter" style="font-size:12px; font-weight:600; color:#64748b;">Đang bật: 35/35</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button type="button" onclick="toggleAllSecTools(true)" style="background:#ecfdf5; color:#059669; border:1px solid #a7f3d0; font-size:11.5px; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer;">
+                                🟢 Bật Toàn Bộ (35)
+                            </button>
+                            <button type="button" onclick="toggleAllSecTools(false)" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; font-size:11.5px; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer;">
+                                ⚪ Tắt Toàn Bộ
+                            </button>
+                            <button type="button" onclick="saveGuestPermissionsAdmin()" style="background:#0f766e; color:#fff; border:none; font-size:12px; font-weight:700; padding:7px 14px; border-radius:6px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                                💾 LƯU PHÂN QUYỀN
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Sub-section: Tool Permissions -->
-                    <div class="guest-admin-card" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px;">
-                        <div style="font-weight:700; font-size:12.5px; color:#334155; margin-bottom:10px;">
-                            🛠️ Phân Quyền 6 Nhóm Công Cụ Cho Khách
+                    <!-- Hidden Inputs for Backward Test Compatibility -->
+                    <input type="checkbox" id="perm-grp-basic" style="display:none;" checked />
+                    <input type="checkbox" id="perm-grp-pro" style="display:none;" />
+                    <input type="checkbox" id="perm-grp-studios" style="display:none;" />
+                    <input type="checkbox" id="perm-grp-legal" style="display:none;" checked />
+                    <input type="checkbox" id="perm-grp-msds" style="display:none;" checked />
+                    <input type="checkbox" id="perm-grp-nxt" style="display:none;" checked />
+
+                    <!-- NHÓM 1: TỔ CHỨC & THAO TÁC TRANG (7 TOOLS) -->
+                    <div class="tool-perm-group-card">
+                        <div class="tool-perm-group-header">
+                            <div class="tool-perm-group-title">
+                                <span>📄</span> Nhóm 1: Tổ Chức &amp; Thao Tác Trang (7 Công Cụ)
+                            </div>
+                            <div class="tool-perm-group-actions">
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('organize', true)">Chọn nhóm</button>
+                                <span style="color:#cbd5e1;">|</span>
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('organize', false)">Bỏ chọn</button>
+                            </div>
                         </div>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px 12px; margin-bottom:12px;">
-                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
-                                <span>📄 PDF Cơ Bản (26 Tools)</span>
-                                <input type="checkbox" id="perm-grp-basic" checked />
+                        <div class="tool-perm-grid">
+                            <label class="tool-perm-item" for="perm-tool-merge">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-merge" data-tool-id="merge" data-group="organize" checked />
+                                <img src="/icons/merge_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Ghép PDF</span>
+                                    <span class="tool-perm-item-id">merge</span>
+                                </div>
                             </label>
-                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
-                                <span>⚡ VIP Editor &amp; Pro</span>
-                                <input type="checkbox" id="perm-grp-pro" />
+                            <label class="tool-perm-item" for="perm-tool-split">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-split" data-tool-id="split" data-group="organize" checked />
+                                <img src="/icons/split_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Tách PDF</span>
+                                    <span class="tool-perm-item-id">split</span>
+                                </div>
                             </label>
-                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
-                                <span>🎨 AI Studio &amp; HSE</span>
-                                <input type="checkbox" id="perm-grp-studios" />
+                            <label class="tool-perm-item" for="perm-tool-extract-pages">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-extract-pages" data-tool-id="extract-pages" data-group="organize" checked />
+                                <img src="/icons/extract-pages_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Trích xuất trang</span>
+                                    <span class="tool-perm-item-id">extract-pages</span>
+                                </div>
                             </label>
-                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
-                                <span>⚖️ Tra Cứu Pháp Lý</span>
-                                <input type="checkbox" id="perm-grp-legal" checked />
+                            <label class="tool-perm-item" for="perm-tool-delete-pages">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-delete-pages" data-tool-id="delete-pages" data-group="organize" checked />
+                                <img src="/icons/delete-pages_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Xóa trang PDF</span>
+                                    <span class="tool-perm-item-id">delete-pages</span>
+                                </div>
                             </label>
-                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
-                                <span>🧪 MSDS Intelligence</span>
-                                <input type="checkbox" id="perm-grp-msds" checked />
+                            <label class="tool-perm-item" for="perm-tool-organize">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-organize" data-tool-id="organize" data-group="organize" checked />
+                                <img src="/icons/organize_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Sắp xếp trang</span>
+                                    <span class="tool-perm-item-id">organize</span>
+                                </div>
                             </label>
-                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
-                                <span>📊 Báo Cáo Tháng (NXT)</span>
-                                <input type="checkbox" id="perm-grp-nxt" checked />
+                            <label class="tool-perm-item" for="perm-tool-rotate">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-rotate" data-tool-id="rotate" data-group="organize" checked />
+                                <img src="/icons/rotate_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Xoay PDF</span>
+                                    <span class="tool-perm-item-id">rotate</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-page-numbers">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-page-numbers" data-tool-id="page-numbers" data-group="organize" checked />
+                                <img src="/icons/page-numbers_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Đánh số trang</span>
+                                    <span class="tool-perm-item-id">page-numbers</span>
+                                </div>
                             </label>
                         </div>
-                        <button type="button" id="btn-save-guest-perms" onclick="saveGuestPermissionsAdmin()" class="btn-primary" style="width:100%; padding:8px 12px; font-size:12px; font-weight:600; background:#0f766e; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-                            💾 Cập Nhật Phân Quyền Công Cụ
+                    </div>
+
+                    <!-- NHÓM 2: CHUYỂN ĐỔI ĐỊNH DẠNG (9 TOOLS) -->
+                    <div class="tool-perm-group-card">
+                        <div class="tool-perm-group-header">
+                            <div class="tool-perm-group-title">
+                                <span>🔄</span> Nhóm 2: Chuyển Đổi Định Dạng (9 Công Cụ)
+                            </div>
+                            <div class="tool-perm-group-actions">
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('convert', true)">Chọn nhóm</button>
+                                <span style="color:#cbd5e1;">|</span>
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('convert', false)">Bỏ chọn</button>
+                            </div>
+                        </div>
+                        <div class="tool-perm-grid">
+                            <label class="tool-perm-item" for="perm-tool-word-to-pdf">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-word-to-pdf" data-tool-id="word-to-pdf" data-group="convert" checked />
+                                <img src="/icons/word-to-pdf_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Word sang PDF</span>
+                                    <span class="tool-perm-item-id">word-to-pdf</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-ppt-to-pdf">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-ppt-to-pdf" data-tool-id="ppt-to-pdf" data-group="convert" checked />
+                                <img src="/icons/ppt-to-pdf_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">PPT sang PDF</span>
+                                    <span class="tool-perm-item-id">ppt-to-pdf</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-excel-to-pdf">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-excel-to-pdf" data-tool-id="excel-to-pdf" data-group="convert" checked />
+                                <img src="/icons/excel-to-pdf_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Excel sang PDF</span>
+                                    <span class="tool-perm-item-id">excel-to-pdf</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-images-to-pdf">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-images-to-pdf" data-tool-id="images-to-pdf" data-group="convert" checked />
+                                <img src="/icons/images-to-pdf_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Ảnh sang PDF</span>
+                                    <span class="tool-perm-item-id">images-to-pdf</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-pdf-to-word">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-pdf-to-word" data-tool-id="pdf-to-word" data-group="convert" checked />
+                                <img src="/icons/pdf-to-word_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">PDF sang Word (COM)</span>
+                                    <span class="tool-perm-item-id">pdf-to-word</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-pdf-to-ppt">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-pdf-to-ppt" data-tool-id="pdf-to-ppt" data-group="convert" checked />
+                                <img src="/icons/pdf-to-ppt_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">PDF sang PPT</span>
+                                    <span class="tool-perm-item-id">pdf-to-ppt</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-pdf-to-excel">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-pdf-to-excel" data-tool-id="pdf-to-excel" data-group="convert" checked />
+                                <img src="/icons/pdf-to-excel_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">PDF sang Excel</span>
+                                    <span class="tool-perm-item-id">pdf-to-excel</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-pdf-to-images">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-pdf-to-images" data-tool-id="pdf-to-images" data-group="convert" checked />
+                                <img src="/icons/pdf-to-images_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">PDF sang Hình ảnh</span>
+                                    <span class="tool-perm-item-id">pdf-to-images</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-pdf-to-pdfa">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-pdf-to-pdfa" data-tool-id="pdf-to-pdfa" data-group="convert" checked />
+                                <img src="/icons/pdf-to-pdfa_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">PDF sang PDF/A</span>
+                                    <span class="tool-perm-item-id">pdf-to-pdfa</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- NHÓM 3: TỐI ƯU, CẮT XÉN & BIÊN TẬP (5 TOOLS) -->
+                    <div class="tool-perm-group-card">
+                        <div class="tool-perm-group-header">
+                            <div class="tool-perm-group-title">
+                                <span>⚡</span> Nhóm 3: Tối Ưu, Cắt Xén &amp; Biên Tập (5 Công Cụ)
+                            </div>
+                            <div class="tool-perm-group-actions">
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('optimize', true)">Chọn nhóm</button>
+                                <span style="color:#cbd5e1;">|</span>
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('optimize', false)">Bỏ chọn</button>
+                            </div>
+                        </div>
+                        <div class="tool-perm-grid">
+                            <label class="tool-perm-item" for="perm-tool-compress">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-compress" data-tool-id="compress" data-group="optimize" checked />
+                                <img src="/icons/compress_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Nén PDF</span>
+                                    <span class="tool-perm-item-id">compress</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-repair">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-repair" data-tool-id="repair" data-group="optimize" checked />
+                                <img src="/icons/repair_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Sửa chữa PDF lỗi</span>
+                                    <span class="tool-perm-item-id">repair</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-crop">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-crop" data-tool-id="crop" data-group="optimize" checked />
+                                <img src="/icons/crop_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Cắt xén lề PDF</span>
+                                    <span class="tool-perm-item-id">crop</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-remove-watermark">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-remove-watermark" data-tool-id="remove-watermark" data-group="optimize" checked />
+                                <img src="/icons/watermark_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Xóa Watermark &amp; Rác</span>
+                                    <span class="tool-perm-item-id">remove-watermark</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-vip-editor">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-vip-editor" data-tool-id="vip-editor" data-group="optimize" />
+                                <img src="/icons/edit_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Trình Chỉnh Sửa VIP Pro</span>
+                                    <span class="tool-perm-item-id">vip-editor</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- NHÓM 4: BẢO MẬT, KÝ SỐ & ĐỐI SOÁT (6 TOOLS) -->
+                    <div class="tool-perm-group-card">
+                        <div class="tool-perm-group-header">
+                            <div class="tool-perm-group-title">
+                                <span>🛡️</span> Nhóm 4: Bảo Mật, Ký Số &amp; Đối Soát (6 Công Cụ)
+                            </div>
+                            <div class="tool-perm-group-actions">
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('security', true)">Chọn nhóm</button>
+                                <span style="color:#cbd5e1;">|</span>
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('security', false)">Bỏ chọn</button>
+                            </div>
+                        </div>
+                        <div class="tool-perm-grid">
+                            <label class="tool-perm-item" for="perm-tool-watermark">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-watermark" data-tool-id="watermark" data-group="security" checked />
+                                <img src="/icons/watermark_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Đóng dấu Watermark</span>
+                                    <span class="tool-perm-item-id">watermark</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-protect">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-protect" data-tool-id="protect" data-group="security" checked />
+                                <img src="/icons/protect_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Khóa bảo vệ PDF</span>
+                                    <span class="tool-perm-item-id">protect</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-unlock">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-unlock" data-tool-id="unlock" data-group="security" checked />
+                                <img src="/icons/unlock_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Mở khóa PDF</span>
+                                    <span class="tool-perm-item-id">unlock</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-sign">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-sign" data-tool-id="sign" data-group="security" checked />
+                                <img src="/icons/sign_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Ký điện tử e-Sign</span>
+                                    <span class="tool-perm-item-id">sign</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-redact">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-redact" data-tool-id="redact" data-group="security" checked />
+                                <img src="/icons/redact_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Che thông tin nhạy cảm</span>
+                                    <span class="tool-perm-item-id">redact</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-compare">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-compare" data-tool-id="compare" data-group="security" checked />
+                                <img src="/icons/compare_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">So sánh 2 bản PDF</span>
+                                    <span class="tool-perm-item-id">compare</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- NHÓM 5: TRÍ TUỆ NHÂN TẠO AI (4 TOOLS) -->
+                    <div class="tool-perm-group-card">
+                        <div class="tool-perm-group-header">
+                            <div class="tool-perm-group-title">
+                                <span>🤖</span> Nhóm 5: Trí Tuệ Nhân Tạo AI (4 Công Cụ)
+                            </div>
+                            <div class="tool-perm-group-actions">
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('ai', true)">Chọn nhóm</button>
+                                <span style="color:#cbd5e1;">|</span>
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('ai', false)">Bỏ chọn</button>
+                            </div>
+                        </div>
+                        <div class="tool-perm-grid">
+                            <label class="tool-perm-item" for="perm-tool-ocr">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-ocr" data-tool-id="ocr" data-group="ai" />
+                                <img src="/icons/ocr_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">OCR Nhận diện văn bản</span>
+                                    <span class="tool-perm-item-id">ocr</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-interlinear-translate">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-interlinear-translate" data-tool-id="interlinear-translate" data-group="ai" />
+                                <img src="/icons/doc-tran_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Dịch Song ngữ Kỹ thuật</span>
+                                    <span class="tool-perm-item-id">interlinear-translate</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-ai-translator">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-ai-translator" data-tool-id="ai-translator" data-group="ai" />
+                                <img src="/icons/doc-tran_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Dịch thuật Văn bản AI</span>
+                                    <span class="tool-perm-item-id">ai-translator</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-ai-summarizer">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-ai-summarizer" data-tool-id="ai-summarizer" data-group="ai" />
+                                <img src="/icons/split_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">AI Tóm Tắt Tài Liệu</span>
+                                    <span class="tool-perm-item-id">ai-summarizer</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- NHÓM 6: NGHIỆP VỤ HÓA CHẤT & EHS CHUYÊN SÂU (4 MODULES) -->
+                    <div class="tool-perm-group-card">
+                        <div class="tool-perm-group-header">
+                            <div class="tool-perm-group-title">
+                                <span>🧪</span> Nhóm 6: Nghiệp Vụ Hóa Chất &amp; EHS Chuyên Sâu (4 Modules)
+                            </div>
+                            <div class="tool-perm-group-actions">
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('special', true)">Chọn nhóm</button>
+                                <span style="color:#cbd5e1;">|</span>
+                                <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('special', false)">Bỏ chọn</button>
+                            </div>
+                        </div>
+                        <div class="tool-perm-grid">
+                            <label class="tool-perm-item" for="perm-tool-msds-studio">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-msds-studio" data-tool-id="msds-studio" data-group="special" checked />
+                                <img src="/icons/doc-tran_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">MSDS AI &amp; Sổ CIL <small style="color:#2563eb;">(Chỉ Xem)</small></span>
+                                    <span class="tool-perm-item-id">msds-studio</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-monthly-inventory">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-monthly-inventory" data-tool-id="monthly-inventory" data-group="special" checked />
+                                <img src="/icons/excel-to-pdf_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Báo Cáo Tháng NXT <small style="color:#2563eb;">(Chỉ Xem)</small></span>
+                                    <span class="tool-perm-item-id">monthly-inventory</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-hse-studio">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-hse-studio" data-tool-id="hse-studio" data-group="special" />
+                                <img src="/icons/hse_avatar.jpg" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">HSE Report Studio</span>
+                                    <span class="tool-perm-item-id">hse-studio</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-legal-lookup">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-legal-lookup" data-tool-id="legal-lookup" data-group="special" checked />
+                                <img src="/icons/doc-pro_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Tra Cứu Pháp Lý</span>
+                                    <span class="tool-perm-item-id">legal-lookup</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Save Button & Status -->
+                    <div style="margin-top:16px;">
+                        <button type="button" id="btn-save-guest-perms" onclick="saveGuestPermissionsAdmin()" class="btn-primary" style="width:100%; padding:11px 16px; font-size:13.5px; font-weight:700; background:#0f766e; color:#fff; border:none; border-radius:8px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                            💾 LƯU CẤU HÌNH PHÂN QUYỀN TOÀN BỘ CÔNG CỤ
                         </button>
-                        <div id="guest-perms-admin-msg" class="hidden" style="margin-top:8px; padding:6px 10px; border-radius:6px; font-size:11.5px;"></div>
+                        <div id="guest-perms-admin-msg" class="hidden" style="margin-top:10px; padding:8px 12px; border-radius:6px; font-size:12px;"></div>
                     </div>
                 </div>
             </div>
@@ -1188,6 +1579,19 @@
                     if (msdsChk) msdsChk.checked = groups.msds !== false;
                     if (nxtChk) nxtChk.checked = groups.monthly_inventory !== false;
 
+                    // Populate Granular 35 Tools Checkboxes
+                    if (perms.tools && typeof perms.tools === "object") {
+                        document.querySelectorAll(".guest-tool-chk").forEach(function(chk) {
+                            var tid = chk.getAttribute("data-tool-id");
+                            if (tid && perms.tools[tid] !== undefined) {
+                                chk.checked = !!perms.tools[tid];
+                            }
+                        });
+                    }
+                    if (typeof updateSecToolsCounter === "function") {
+                        updateSecToolsCounter();
+                    }
+
                     window.GUEST_PERMISSIONS_CACHE = perms;
                 }
             } catch(e) {}
@@ -1373,18 +1777,106 @@
         }
         window.resetAllGuestDevicesAdmin = resetAllGuestDevicesAdmin;
 
+        // Modal Tab & Granular Tools Helpers
+        function switchSecTab(tabName) {
+            document.querySelectorAll(".sec-tab-btn").forEach(function(btn) {
+                btn.classList.remove("active");
+            });
+            document.querySelectorAll(".sec-tab-panel").forEach(function(p) {
+                p.classList.remove("active");
+            });
+            var tabBtn = document.getElementById("sec-tab-btn-" + tabName);
+            var panel = document.getElementById("sec-panel-" + tabName);
+            if (tabBtn) tabBtn.classList.add("active");
+            if (panel) panel.classList.add("active");
+            if (tabName === "tools") {
+                updateSecToolsCounter();
+            }
+        }
+        window.switchSecTab = switchSecTab;
+
+        function toggleAllSecTools(state) {
+            document.querySelectorAll(".guest-tool-chk").forEach(function(chk) {
+                chk.checked = !!state;
+            });
+            updateSecToolsCounter();
+        }
+        window.toggleAllSecTools = toggleAllSecTools;
+
+        function toggleSecGroupTools(groupKey, state) {
+            document.querySelectorAll('.guest-tool-chk[data-group="' + groupKey + '"]').forEach(function(chk) {
+                chk.checked = !!state;
+            });
+            updateSecToolsCounter();
+        }
+        window.toggleSecGroupTools = toggleSecGroupTools;
+
+        function filterSecTools(query) {
+            var q = (query || "").toLowerCase().trim();
+            document.querySelectorAll(".tool-perm-item").forEach(function(item) {
+                var text = item.innerText.toLowerCase();
+                var tid = item.getAttribute("for") || "";
+                if (!q || text.includes(q) || tid.includes(q)) {
+                    item.style.display = "flex";
+                } else {
+                    item.style.display = "none";
+                }
+            });
+        }
+        window.filterSecTools = filterSecTools;
+
+        function updateSecToolsCounter() {
+            var chks = document.querySelectorAll(".guest-tool-chk");
+            var total = chks.length;
+            var active = 0;
+            chks.forEach(function(c) { if (c.checked) active++; });
+            var counter = document.getElementById("sec-tools-counter");
+            if (counter) counter.innerText = "Đang bật: " + active + "/" + total;
+        }
+        window.updateSecToolsCounter = updateSecToolsCounter;
+
         async function saveGuestPermissionsAdmin() {
             var msg = document.getElementById("guest-perms-admin-msg");
             var token = sessionStorage.getItem("luv_auth_token") || "verified";
 
-            var basicVal = document.getElementById("perm-grp-basic") ? document.getElementById("perm-grp-basic").checked : true;
-            var proVal = document.getElementById("perm-grp-pro") ? document.getElementById("perm-grp-pro").checked : false;
-            var studiosVal = document.getElementById("perm-grp-studios") ? document.getElementById("perm-grp-studios").checked : false;
-            var legalVal = document.getElementById("perm-grp-legal") ? document.getElementById("perm-grp-legal").checked : true;
-            var msdsVal = document.getElementById("perm-grp-msds") ? document.getElementById("perm-grp-msds").checked : true;
-            var nxtVal = document.getElementById("perm-grp-nxt") ? document.getElementById("perm-grp-nxt").checked : true;
+            // Granular tools map for all 35 tools
+            var toolsMap = {};
+            document.querySelectorAll(".guest-tool-chk").forEach(function(chk) {
+                var tid = chk.getAttribute("data-tool-id");
+                if (tid) {
+                    toolsMap[tid] = chk.checked;
+                }
+            });
+
+            // Backward-compatible group sync
+            var basicChk = document.getElementById("perm-grp-basic");
+            var proChk = document.getElementById("perm-grp-pro");
+            var studiosChk = document.getElementById("perm-grp-studios");
+            var legalChk = document.getElementById("perm-grp-legal");
+            var msdsChk = document.getElementById("perm-grp-msds");
+            var nxtChk = document.getElementById("perm-grp-nxt");
+
+            var basicVal = Object.keys(toolsMap).some(function(k) {
+                return ["merge","split","extract-pages","delete-pages","organize","rotate","page-numbers",
+                        "word-to-pdf","ppt-to-pdf","excel-to-pdf","images-to-pdf","pdf-to-word","pdf-to-ppt",
+                        "pdf-to-excel","pdf-to-images","pdf-to-pdfa","compress","repair","crop","remove-watermark",
+                        "watermark","protect","unlock","sign","redact","compare"].includes(k) && toolsMap[k];
+            });
+            var proVal = ["interlinear-translate","vip-editor","ai-translator","ai-summarizer","ocr"].some(function(k) { return !!toolsMap[k]; });
+            var studiosVal = !!toolsMap["hse-studio"];
+            var legalVal = !!toolsMap["legal-lookup"];
+            var msdsVal = !!toolsMap["msds-studio"];
+            var nxtVal = !!toolsMap["monthly-inventory"];
+
+            if (basicChk) basicChk.checked = basicVal;
+            if (proChk) proChk.checked = proVal;
+            if (studiosChk) studiosChk.checked = studiosVal;
+            if (legalChk) legalChk.checked = legalVal;
+            if (msdsChk) msdsChk.checked = msdsVal;
+            if (nxtChk) nxtChk.checked = nxtVal;
 
             var payload = {
+                tools: toolsMap,
                 tool_groups: {
                     basic_pdf: basicVal,
                     pro_tools: proVal,
@@ -1407,8 +1899,9 @@
                 var data = await res.json();
                 if (res.ok && data.success) {
                     window.GUEST_PERMISSIONS_CACHE = data.permissions;
+                    updateSecToolsCounter();
                     if (msg) {
-                        msg.innerText = "✓ Đã cập nhật phân quyền 6 nhóm công cụ thành công!";
+                        msg.innerText = "✓ Đã lưu cấu hình phân quyền 35 công cụ thành công!";
                         msg.style.background = "#f0fdf4";
                         msg.style.color = "#16a34a";
                         msg.style.border = "1px solid #bbf7d0";
@@ -1435,6 +1928,53 @@
             }
         }
         window.saveGuestPermissionsAdmin = saveGuestPermissionsAdmin;
+
+        // Auto-wire group checkbox sync for test compatibility
+        document.addEventListener("DOMContentLoaded", function() {
+            ["basic", "pro", "studios", "legal", "msds", "nxt"].forEach(function(grp) {
+                var el = document.getElementById("perm-grp-" + grp);
+                if (el) {
+                    el.addEventListener("change", function() {
+                        var checked = el.checked;
+                        if (grp === "basic") {
+                            toggleSecGroupTools("organize", checked);
+                            toggleSecGroupTools("convert", checked);
+                            ["compress","repair","crop","remove-watermark","watermark","protect","unlock","sign","redact","compare"].forEach(function(t) {
+                                var c = document.getElementById("perm-tool-" + t);
+                                if (c) c.checked = checked;
+                            });
+                        }
+                        if (grp === "pro") {
+                            ["interlinear-translate","vip-editor","ai-translator","ai-summarizer","ocr"].forEach(function(t) {
+                                var c = document.getElementById("perm-tool-" + t);
+                                if (c) c.checked = checked;
+                            });
+                        }
+                        if (grp === "studios") {
+                            var c1 = document.getElementById("perm-tool-hse-studio");
+                            if (c1) c1.checked = checked;
+                        }
+                        if (grp === "legal") {
+                            var c = document.getElementById("perm-tool-legal-lookup");
+                            if (c) c.checked = checked;
+                        }
+                        if (grp === "msds") {
+                            var c = document.getElementById("perm-tool-msds-studio");
+                            if (c) c.checked = checked;
+                        }
+                        if (grp === "nxt") {
+                            var c = document.getElementById("perm-tool-monthly-inventory");
+                            if (c) c.checked = checked;
+                        }
+                        updateSecToolsCounter();
+                    });
+                }
+            });
+
+            document.querySelectorAll(".guest-tool-chk").forEach(function(chk) {
+                chk.addEventListener("change", updateSecToolsCounter);
+            });
+        });
 
         function closeSecurityModal() {
             var modal = document.getElementById("security-settings-modal");

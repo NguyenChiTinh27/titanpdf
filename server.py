@@ -471,14 +471,17 @@ def auth_get_guest_permissions():
 def auth_update_guest_permissions(payload: Dict[str, Any] = Body(...), _: str = Depends(require_owner)):
     """Cập nhật phân quyền từng tool hoặc nhóm tool cho Khách (Chỉ Quản trị viên)."""
     perms = load_guest_permissions()
-    if "tool_groups" in payload and isinstance(payload["tool_groups"], dict):
+    if "tools" in payload and isinstance(payload["tools"], dict):
+        perms["tools"].update(payload["tools"])
+        # Tự động đồng bộ trạng thái tool_groups dựa trên từng tool cụ thể
+        for grp, tids in GROUP_TOOL_MAPPING.items():
+            perms["tool_groups"][grp] = any(perms["tools"].get(tid, False) for tid in tids)
+    elif "tool_groups" in payload and isinstance(payload["tool_groups"], dict):
         perms["tool_groups"].update(payload["tool_groups"])
         for grp, is_enabled in payload["tool_groups"].items():
             if grp in GROUP_TOOL_MAPPING:
                 for tid in GROUP_TOOL_MAPPING[grp]:
                     perms["tools"][tid] = bool(is_enabled)
-    if "tools" in payload and isinstance(payload["tools"], dict):
-        perms["tools"].update(payload["tools"])
     if "read_only" in payload and isinstance(payload["read_only"], dict):
         perms["read_only"].update(payload["read_only"])
     if "profile" in payload and isinstance(payload["profile"], dict):
