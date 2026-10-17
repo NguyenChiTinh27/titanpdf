@@ -40,6 +40,10 @@
   // --------------------------------------------------------------------------
   const byId = (id) => document.getElementById(id);
 
+  function isGuestUser() {
+    return document.body?.getAttribute('data-role') === 'guest' || sessionStorage.getItem('luv_user_role') === 'guest';
+  }
+
   function escapeHtml(val) {
     if (val === null || val === undefined) return '';
     return String(val)
@@ -329,16 +333,19 @@
         <div class="nxt-state-box">
           <div class="nxt-state-icon">📋</div>
           <strong>Chưa có hóa chất nào trong kỳ báo cáo này</strong>
+          ${isGuestUser() ? '<p>Tài khoản Khách ở chế độ chỉ đọc.</p>' : `
           <p>Bấm nút <b>"➕ Thêm Hóa Chất Từ CIL"</b> để chọn các hóa chất cần theo dõi trong tháng.</p>
           <button class="nxt-btn nxt-btn-primary" onclick="window.openMonthlyAddCilModal()">
             ➕ Thêm Hóa Chất Từ Sổ CIL
           </button>
+          `}
         </div>
       `;
       return;
     }
 
-    const isLocked = state.currentPeriod && (state.currentPeriod.status === 'LOCKED' || state.currentPeriod.status === 'CLOSED');
+    const isGuest = isGuestUser();
+    const isLocked = (state.currentPeriod && (state.currentPeriod.status === 'LOCKED' || state.currentPeriod.status === 'CLOSED')) || isGuest;
 
     let html = `
       <div class="nxt-table-wrapper">
@@ -467,6 +474,7 @@
             />
           </td>
           <td style="text-align: center;">
+            ${isGuest ? '<span style="color:var(--nxt-text-muted); font-size:0.75rem;">Chỉ xem</span>' : `
             <div class="nxt-action-cell" style="justify-content: center;">
               <button 
                 class="nxt-btn-mini nxt-btn-mini-save" 
@@ -494,6 +502,7 @@
                 🗑️
               </button>
             </div>
+            `}
           </td>
         </tr>
       `;
@@ -534,16 +543,19 @@
         <div class="nxt-state-box">
           <div class="nxt-state-icon">📝</div>
           <strong>Chưa có phiếu giao dịch nào trong kỳ này</strong>
+          ${isGuestUser() ? '<p>Tài khoản Khách ở chế độ chỉ đọc.</p>' : `
           <p>Bấm nút <b>"📝 Ghi Phiếu Nhập / Xuất"</b> để thêm giao dịch xuất kho hoặc nhập kho chi tiết.</p>
           <button class="nxt-btn nxt-btn-info" onclick="window.openMonthlyTransactionModal()">
             📝 Thêm Phiếu Giao Dịch Mới
           </button>
+          `}
         </div>
       `;
       return;
     }
 
-    const isLocked = state.currentPeriod && (state.currentPeriod.status === 'LOCKED' || state.currentPeriod.status === 'CLOSED');
+    const isGuest = isGuestUser();
+    const isLocked = (state.currentPeriod && (state.currentPeriod.status === 'LOCKED' || state.currentPeriod.status === 'CLOSED')) || isGuest;
 
     let html = `
       <div class="nxt-table-wrapper">
@@ -592,6 +604,7 @@
           <td>${escapeHtml(t.department || '—')}</td>
           <td>${escapeHtml(t.purpose || '—')}</td>
           <td style="text-align: center;">
+            ${isGuest ? '<span style="color:var(--nxt-text-muted); font-size:0.75rem;">—</span>' : `
             <button 
               class="nxt-btn-mini nxt-btn-mini-danger" 
               title="Xóa phiếu giao dịch này" 
@@ -600,6 +613,7 @@
             >
               🗑️
             </button>
+            `}
           </td>
         </tr>
       `;
@@ -667,6 +681,10 @@
   }
 
   async function saveNxtRecord(recordId, showSuccessToast = true) {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) chỉ có quyền Xem & Xuất báo cáo, không thể lưu số liệu.", "warn");
+      return;
+    }
     const openInp = byId(`nxt-open-${recordId}`);
     const impInp = byId(`nxt-imp-${recordId}`);
     const expInp = byId(`nxt-exp-${recordId}`);
@@ -722,6 +740,10 @@
   }
 
   async function deleteNxtRecord(recordId) {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền xóa hóa chất khỏi kỳ báo cáo.", "warn");
+      return;
+    }
     if (!confirm('Bạn có chắc chắn muốn bỏ hóa chất này khỏi kỳ báo cáo hiện tại?')) return;
 
     try {
@@ -735,6 +757,10 @@
   }
 
   async function deleteNxtTransaction(transactionId) {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền xóa giao dịch.", "warn");
+      return;
+    }
     if (!confirm('Bạn có chắc muốn xóa phiếu giao dịch này? Số dư kỳ sẽ được tự động tính toán lại.')) return;
 
     try {
@@ -751,6 +777,10 @@
   // 8. PERIOD CREATION & MANAGEMENT
   // --------------------------------------------------------------------------
   async function createPeriod(month, year, autoLoad = true) {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền tạo kỳ báo cáo mới.", "warn");
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/periods`, {
         method: 'POST',
@@ -784,6 +814,10 @@
   }
 
   async function togglePeriodLock() {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền khóa hoặc mở sổ kỳ báo cáo.", "warn");
+      return;
+    }
     if (!state.currentPeriod) return;
     const isLocked = state.currentPeriod.status === 'LOCKED' || state.currentPeriod.status === 'CLOSED';
     const newStatus = isLocked ? 'OPEN' : 'LOCKED';
@@ -809,6 +843,10 @@
   }
 
   async function rollForwardCurrentPeriod() {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền kết chuyển số dư kỳ.", "warn");
+      return;
+    }
     if (!state.currentPeriod) return;
     if (!confirm(`Bạn có muốn kế thừa toàn bộ Tồn cuối kỳ ${state.currentPeriodKey} sang làm Tồn đầu kỳ của tháng tiếp theo?`)) return;
 
@@ -863,6 +901,10 @@
   }
 
   function openImportExcelModal() {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền nhập file Excel vào sổ.", "warn");
+      return;
+    }
     const modal = byId('nxt-modal-import-excel');
     if (!modal) return;
     const fileInp = byId('nxt-import-excel-file');
@@ -881,6 +923,10 @@
   }
 
   async function submitImportExcel() {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền nhập file Excel vào sổ.", "warn");
+      return;
+    }
     const fileInp = byId('nxt-import-excel-file');
     const msg = byId('nxt-import-result-msg');
     const btn = byId('nxt-btn-submit-import-excel');
@@ -947,6 +993,10 @@
   // 10. MODALS: ADD CHEMICALS FROM CIL & NEW TRANSACTION
   // --------------------------------------------------------------------------
   function openAddCilModal() {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền thêm hóa chất vào kỳ.", "warn");
+      return;
+    }
     const modal = byId('nxt-modal-add-cil');
     if (!modal) return;
 
@@ -1013,6 +1063,10 @@
   }
 
   async function submitAddCilChemicals() {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền thêm hóa chất vào kỳ.", "warn");
+      return;
+    }
     const checkboxes = document.querySelectorAll('input[name="nxt-cil-select"]:checked:not(:disabled)');
     const ids = Array.from(checkboxes).map((cb) => cb.value);
 
@@ -1045,6 +1099,10 @@
   }
 
   function openTransactionModal(chemId = '', transType = 'EXPORT') {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền lập phiếu giao dịch.", "warn");
+      return;
+    }
     const modal = byId('nxt-modal-transaction');
     if (!modal) return;
 
@@ -1097,6 +1155,10 @@
   }
 
   async function submitTransaction() {
+    if (isGuestUser()) {
+      showToast("Khách (Guest) không có quyền lập phiếu giao dịch.", "warn");
+      return;
+    }
     const chemSelect = byId('nxt-trans-chemical-select');
     const radioImp = byId('nxt-trans-type-import');
     const qtyInp = byId('nxt-trans-qty');

@@ -13,13 +13,32 @@ document.addEventListener("DOMContentLoaded", () => {
     initAiStudio();
 });
 
+function isGuestUser() {
+    return document.body?.getAttribute("data-role") === "guest" || sessionStorage.getItem("luv_user_role") === "guest";
+}
+
 function initAiStudio() {
-    // Load saved DeepSeek API key from localStorage
-    const savedKey = localStorage.getItem("deepseek_api_key") || "";
+    const isGuest = isGuestUser();
+    // Load saved DeepSeek API key from localStorage or mask if guest
+    const savedKey = isGuest ? "••••••••••••••••" : (localStorage.getItem("deepseek_api_key") || "");
     const keyInput1 = document.getElementById("ai-deepseek-key");
     const keyInput2 = document.getElementById("ai-sum-key");
-    if (keyInput1 && savedKey) keyInput1.value = savedKey;
-    if (keyInput2 && savedKey) keyInput2.value = savedKey;
+    if (keyInput1) {
+        keyInput1.value = savedKey;
+        if (isGuest) {
+            keyInput1.setAttribute("readonly", "true");
+            keyInput1.setAttribute("disabled", "true");
+            keyInput1.setAttribute("type", "password");
+        }
+    }
+    if (keyInput2) {
+        keyInput2.value = savedKey;
+        if (isGuest) {
+            keyInput2.setAttribute("readonly", "true");
+            keyInput2.setAttribute("disabled", "true");
+            keyInput2.setAttribute("type", "password");
+        }
+    }
 
     // Attach Ctrl+Enter keyboard shortcut to translation input
     const inputArea = document.getElementById("ai-input-text");
@@ -173,6 +192,10 @@ function toggleAiKeyInput() {
 }
 
 function saveAiDeepSeekKey() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền thay đổi API key.");
+        return;
+    }
     const input = document.getElementById("ai-deepseek-key");
     if (!input) return;
     const key = input.value.trim();
@@ -445,6 +468,10 @@ function toggleAiSumKeyInput() {
 }
 
 function saveAiSumKey() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền thay đổi API key.");
+        return;
+    }
     const input = document.getElementById("ai-sum-key");
     if (!input) return;
     const key = input.value.trim();
@@ -815,6 +842,10 @@ function toggleMsdsSidebar() {
 window.toggleMsdsSidebar = toggleMsdsSidebar;
 
 function toggleMsdsIntakePanel() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền nạp hồ sơ MSDS.");
+        return;
+    }
     const drawer = document.getElementById("msds-intake-drawer");
     const btn = document.getElementById("btn-toggle-msds-intake");
     const txt = document.getElementById("txt-toggle-msds-intake");
@@ -901,6 +932,10 @@ function clearMsdsFile() {
 let PENDING_MSDS_DUPLICATE_PAYLOAD = null;
 
 async function runMsdsAnalysis() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) chỉ có quyền Xem & Xuất dữ liệu MSDS, không thể nạp hoặc phân tích tệp mới.");
+        return;
+    }
     if (CURRENT_MSDS_FILES.length === 0) {
         alert("Vui lòng chọn hoặc kéo thả tệp MSDS / SDS (.pdf, .docx, .doc, .txt) vào khung nạp trước!");
         document.getElementById("msds-file-input")?.click();
@@ -1475,9 +1510,11 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
                         <button type="button" class="msds-btn-matrix-row" onclick="openStorageMatrixModal('${safeChemId}')" title="Kiểm tra tương thích lưu kho hóa chất này (TCVN 5507:2002)">
                             <span>🧭 Kho</span>
                         </button>
+                        ${isGuestUser() ? '' : `
                         <button type="button" class="msds-btn-del-row" onclick="deleteMsdsChemical('${safeChemId}')" title="Xóa hóa chất này khỏi sổ CIL">
                             🗑️
                         </button>
+                        `}
                     </div>
                 </td>
             </tr>
@@ -1786,6 +1823,10 @@ function closeMsdsSafetyModal() {
 }
 
 async function deleteMsdsChemical(chemId) {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền xóa hóa chất.");
+        return;
+    }
     if (!confirm(`Bạn có chắc chắn muốn xóa mã hóa chất "${chemId}" khỏi Danh mục Hóa chất CIL?`)) {
         return;
     }
@@ -1902,6 +1943,10 @@ function clearMsdsSelection() {
 window.clearMsdsSelection = clearMsdsSelection;
 
 async function deleteSelectedMsdsBatch() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền xóa hóa chất.");
+        return;
+    }
     const ids = Array.from(SELECTED_MSDS_IDS);
     if (ids.length === 0) {
         alert("Vui lòng chọn ít nhất một hóa chất để xóa.");
@@ -2020,6 +2065,10 @@ function exportAllMsdsSafetyCardsZip() {
 window.exportAllMsdsSafetyCardsZip = exportAllMsdsSafetyCardsZip;
 
 function openMsdsDeleteAllModal() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền xóa danh mục hóa chất.");
+        return;
+    }
     const modal = document.getElementById("msds-delete-all-modal");
     const pwdInp = document.getElementById("msds-delete-all-pwd");
     const errDiv = document.getElementById("msds-delete-all-err");
@@ -2045,6 +2094,10 @@ function closeMsdsDeleteAllModal() {
 window.closeMsdsDeleteAllModal = closeMsdsDeleteAllModal;
 
 async function executeDeleteAllMsds() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền xóa danh mục hóa chất.");
+        return;
+    }
     const pwdInp = document.getElementById("msds-delete-all-pwd");
     const errDiv = document.getElementById("msds-delete-all-err");
     const errTxt = document.getElementById("msds-delete-all-err-txt");
@@ -2106,6 +2159,10 @@ function exportCilExcel() {
 }
 
 async function openMsdsStorageFolder() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền mở thư mục lưu trữ máy chủ.");
+        return;
+    }
     try {
         const resp = await fetch("/api/msds/open-storage-folder", { method: "POST" });
         const res = await resp.json();
@@ -2118,6 +2175,10 @@ async function openMsdsStorageFolder() {
 }
 
 async function syncMsdsToGoogleDrive() {
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền đồng bộ Google Drive.");
+        return;
+    }
     const btn = document.getElementById("btn-msds-gdrive-sync");
     const txt = document.getElementById("txt-msds-gdrive-sync");
     const origText = txt ? txt.textContent : "☁️ Lưu Google Drive";

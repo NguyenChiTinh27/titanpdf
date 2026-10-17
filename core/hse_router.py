@@ -26,9 +26,11 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
+
+from core.auth_rbac import get_current_role, require_owner
 
 # Dynamic path resolution matching server.py
 if getattr(sys, "frozen", False):
@@ -384,7 +386,8 @@ def translate_endpoint(req: TranslateRequest):
 
 @hse_router.get("/config")
 @hse_router.get("/ai_config")
-def get_ai_config():
+def get_ai_config(request: Request):
+    role = get_current_role(request)
     data = {}
     if SETTINGS_FILE.exists():
         try:
@@ -393,19 +396,31 @@ def get_ai_config():
         except Exception:
             pass
     api_key = data.get("deepseek_api_key", "")
+    if role == "guest":
+        return {
+            "has_key": bool(api_key),
+            "api_key": "",
+            "deepseek_api_key_masked": "••••••••••••••••" if api_key else "",
+            "base_url": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
+            "model": data.get("deepseek_model", "DeepSeek-V4.1-Flash"),
+            "endpoint": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
+            "read_only": True
+        }
     masked = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else ("***" if api_key else "")
     return {
+        "has_key": bool(api_key),
         "api_key": api_key,
         "deepseek_api_key_masked": masked,
         "base_url": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
         "model": data.get("deepseek_model", "DeepSeek-V4.1-Flash"),
-        "endpoint": data.get("deepseek_base_url", "https://api.deepseek.com/v1")
+        "endpoint": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
+        "read_only": False
     }
 
 
 @hse_router.post("/config")
 @hse_router.post("/ai_config")
-def save_ai_config(cfg: AIConfigModel):
+def save_ai_config(cfg: AIConfigModel, _: str = Depends(require_owner)):
     data = {}
     if SETTINGS_FILE.exists():
         try:

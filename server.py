@@ -16,11 +16,20 @@ import socket
 import secrets
 import subprocess
 from pydantic import BaseModel
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Body, Request, Response, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Body, Request, Response, Query, Depends
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.background import BackgroundTask
+from core.auth_rbac import (
+    get_current_role,
+    require_owner,
+    load_guest_permissions,
+    save_guest_permissions,
+    reset_guest_permissions,
+    extract_token,
+    GROUP_TOOL_MAPPING
+)
 try:
     from reportlab.graphics.barcode import qr
     from reportlab.graphics.shapes import Drawing
@@ -232,18 +241,285 @@ def save_upload_file(upload_file: UploadFile, folder: str) -> str:
     return file_path
 
 
+class GuestSessionRequest(BaseModel):
+    device_id: Optional[str] = None
+    device_name: Optional[str] = None
+    user_agent: Optional[str] = None
+
+
+class GuestProfileUpdateRequest(BaseModel):
+    guest_name: Optional[str] = None
+    is_blocked: Optional[bool] = None
+    max_visits: Optional[int] = None
+    reset_visits: Optional[bool] = None
+    max_devices: Optional[int] = None
+
+
+class RevokeDeviceRequest(BaseModel):
+    device_id: str
+
+
 @app.get("/api/auth/status")
-def auth_status(token: Optional[str] = None):
+def auth_status(request: Request, token: Optional[str] = None):
     """Check if the session token is authenticated or gate is disabled."""
     cfg = get_security_config()
+    perms = load_guest_permissions()
+    profile = perms.get("profile", {})
+    guest_name = profile.get("guest_name", "Khách (Chỉ Xem & Tra Cứu)")
+
     if not cfg["enabled"]:
-        return {"authenticated": True, "lock_enabled": False}
+        return {
+            "authenticated": True,
+            "lock_enabled": False,
+            "role": "owner",
+            "username": "Quản trị viên"
+        }
     if not token:
-        return {"authenticated": False, "lock_enabled": True}
+        token = extract_token(request)
+    if not token:
+        return {
+            "authenticated": False,
+            "lock_enabled": True,
+            "role": "guest",
+            "username": guest_name
+        }
     token = token.strip()
-    if token and (token in ACTIVE_SESSIONS or token.startswith("quick_") or token.startswith("luv_") or token in ["verified", "local_bypass"]):
-        return {"authenticated": True, "lock_enabled": True}
-    return {"authenticated": False, "lock_enabled": True}
+    if token.startswith("luv_guest_") or token == "guest":
+        return {
+            "authenticated": True,
+            "lock_enabled": True,
+            "role": "guest",
+            "username": guest_name,
+            "visits": {
+                "current": profile.get("current_visits", 0),
+                "max": profile.get("max_visits", 0)
+            },
+            "devices": {
+                "current": len(profile.get("registered_devices", [])),
+                "max": profile.get("max_devices", 0)
+            }
+        }
+    if token and (token in ACTIVE_SESSIONS or token.startswith("quick_") or token.startswith("luv_sess_") or token in ["verified", "local_bypass"]):
+        return {
+            "authenticated": True,
+            "lock_enabled": True,
+            "role": "owner",
+            "username": "Quản trị viên"
+        }
+    return {
+        "authenticated": False,
+        "lock_enabled": True,
+        "role": "guest",
+        "username": guest_name
+    }
+
+
+@app.post("/api/auth/guest-session")
+def auth_guest_session(request: Request, response: Response, payload: Optional[GuestSessionRequest] = Body(default=None)):
+    """
+    Khởi tạo phiên làm việc Chế độ Khách (Guest Mode) từ Màn hình Khóa.
+    Kiểm tra trạng thái Chặn, Giới hạn Lượt truy cập, và Giới hạn Thiết bị.
+    """
+    perms = load_guest_permissions()
+    profile = perms.get("profile", {})
+
+    # 1. Kiểm tra trạng thái Khóa / Chặn toàn cục
+    if profile.get("is_blocked", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Cổng truy cập Chế độ Khách hiện đang bị tạm khóa bởi Quản trị viên."
+        )
+
+    # 2. Kiểm tra giới hạn lượt truy cập (max_visits > 0)
+    max_visits = int(profile.get("max_visits", 0) or 0)
+    current_visits = int(profile.get("current_visits", 0) or 0)
+    if max_visits > 0 and current_visits >= max_visits:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Chế độ Khách đã hết lượt truy cập cho phép ({current_visits}/{max_visits}). Vui lòng liên hệ Quản trị viên."
+        )
+
+    # 3. Kiểm tra và đăng ký thiết bị (Device Access Limit & Binding)
+    max_devices = int(profile.get("max_devices", 0) or 0)
+    registered_devices = profile.get("registered_devices", [])
+    if not isinstance(registered_devices, list):
+        registered_devices = []
+
+    req_device_id = None
+    req_ua = None
+    if payload:
+        req_device_id = payload.device_id
+        req_ua = payload.user_agent or payload.device_name
+    if not req_device_id:
+        req_device_id = request.headers.get("x-device-id") or request.headers.get("x-titan-device-id") or request.query_params.get("device_id")
+    if not req_ua:
+        req_ua = request.headers.get("user-agent", "Unknown Browser/Device")
+
+    now_iso = datetime.now().isoformat()
+    client_ip = getattr(request.client, "host", "127.0.0.1") if request.client else "127.0.0.1"
+
+    if req_device_id and str(req_device_id).strip():
+        dev_id = str(req_device_id).strip()
+        matched = False
+        for dev in registered_devices:
+            if dev.get("device_id") == dev_id:
+                dev["last_seen_at"] = now_iso
+                dev["ip"] = client_ip
+                if req_ua:
+                    dev["user_agent"] = req_ua
+                matched = True
+                break
+
+        if not matched:
+            if max_devices > 0 and len(registered_devices) >= max_devices:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Đã đạt giới hạn số lượng thiết bị truy cập cho phép ({len(registered_devices)}/{max_devices}). Vui lòng liên hệ Quản trị viên để gỡ bỏ thiết bị cũ."
+                )
+            new_dev = {
+                "device_id": dev_id,
+                "user_agent": req_ua or "Unknown Browser",
+                "ip": client_ip,
+                "registered_at": now_iso,
+                "last_seen_at": now_iso
+            }
+            registered_devices.append(new_dev)
+
+        profile["registered_devices"] = registered_devices
+
+    # 4. Tăng biến đếm lượt truy cập
+    profile["current_visits"] = current_visits + 1
+    profile["last_visit_at"] = now_iso
+    perms["profile"] = profile
+    save_guest_permissions(perms)
+
+    # 5. Sinh token phiên Khách và thiết lập Cookie
+    token = f"luv_guest_{uuid.uuid4().hex}"
+    response.set_cookie(
+        key="luv_auth_token",
+        value=token,
+        max_age=86400,
+        httponly=False,
+        samesite="lax",
+        path="/"
+    )
+
+    return {
+        "success": True,
+        "token": token,
+        "role": "guest",
+        "guest_name": profile.get("guest_name", "Khách (Chỉ Xem & Tra Cứu)"),
+        "visits": {
+            "current": profile["current_visits"],
+            "max": max_visits
+        },
+        "devices": {
+            "current": len(profile.get("registered_devices", [])),
+            "max": max_devices
+        },
+        "message": "Đã khởi tạo phiên làm việc Chế độ Khách."
+    }
+
+
+@app.get("/api/auth/guest-profile")
+def auth_get_guest_profile():
+    """Lấy thông tin hồ sơ và hạn mức của Chế độ Khách."""
+    perms = load_guest_permissions()
+    return perms.get("profile", {})
+
+
+@app.post("/api/auth/guest-profile")
+def auth_update_guest_profile(payload: GuestProfileUpdateRequest, _: str = Depends(require_owner)):
+    """Cập nhật hồ sơ, khóa/mở khóa và hạn mức Chế độ Khách (Chỉ Quản trị viên)."""
+    perms = load_guest_permissions()
+    profile = perms.get("profile", {})
+
+    if payload.guest_name is not None and str(payload.guest_name).strip():
+        profile["guest_name"] = str(payload.guest_name).strip()
+    if payload.is_blocked is not None:
+        profile["is_blocked"] = bool(payload.is_blocked)
+    if payload.max_visits is not None:
+        profile["max_visits"] = max(0, int(payload.max_visits))
+    if payload.reset_visits:
+        profile["current_visits"] = 0
+    if payload.max_devices is not None:
+        profile["max_devices"] = max(0, int(payload.max_devices))
+
+    perms["profile"] = profile
+    save_guest_permissions(perms)
+    return {"success": True, "profile": profile}
+
+
+@app.delete("/api/auth/guest-profile")
+def auth_delete_guest_profile(_: str = Depends(require_owner)):
+    """Khôi phục hồ sơ và quyền khách về mặc định nhà sản xuất (Chỉ Quản trị viên)."""
+    default_cfg = reset_guest_permissions()
+    return {
+        "success": True,
+        "message": "Đã khôi phục cấu hình Khách về mặc định ban đầu.",
+        "profile": default_cfg.get("profile", {})
+    }
+
+
+@app.get("/api/auth/guest-permissions")
+def auth_get_guest_permissions():
+    """Lấy toàn bộ cấu hình phân quyền hiện tại của Chế độ Khách."""
+    return load_guest_permissions()
+
+
+@app.post("/api/auth/guest-permissions")
+def auth_update_guest_permissions(payload: Dict[str, Any] = Body(...), _: str = Depends(require_owner)):
+    """Cập nhật phân quyền từng tool hoặc nhóm tool cho Khách (Chỉ Quản trị viên)."""
+    perms = load_guest_permissions()
+    if "tool_groups" in payload and isinstance(payload["tool_groups"], dict):
+        perms["tool_groups"].update(payload["tool_groups"])
+        for grp, is_enabled in payload["tool_groups"].items():
+            if grp in GROUP_TOOL_MAPPING:
+                for tid in GROUP_TOOL_MAPPING[grp]:
+                    perms["tools"][tid] = bool(is_enabled)
+    if "tools" in payload and isinstance(payload["tools"], dict):
+        perms["tools"].update(payload["tools"])
+    if "read_only" in payload and isinstance(payload["read_only"], dict):
+        perms["read_only"].update(payload["read_only"])
+    if "profile" in payload and isinstance(payload["profile"], dict):
+        perms["profile"].update(payload["profile"])
+
+    save_guest_permissions(perms)
+    return {"success": True, "permissions": perms}
+
+
+@app.post("/api/auth/guest-device/revoke")
+def auth_revoke_guest_device(payload: RevokeDeviceRequest, _: str = Depends(require_owner)):
+    """Gỡ bỏ một thiết bị khỏi danh sách thiết bị Khách đã đăng ký (Chỉ Quản trị viên)."""
+    perms = load_guest_permissions()
+    profile = perms.get("profile", {})
+    registered = profile.get("registered_devices", [])
+    before_len = len(registered)
+    target_id = payload.device_id.strip()
+    registered = [d for d in registered if str(d.get("device_id")).strip() != target_id]
+    profile["registered_devices"] = registered
+    perms["profile"] = profile
+    save_guest_permissions(perms)
+    return {
+        "success": True,
+        "revoked": before_len > len(registered),
+        "remaining_devices": len(registered),
+        "message": f"Đã gỡ bỏ thiết bị '{payload.device_id}' thành công."
+    }
+
+
+@app.post("/api/auth/guest-device/reset")
+def auth_reset_guest_devices(_: str = Depends(require_owner)):
+    """Xóa toàn bộ danh sách thiết bị Khách đã đăng ký (Chỉ Quản trị viên)."""
+    perms = load_guest_permissions()
+    profile = perms.get("profile", {})
+    profile["registered_devices"] = []
+    perms["profile"] = profile
+    save_guest_permissions(perms)
+    return {
+        "success": True,
+        "message": "Đã đặt lại toàn bộ danh sách thiết bị kết nối của Khách."
+    }
 
 
 @app.get("/api/auth/settings")
@@ -1062,22 +1338,31 @@ def process_unlock(file: UploadFile = File(...), password: str = Form("")):
 
 # 15. OCR PDF (DeepSeek Vision AI & Tesseract Hybrid)
 @app.get("/api/settings/deepseek")
-def get_deepseek_settings():
-    """Lấy trạng thái cấu hình DeepSeek API."""
+def get_deepseek_settings(request: Request):
+    """Lấy trạng thái cấu hình DeepSeek API (Che giấu đối với Chế độ Khách)."""
+    role = get_current_role(request)
     saved_key = DeepSeekOCR.get_saved_api_key() or ""
+    if role == "guest":
+        return {
+            "has_key": bool(saved_key),
+            "masked_key": "••••••••••••••••" if saved_key else "",
+            "default_model": DeepSeekOCR.DEFAULT_MODEL,
+            "read_only": True
+        }
     masked = ""
     if saved_key:
         masked = saved_key[:6] + "..." + saved_key[-4:] if len(saved_key) > 10 else "******"
     return {
         "has_key": bool(saved_key),
         "masked_key": masked,
-        "default_model": DeepSeekOCR.DEFAULT_MODEL
+        "default_model": DeepSeekOCR.DEFAULT_MODEL,
+        "read_only": False
     }
 
 
 @app.post("/api/settings/deepseek")
-def save_deepseek_settings(api_key: str = Form(...)):
-    """Lưu DeepSeek API Key vào cấu hình."""
+def save_deepseek_settings(api_key: str = Form(...), _: str = Depends(require_owner)):
+    """Lưu DeepSeek API Key vào cấu hình (Chỉ Quản trị viên)."""
     key = api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="API Key không được để trống.")
@@ -1514,7 +1799,8 @@ def api_msds_upload_summarize(
     engine: Optional[str] = Form("deepseek"),
     api_key: Optional[str] = Form(None),
     force_overwrite: Optional[str] = Form("false"),
-    custom_chem_id: Optional[str] = Form(None)
+    custom_chem_id: Optional[str] = Form(None),
+    _: str = Depends(require_owner)
 ):
     """Tải lên tệp MSDS (PDF/Word/TXT/Scan), AI phân tích 16 mục GHS, kiểm tra trùng lặp Mã sản phẩm / MSDS trước khi lưu."""
     from core.msds_intelligence import MSDSExtractorEngine, MSDSDatabase
@@ -1572,7 +1858,7 @@ def api_msds_upload_summarize(
 
 
 @app.post("/api/msds/confirm-save")
-def api_msds_confirm_save(payload: Dict[str, Any] = Body(...)):
+def api_msds_confirm_save(payload: Dict[str, Any] = Body(...), _: str = Depends(require_owner)):
     """Xác nhận lưu dữ liệu MSDS sau khi phát hiện trùng lặp (Ghi đè mã cũ hoặc Lưu thành mã mới)."""
     from core.msds_intelligence import MSDSDatabase
     try:
@@ -1787,7 +2073,7 @@ def api_msds_detail(chem_id: str):
 
 
 @app.delete("/api/msds/delete/{chem_id}")
-def api_msds_delete(chem_id: str):
+def api_msds_delete(chem_id: str, _: str = Depends(require_owner)):
     """Xóa hóa chất khỏi Danh mục CIL."""
     from core.msds_intelligence import MSDSDatabase
     try:
@@ -1811,7 +2097,7 @@ class MSDSDeleteAllRequest(BaseModel):
 
 
 @app.post("/api/msds/delete-batch")
-def api_msds_delete_batch(payload: MSDSBatchDeleteRequest):
+def api_msds_delete_batch(payload: MSDSBatchDeleteRequest, _: str = Depends(require_owner)):
     """Xóa nhiều hóa chất khỏi danh mục CIL."""
     from core.msds_intelligence import MSDSDatabase
     try:
@@ -1828,7 +2114,7 @@ def api_msds_delete_batch(payload: MSDSBatchDeleteRequest):
 
 
 @app.post("/api/msds/delete-all")
-def api_msds_delete_all(payload: MSDSDeleteAllRequest):
+def api_msds_delete_all(payload: MSDSDeleteAllRequest, _: str = Depends(require_owner)):
     """Xóa tất cả hóa chất khỏi CSDL CIL (yêu cầu mật khẩu bảo mật: 270120)."""
     from core.msds_intelligence import MSDSDatabase
     if (payload.password or "").strip() != "270120":
@@ -2600,7 +2886,7 @@ def api_msds_emergency_query(chem_id: Optional[str] = Query(None)):
 
 
 @app.post("/api/msds/open-storage-folder")
-def api_msds_open_storage_folder():
+def api_msds_open_storage_folder(_: str = Depends(require_owner)):
     """Mở trực tiếp thư mục lưu trữ các tệp MSDS (data/msds_files) trên máy tính."""
     from core.msds_intelligence import MSDS_STORAGE_DIR, MSDSDatabase
     try:
@@ -2689,7 +2975,7 @@ def api_msds_gdrive_status():
 
 
 @app.post("/api/msds/gdrive/sync")
-def api_msds_gdrive_sync():
+def api_msds_gdrive_sync(_: str = Depends(require_owner)):
     """Đồng bộ toàn bộ dữ liệu MSDS, Sổ CIL Excel và các tệp gốc vào Google Drive của bạn."""
     import shutil
     from core.msds_intelligence import MSDSDatabase, CILExcelExporter, MSDS_STORAGE_DIR
@@ -2738,7 +3024,7 @@ def api_msds_gdrive_sync():
 
 
 @app.post("/api/msds/gdrive/open-folder")
-def api_msds_gdrive_open_folder():
+def api_msds_gdrive_open_folder(_: str = Depends(require_owner)):
     """Mở thư mục Google Drive (G:\\Drive của tôi\\TitanPDF_MSDS) trên máy tính hoặc trả về web link."""
     gdrive_root = get_google_drive_path()
     web_url = "https://drive.google.com/drive/u/0/my-drive"

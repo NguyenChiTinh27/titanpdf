@@ -21,10 +21,11 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
+from core.auth_rbac import require_owner
 from core.monthly_inventory_engine import MonthlyInventoryEngine
 
 logger = logging.getLogger("titan.monthly_inventory_router")
@@ -187,7 +188,7 @@ def list_periods(
 
 
 @monthly_inventory_router.post("/periods", summary="Tạo kỳ báo cáo mới")
-def create_period(payload: PeriodCreateRequest):
+def create_period(payload: PeriodCreateRequest, _: str = Depends(require_owner)):
     """
     Tạo một kỳ báo cáo mới (hoặc trả về kỳ đã có).
     Nếu copy_from_previous=True hoặc auto_roll_forward=True, tự động kế thừa tồn kho tháng trước.
@@ -220,7 +221,7 @@ def get_period(period_ident: str):
 
 
 @monthly_inventory_router.put("/periods/{period_ident}/status", summary="Cập nhật trạng thái kỳ báo cáo")
-def update_period_status(period_ident: str, payload: PeriodStatusUpdateRequest):
+def update_period_status(period_ident: str, payload: PeriodStatusUpdateRequest, _: str = Depends(require_owner)):
     """Cập nhật trạng thái kỳ báo cáo ('OPEN', 'LOCKED', 'CLOSED' hoặc 'draft', 'closed', 'approved')."""
     try:
         updated = MonthlyInventoryEngine.update_period_status(
@@ -237,7 +238,7 @@ def update_period_status(period_ident: str, payload: PeriodStatusUpdateRequest):
 
 
 @monthly_inventory_router.delete("/periods/{period_ident}", summary="Xóa một kỳ báo cáo")
-def delete_period(period_ident: str):
+def delete_period(period_ident: str, _: str = Depends(require_owner)):
     """Xóa một kỳ báo cáo cùng toàn bộ bản ghi và nhật ký giao dịch phát sinh."""
     ok = MonthlyInventoryEngine.delete_period(period_ident)
     if not ok:
@@ -314,7 +315,7 @@ def get_record(record_id: int):
 @monthly_inventory_router.patch("/records/{record_id}", summary="Cập nhật nhanh số liệu dòng hóa chất (Mode 1 - PATCH)")
 @monthly_inventory_router.put("/periods/{period_ident}/records/{record_id}", summary="Cập nhật nhanh số liệu dòng hóa chất (Mode 1 - alias)")
 @monthly_inventory_router.patch("/periods/{period_ident}/records/{record_id}", summary="Cập nhật nhanh số liệu dòng hóa chất (Mode 1 - alias PATCH)")
-def update_record(record_id: int, payload: UpdateRecordItemModel, period_ident: Optional[str] = None):
+def update_record(record_id: int, payload: UpdateRecordItemModel, period_ident: Optional[str] = None, _: str = Depends(require_owner)):
     """
     Cập nhật trực tiếp số liệu (Mode 1: Quick Monthly Summary).
     Tự động tính: Tồn cuối kỳ = Tồn đầu kỳ + Tổng nhập - Tổng xuất
@@ -335,7 +336,7 @@ def update_record(record_id: int, payload: UpdateRecordItemModel, period_ident: 
 
 
 @monthly_inventory_router.put("/records-batch", summary="Cập nhật hàng loạt nhiều dòng dữ liệu")
-def batch_update_records(payload: Union[BatchUpdateRecordsRequest, List[UpdateRecordItemModel]] = Body(...)):
+def batch_update_records(payload: Union[BatchUpdateRecordsRequest, List[UpdateRecordItemModel]] = Body(...), _: str = Depends(require_owner)):
     """Cập nhật đồng loạt nhiều dòng hóa chất trên lưới dữ liệu."""
     try:
         if isinstance(payload, list):
@@ -353,7 +354,7 @@ def batch_update_records(payload: Union[BatchUpdateRecordsRequest, List[UpdateRe
 
 
 @monthly_inventory_router.delete("/records/{record_id}", summary="Xóa hóa chất khỏi kỳ báo cáo")
-def delete_record(record_id: int):
+def delete_record(record_id: int, _: str = Depends(require_owner)):
     """Xóa một hóa chất khỏi kỳ báo cáo hiện tại kèm các phiếu giao dịch phát sinh."""
     ok = MonthlyInventoryEngine.delete_record(record_id)
     if not ok:
@@ -381,7 +382,7 @@ def get_available_chemicals(
 
 
 @monthly_inventory_router.post("/periods/{period_ident}/add-from-cil", summary="Thêm hóa chất từ CIL vào kỳ")
-def add_chemicals_from_cil_path(period_ident: str, payload: AddChemicalsRequest):
+def add_chemicals_from_cil_path(period_ident: str, payload: AddChemicalsRequest, _: str = Depends(require_owner)):
     """Nạp một hoặc hàng loạt hóa chất từ Sổ CIL vào kỳ báo cáo qua path param."""
     try:
         added_count = MonthlyInventoryEngine.add_chemicals_from_cil(
@@ -399,7 +400,7 @@ def add_chemicals_from_cil_path(period_ident: str, payload: AddChemicalsRequest)
 
 @monthly_inventory_router.post("/add-chemicals", summary="Thêm hóa chất từ CIL vào kỳ (Body param)")
 @monthly_inventory_router.post("/chemicals", summary="Thêm hóa chất từ CIL vào kỳ (Alias)")
-def add_chemicals_general(payload: AddChemicalsRequest):
+def add_chemicals_general(payload: AddChemicalsRequest, _: str = Depends(require_owner)):
     """Nạp một hoặc hàng loạt hóa chất từ Sổ CIL vào kỳ báo cáo qua request body."""
     ident = _determine_period_ident(payload.period_id, payload.period_key)
     try:
@@ -458,7 +459,7 @@ def list_transactions(
 
 
 @monthly_inventory_router.post("/transactions", summary="Ghi nhận phiếu nhập/xuất kho (Mode 2)")
-def create_transaction(payload: CreateTransactionRequest):
+def create_transaction(payload: CreateTransactionRequest, _: str = Depends(require_owner)):
     """
     Ghi nhận một phiếu nhập hoặc xuất kho (Mode 2).
     Hệ thống tự động cộng dồn số lượng lên dòng tổng hợp tương ứng và tính lại tồn cuối kỳ.
@@ -490,7 +491,7 @@ def create_transaction(payload: CreateTransactionRequest):
 
 
 @monthly_inventory_router.put("/transactions/{txn_ident}", summary="Chỉnh sửa phiếu giao dịch")
-def update_transaction(txn_ident: str, payload: UpdateTransactionRequest):
+def update_transaction(txn_ident: str, payload: UpdateTransactionRequest, _: str = Depends(require_owner)):
     """Chỉnh sửa phiếu giao dịch và tự động tính lại tổng kho."""
     try:
         data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
@@ -504,7 +505,7 @@ def update_transaction(txn_ident: str, payload: UpdateTransactionRequest):
 
 
 @monthly_inventory_router.delete("/transactions/{txn_ident}", summary="Xóa phiếu giao dịch")
-def delete_transaction(txn_ident: str):
+def delete_transaction(txn_ident: str, _: str = Depends(require_owner)):
     """Xóa phiếu giao dịch và tự động trừ khỏi tổng kho."""
     ok = MonthlyInventoryEngine.delete_transaction(txn_ident)
     if not ok:
@@ -518,7 +519,7 @@ def delete_transaction(txn_ident: str):
 
 @monthly_inventory_router.post("/roll-forward", summary="Thực hiện chuyển số dư tồn cuối kỳ qua tháng mới")
 @monthly_inventory_router.post("/periods/roll-forward", summary="Thực hiện chuyển số dư tồn cuối kỳ qua tháng mới (alias)")
-def roll_forward(payload: RollForwardRequest):
+def roll_forward(payload: RollForwardRequest, _: str = Depends(require_owner)):
     """
     Chuyển số dư Tồn cuối kỳ của tháng nguồn làm Tồn đầu kỳ của tháng đích.
     Hỗ trợ tham số from_period/to_period hoặc from_period_id/to_period_id.
@@ -711,6 +712,7 @@ async def import_excel(
     file: UploadFile = File(..., description="Tệp Excel (.xlsx) danh sách hóa chất kho"),
     period_key: Optional[str] = Form(None),
     period_id: Optional[int] = Form(None),
+    _: str = Depends(require_owner),
 ):
     """
     Đọc và nạp dữ liệu hàng loạt từ tệp Excel thực tế của kho vào kỳ báo cáo được chỉ định.

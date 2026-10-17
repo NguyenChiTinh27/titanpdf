@@ -38,8 +38,42 @@ const VIP_STATE = {
 // 1. MAIN TAB SWITCHER (Tools Dashboard <-> VIP Editor <-> AI Studio <-> MSDS CIL)
 // -------------------------------------------------------------
 function switchMainTab(tab, subTab = null) {
-    if (tab === 'ai' && subTab === 'msds') {
+    if ((tab === 'ai' || tab === 'ai-studio') && subTab === 'msds') {
         tab = 'msds';
+    }
+    if (tab === 'msds-studio') tab = 'msds';
+    if (tab === 'hse-studio') tab = 'hse';
+    if (tab === 'legal-lookup') tab = 'legal';
+    if (tab === 'ai-studio') tab = 'ai';
+    if (tab === 'vip-editor') tab = 'editor';
+
+    // RBAC: Check guest permissions before switching tabs
+    if (document.body.getAttribute('data-role') === 'guest' && window.GUEST_PERMISSIONS_CACHE) {
+        const groups = window.GUEST_PERMISSIONS_CACHE.tool_groups || {};
+        if (tab === 'editor' && groups.pro_tools === false) {
+            alert('Phân hệ VIP Editor đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+            return;
+        }
+        if (tab === 'ai' && groups.studios === false && groups.pro_tools === false) {
+            alert('Phân hệ AI Studio đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+            return;
+        }
+        if (tab === 'hse' && groups.studios === false) {
+            alert('Phân hệ HSE Report đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+            return;
+        }
+        if (tab === 'legal' && groups.legal === false) {
+            alert('Phân hệ Tra Cứu Pháp Lý đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+            return;
+        }
+        if (tab === 'msds' && groups.msds === false) {
+            alert('Phân hệ Sổ Hóa Chất MSDS & CIL đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+            return;
+        }
+        if (tab === 'monthly-inventory' && groups.monthly_inventory === false) {
+            alert('Phân hệ Báo Cáo Tháng (NXT) đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+            return;
+        }
     }
 
     const homeView = document.getElementById("home-view");

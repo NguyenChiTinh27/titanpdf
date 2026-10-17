@@ -516,6 +516,24 @@
                 </button>
             </div>
 
+            <!-- Visual Divider 2: Guest Mode Option -->
+            <div class="guest-gate-divider" style="display:flex; align-items:center; margin:12px 0 10px; color:#94a3b8; font-size:11px; font-weight:700; width:100%;">
+                <span style="flex:1; border-top:1px solid #e2e8f0;"></span>
+                <span style="padding:0 8px; letter-spacing:0.5px;">HOẶC TRUY CẬP NHANH</span>
+                <span style="flex:1; border-top:1px solid #e2e8f0;"></span>
+            </div>
+
+            <!-- Option 3: Continue as Guest Button -->
+            <div id="guest-login-container" style="width:100%; margin:4px 0 8px;">
+                <button id="btn-guest-mode" type="button" onclick="continueAsGuest()" class="btn-guest-mode">
+                    <span class="guest-btn-icon">👤</span>
+                    <span class="guest-btn-label">Tiếp tục với Chế độ Khách (Guest Mode)</span>
+                </button>
+                <div class="guest-btn-subhint" style="font-size:11px; color:#64748b; text-align:center; margin-top:5px;">
+                    Tra cứu, xem &amp; tải tài liệu • Không cần mật khẩu
+                </div>
+            </div>
+
             <div id="security-error-msg" class="security-error-msg hidden" style="margin-top: 10px; text-align: center; font-size: 13px;"></div>
 
             <!-- Hidden Compatibility Test Hooks (Preserved in DOM for automated test suites) -->
@@ -535,21 +553,21 @@
     <!-- 2. SECURITY SETTINGS & PASSWORD MANAGEMENT MODAL             -->
     <!-- ============================================================ -->
     <div id="security-settings-modal" class="vip-modal-backdrop hidden">
-        <div class="vip-modal-content" style="max-width: 480px; width: 90%; background:#ffffff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
-            <div class="vip-modal-header" style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <div class="vip-modal-content" style="max-width: 540px; width: 92%; max-height: 88vh; display: flex; flex-direction: column; background:#ffffff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
+            <div class="vip-modal-header" style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <div style="width:34px; height:34px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </div>
                     <div>
-                        <h3 style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">Quản Trị Mật Khẩu & Bảo Mật</h3>
-                        <p style="margin:2px 0 0; font-size:11px; color:#64748b;">Tùy chỉnh mật mã riêng và chế độ khóa ứng dụng</p>
+                        <h3 style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">Quản Trị Mật Khẩu &amp; Bảo Mật</h3>
+                        <p style="margin:2px 0 0; font-size:11px; color:#64748b;">Tùy chỉnh mật mã riêng, phân quyền Khách và khóa ứng dụng</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeSecurityModal()" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
+                <button type="button" id="btn-close-security-modal" onclick="closeSecurityModal()" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
             </div>
 
-            <div class="vip-modal-body" style="padding: 18px 22px;">
+            <div class="vip-modal-body" style="padding: 18px 22px; overflow-y: auto; flex: 1;">
                 <!-- Section A: Toggle Startup Lock -->
                 <div style="padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -600,6 +618,115 @@
                         Khóa màn hình ngay
                     </button>
                 </div>
+
+                <!-- Section D: Quản Trị Khách Chuyên Sâu & Phân Quyền Tool -->
+                <div class="guest-admin-section" style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #e2e8f0;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                        <span style="font-size:18px;">👥</span>
+                        <div>
+                            <h4 style="margin:0; font-size:13.5px; font-weight:700; color:#0f172a;">Quản Trị Khách Chuyên Sâu &amp; Phân Quyền Tool</h4>
+                            <p style="margin:2px 0 0; font-size:11px; color:#64748b;">Hồ sơ, chặn khách, hạn mức lượt, giới hạn thiết bị &amp; phân quyền công cụ</p>
+                        </div>
+                    </div>
+
+                    <!-- Sub-section: Guest Profile & Quotas -->
+                    <div class="guest-admin-card" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; margin-bottom:12px;">
+                        <div style="font-weight:700; font-size:12.5px; color:#334155; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📋 Hồ Sơ &amp; Hạn Mức Truy Cập</span>
+                            <span id="guest-visits-stat-badge" style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; background:#e2e8f0; color:#475569;">Lượt: 0/0</span>
+                        </div>
+
+                        <div style="margin-bottom:10px;">
+                            <label style="font-size:11.5px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Tên định danh Khách:</label>
+                            <input type="text" id="guest-name-input" class="input-text" placeholder="Khách (Chỉ Xem &amp; Tra Cứu)" style="width:100%; font-size:12.5px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;" />
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:8px 0; border-top:1px dashed #e2e8f0; border-bottom:1px dashed #e2e8f0;">
+                            <div>
+                                <div style="font-weight:600; font-size:12px; color:#1e293b;">Chặn toàn bộ Khách (Block Access)</div>
+                                <div style="font-size:11px; color:#64748b;">Tạm khóa cổng Chế độ Khách tại màn hình đăng nhập</div>
+                            </div>
+                            <label class="switch-toggle" style="position:relative; display:inline-block; width:40px; height:22px; cursor:pointer;">
+                                <input type="checkbox" id="guest-blocked-switch" style="opacity:0; width:0; height:0;" />
+                                <span class="switch-slider" style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:22px; transition:0.2s;"></span>
+                            </label>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+                            <div>
+                                <label style="font-size:11.5px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Giới hạn lượt (0 = không giới hạn):</label>
+                                <input type="number" id="guest-max-visits-input" class="input-text" min="0" value="0" style="width:100%; font-size:12.5px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;" />
+                            </div>
+                            <div>
+                                <label style="font-size:11.5px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Giới hạn thiết bị (0 = không giới hạn):</label>
+                                <input type="number" id="guest-max-devices-input" class="input-text" min="0" value="0" style="width:100%; font-size:12.5px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;" />
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button type="button" id="btn-save-guest-profile" onclick="saveGuestProfileAdmin()" class="btn-primary" style="flex:1; padding:8px 12px; font-size:12px; font-weight:600; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                                💾 Lưu Hồ Sơ
+                            </button>
+                            <button type="button" id="btn-reset-guest-visits" onclick="resetGuestVisitsAdmin()" class="btn-secondary" style="padding:8px 12px; font-size:12px; font-weight:600; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;" title="Đưa lượt truy cập hiện tại về 0">
+                                🔄 Đặt Lại Lượt
+                            </button>
+                            <button type="button" id="btn-delete-guest-profile" onclick="deleteGuestProfileAdmin()" class="btn-secondary" style="padding:8px 12px; font-size:12px; font-weight:600; background:#fff; color:#ef4444; border:1px solid #fca5a5; border-radius:6px; cursor:pointer;" title="Khôi phục hồ sơ và quyền khách về mặc định ban đầu">
+                                🗑️ Khôi Phục Mặc Định
+                            </button>
+                        </div>
+                        <div id="guest-profile-admin-msg" class="hidden" style="margin-top:8px; padding:6px 10px; border-radius:6px; font-size:11.5px;"></div>
+                    </div>
+
+                    <!-- Sub-section: Device Management -->
+                    <div class="guest-admin-card" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; margin-bottom:12px;">
+                        <div style="font-weight:700; font-size:12.5px; color:#334155; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📱 Quản Lý Thiết Bị Đã Đăng Ký</span>
+                            <button type="button" id="btn-reset-all-devices" onclick="resetAllGuestDevicesAdmin()" style="background:transparent; border:none; color:#ef4444; font-size:11.5px; font-weight:600; cursor:pointer; padding:2px 6px;">
+                                🔄 Đặt Lại Toàn Bộ
+                            </button>
+                        </div>
+                        <div id="guest-devices-list" style="max-height:160px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; background:#fff; padding:6px;">
+                            <div style="font-size:11.5px; color:#94a3b8; text-align:center; padding:12px;">Đang tải danh sách thiết bị...</div>
+                        </div>
+                    </div>
+
+                    <!-- Sub-section: Tool Permissions -->
+                    <div class="guest-admin-card" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px;">
+                        <div style="font-weight:700; font-size:12.5px; color:#334155; margin-bottom:10px;">
+                            🛠️ Phân Quyền 6 Nhóm Công Cụ Cho Khách
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px 12px; margin-bottom:12px;">
+                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
+                                <span>📄 PDF Cơ Bản (26 Tools)</span>
+                                <input type="checkbox" id="perm-grp-basic" checked />
+                            </label>
+                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
+                                <span>⚡ VIP Editor &amp; Pro</span>
+                                <input type="checkbox" id="perm-grp-pro" />
+                            </label>
+                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
+                                <span>🎨 AI Studio &amp; HSE</span>
+                                <input type="checkbox" id="perm-grp-studios" />
+                            </label>
+                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
+                                <span>⚖️ Tra Cứu Pháp Lý</span>
+                                <input type="checkbox" id="perm-grp-legal" checked />
+                            </label>
+                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
+                                <span>🧪 MSDS Intelligence</span>
+                                <input type="checkbox" id="perm-grp-msds" checked />
+                            </label>
+                            <label style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1e293b; background:#fff; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer;">
+                                <span>📊 Báo Cáo Tháng (NXT)</span>
+                                <input type="checkbox" id="perm-grp-nxt" checked />
+                            </label>
+                        </div>
+                        <button type="button" id="btn-save-guest-perms" onclick="saveGuestPermissionsAdmin()" class="btn-primary" style="width:100%; padding:8px 12px; font-size:12px; font-weight:600; background:#0f766e; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                            💾 Cập Nhật Phân Quyền Công Cụ
+                        </button>
+                        <div id="guest-perms-admin-msg" class="hidden" style="margin-top:8px; padding:6px 10px; border-radius:6px; font-size:11.5px;"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -620,7 +747,7 @@
         }
 
         function quickUnlock() {
-            unlockGateUI("quick_bypass_token");
+            unlockGateUI("quick_bypass_token", "owner");
         }
         window.quickUnlock = quickUnlock;
 
@@ -724,7 +851,8 @@
                 var res = await fetch("/api/auth/google-verify", { method: "POST", body: fd });
                 var data = await res.json();
                 if (res.ok && data.success) {
-                    unlockGateUI(data.token);
+                    unlockGateUI(data.token, "owner");
+                    updateTopbarRoleUI("owner");
                 } else {
                     if (errMsg) {
                         errMsg.innerText = data.message || "Từ chối truy cập! Tài khoản Google không hợp lệ.";
@@ -741,13 +869,141 @@
             }
         }
 
-        function unlockGateUI(token) {
+        function getDeviceId() {
+            var devId = "";
+            try {
+                devId = localStorage.getItem("luv_device_id");
+                if (!devId) {
+                    devId = "dev_" + ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, function(c) {
+                        return (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16);
+                    });
+                    localStorage.setItem("luv_device_id", devId);
+                }
+            } catch(e) {
+                devId = "dev_default_" + Date.now();
+            }
+            return devId;
+        }
+        window.getDeviceId = getDeviceId;
+
+        function updateTopbarRoleUI(role, info) {
+            var guestCtrl = document.getElementById("topbar-guest-controls");
+            var ownerCtrl = document.getElementById("topbar-owner-controls");
+            var guestBadgeText = document.getElementById("topbar-guest-badge-text");
+
+            if (role === "guest") {
+                if (guestCtrl) guestCtrl.classList.remove("hidden");
+                if (ownerCtrl) ownerCtrl.classList.add("hidden");
+
+                var guestName = (info && (info.guest_name || info.username)) ? (info.guest_name || info.username) : "Khách (Chỉ Xem & Tra Cứu)";
+                var devCur = 1;
+                var devMax = "Không giới hạn";
+                var visCur = 1;
+                var visMax = "Không giới hạn";
+
+                if (info && info.devices) {
+                    devCur = info.devices.current || 1;
+                    devMax = info.devices.max > 0 ? info.devices.max : "Không giới hạn";
+                }
+                if (info && info.visits) {
+                    visCur = info.visits.current || 1;
+                    visMax = info.visits.max > 0 ? info.visits.max : "Không giới hạn";
+                }
+
+                if (guestBadgeText) {
+                    guestBadgeText.innerText = "👤 Khách: " + guestName + " (Thiết bị: " + devCur + "/" + devMax + " | Lượt: " + visCur + "/" + visMax + ")";
+                }
+            } else if (role === "owner") {
+                if (guestCtrl) guestCtrl.classList.add("hidden");
+                if (ownerCtrl) ownerCtrl.classList.remove("hidden");
+            } else {
+                if (guestCtrl) guestCtrl.classList.add("hidden");
+                if (ownerCtrl) ownerCtrl.classList.add("hidden");
+            }
+        }
+        window.updateTopbarRoleUI = updateTopbarRoleUI;
+
+        async function continueAsGuest() {
+            var errMsg = document.getElementById("security-error-msg");
+            var btn = document.getElementById("btn-guest-mode");
+            if (btn) btn.disabled = true;
+
+            if (errMsg) {
+                errMsg.classList.add("hidden");
+                errMsg.innerText = "";
+            }
+
+            var devId = getDeviceId();
+
+            try {
+                var res = await fetch("/api/auth/guest-session", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        device_id: devId,
+                        user_agent: navigator.userAgent
+                    })
+                });
+
+                var data = await res.json();
+
+                if (res.ok && data.success) {
+                    sessionStorage.setItem("luv_user_role", "guest");
+                    sessionStorage.setItem("luv_auth_token", data.token);
+                    document.body.setAttribute("data-role", "guest");
+
+                    updateTopbarRoleUI("guest", data);
+                    unlockGateUI(data.token, "guest");
+
+                    if (typeof window.loadAndApplyGuestPermissions === "function") {
+                        window.loadAndApplyGuestPermissions();
+                    }
+                    if (typeof window.applyDeepSeekKeyMasking === "function") {
+                        window.applyDeepSeekKeyMasking(true);
+                    }
+                } else {
+                    if (errMsg) {
+                        var detail = (data && (data.detail || data.message)) ? (data.detail || data.message) : "Không thể truy cập Chế độ Khách. Vui lòng liên hệ Quản trị viên!";
+                        errMsg.innerText = detail;
+                        errMsg.style.color = "#ef4444";
+                        errMsg.classList.remove("hidden");
+                    }
+                    var card = document.getElementById("security-card-box");
+                    if (card) {
+                        card.classList.remove("shake-anim");
+                        void card.offsetWidth;
+                        card.classList.add("shake-anim");
+                    }
+                }
+            } catch(err) {
+                if (errMsg) {
+                    errMsg.innerText = "Lỗi kết nối máy chủ khi tạo phiên Khách: " + err.message;
+                    errMsg.style.color = "#ef4444";
+                    errMsg.classList.remove("hidden");
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+        window.continueAsGuest = continueAsGuest;
+
+        function unlockGateUI(token, role) {
             var effectiveToken = token || "verified";
+            var effectiveRole = role || (effectiveToken.indexOf("guest") !== -1 ? "guest" : "owner");
             try {
                 sessionStorage.setItem("luv_auth_token", effectiveToken);
+                sessionStorage.setItem("luv_user_role", effectiveRole);
                 localStorage.removeItem("luv_auth_token");
-                localStorage.setItem("luv_owner_authorized", "ntc270120cm@gmail.com");
+                if (effectiveRole === "owner") {
+                    localStorage.setItem("luv_owner_authorized", "ntc270120cm@gmail.com");
+                } else {
+                    localStorage.removeItem("luv_owner_authorized");
+                }
             } catch(e) {}
+
+            document.body.setAttribute("data-role", effectiveRole);
 
             var gate = document.getElementById("security-gate");
             if (gate) {
@@ -759,13 +1015,43 @@
             if (errMsg) errMsg.classList.add("hidden");
             var inp = document.getElementById("security-passkey-input");
             if (inp) inp.value = "";
+
+            updateTopbarRoleUI(effectiveRole);
+
+            if (effectiveRole === "guest") {
+                if (typeof window.loadAndApplyGuestPermissions === "function") {
+                    window.loadAndApplyGuestPermissions();
+                }
+                if (typeof window.applyDeepSeekKeyMasking === "function") {
+                    window.applyDeepSeekKeyMasking(true);
+                }
+            } else {
+                if (typeof window.applyDeepSeekKeyMasking === "function") {
+                    window.applyDeepSeekKeyMasking(false);
+                }
+                if (typeof window.renderToolCards === "function") {
+                    window.renderToolCards();
+                }
+            }
         }
+        window.unlockGateUI = unlockGateUI;
 
         function lockApp() {
             try {
                 sessionStorage.removeItem("luv_auth_token");
+                sessionStorage.removeItem("luv_user_role");
                 localStorage.removeItem("luv_auth_token");
+                localStorage.removeItem("luv_owner_authorized");
             } catch(e) {}
+
+            document.body.removeAttribute("data-role");
+            updateTopbarRoleUI(null);
+            if (typeof window.applyDeepSeekKeyMasking === "function") {
+                window.applyDeepSeekKeyMasking(false);
+            }
+            if (typeof window.renderToolCards === "function") {
+                window.renderToolCards();
+            }
 
             var gate = document.getElementById("security-gate");
             if (gate) {
@@ -781,6 +1067,7 @@
             }
             initQrAuth();
         }
+        window.lockApp = lockApp;
 
         async function handleSecurityUnlock(e) {
             if (e && typeof e.preventDefault === "function") e.preventDefault();
@@ -810,7 +1097,8 @@
                 var data = await res.json();
 
                 if (res.ok && data.success) {
-                    unlockGateUI(data.token);
+                    unlockGateUI(data.token, "owner");
+                    updateTopbarRoleUI("owner");
                 } else {
                     if (errMsg) {
                         errMsg.innerText = (data && data.message) ? data.message : "Mật mã bảo mật không chính xác. Vui lòng thử lại!";
@@ -843,16 +1131,310 @@
             var msg = document.getElementById("sec-change-msg");
             if (msg) msg.classList.add("hidden");
 
+            var token = sessionStorage.getItem("luv_auth_token") || "verified";
+            var headers = { "X-Titan-Session": token };
+
             try {
-                var res = await fetch("/api/auth/settings");
+                var res = await fetch("/api/auth/settings", { headers: headers });
                 if (res.ok) {
                     var data = await res.json();
                     if (toggleChk) toggleChk.checked = data.enabled;
                 }
             } catch(e) {}
 
+            // Load Guest Profile & Devices
+            try {
+                var pRes = await fetch("/api/auth/guest-profile", { headers: headers });
+                if (pRes.ok) {
+                    var profile = await pRes.json();
+                    var nameInp = document.getElementById("guest-name-input");
+                    var blockSw = document.getElementById("guest-blocked-switch");
+                    var maxVisInp = document.getElementById("guest-max-visits-input");
+                    var maxDevInp = document.getElementById("guest-max-devices-input");
+                    var statBadge = document.getElementById("guest-visits-stat-badge");
+
+                    if (nameInp) nameInp.value = profile.guest_name || "Khách (Chỉ Xem & Tra Cứu)";
+                    if (blockSw) blockSw.checked = !!profile.is_blocked;
+                    if (maxVisInp) maxVisInp.value = profile.max_visits || 0;
+                    if (maxDevInp) maxDevInp.value = profile.max_devices || 0;
+                    if (statBadge) {
+                        var maxV = profile.max_visits > 0 ? profile.max_visits : "∞";
+                        statBadge.innerText = "Lượt: " + (profile.current_visits || 0) + "/" + maxV;
+                    }
+
+                    renderGuestDevicesList(profile.registered_devices || []);
+                }
+            } catch(e) {}
+
+            // Load Guest Permissions
+            try {
+                var permRes = await fetch("/api/auth/guest-permissions", { headers: headers });
+                if (permRes.ok) {
+                    var permData = await permRes.json();
+                    var perms = permData.permissions || permData;
+                    var groups = perms.tool_groups || {};
+
+                    var basicChk = document.getElementById("perm-grp-basic");
+                    var proChk = document.getElementById("perm-grp-pro");
+                    var studiosChk = document.getElementById("perm-grp-studios");
+                    var legalChk = document.getElementById("perm-grp-legal");
+                    var msdsChk = document.getElementById("perm-grp-msds");
+                    var nxtChk = document.getElementById("perm-grp-nxt");
+
+                    if (basicChk) basicChk.checked = groups.basic_pdf !== false;
+                    if (proChk) proChk.checked = !!groups.pro_tools;
+                    if (studiosChk) studiosChk.checked = !!groups.studios;
+                    if (legalChk) legalChk.checked = groups.legal !== false;
+                    if (msdsChk) msdsChk.checked = groups.msds !== false;
+                    if (nxtChk) nxtChk.checked = groups.monthly_inventory !== false;
+
+                    window.GUEST_PERMISSIONS_CACHE = perms;
+                }
+            } catch(e) {}
+
             if (modal) modal.classList.remove("hidden");
         }
+        window.openSecurityModal = openSecurityModal;
+
+        function renderGuestDevicesList(devices) {
+            var listEl = document.getElementById("guest-devices-list");
+            if (!listEl) return;
+            if (!devices || devices.length === 0) {
+                listEl.innerHTML = '<div style="font-size:11.5px; color:#94a3b8; text-align:center; padding:12px;">Chưa có thiết bị nào kết nối</div>';
+                return;
+            }
+
+            var html = "";
+            devices.forEach(function(dev) {
+                var ua = dev.user_agent || dev.device_name || "Thiết bị không rõ";
+                var ip = dev.ip || "127.0.0.1";
+                var did = dev.device_id || "";
+                var shortId = did.length > 14 ? (did.substring(0, 14) + "...") : did;
+                var lastSeen = dev.last_seen_at ? new Date(dev.last_seen_at).toLocaleString("vi-VN") : "Gần đây";
+
+                html += '<div class="guest-device-item" style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid #f1f5f9; font-size:11px;">' +
+                    '<div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:72%;">' +
+                        '<div style="font-weight:600; color:#1e293b; overflow:hidden; text-overflow:ellipsis;" title="' + (ua.replace(/"/g, '&quot;')) + '">' + (ua.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</div>' +
+                        '<div style="color:#64748b; font-size:10.5px;">IP: ' + ip + ' • ID: ' + shortId + ' • ' + lastSeen + '</div>' +
+                    '</div>' +
+                    '<button type="button" class="btn-revoke-device" onclick="revokeGuestDeviceAdmin(\'' + did + '\')" style="background:#fee2e2; border:1px solid #fecaca; color:#dc2626; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;" title="Gỡ bỏ thiết bị">' +
+                        '🗑️ Gỡ' +
+                    '</button>' +
+                '</div>';
+            });
+            listEl.innerHTML = html;
+        }
+
+        async function saveGuestProfileAdmin() {
+            var nameInp = document.getElementById("guest-name-input");
+            var blockSw = document.getElementById("guest-blocked-switch");
+            var maxVisInp = document.getElementById("guest-max-visits-input");
+            var maxDevInp = document.getElementById("guest-max-devices-input");
+            var msg = document.getElementById("guest-profile-admin-msg");
+
+            var token = sessionStorage.getItem("luv_auth_token") || "verified";
+
+            try {
+                var payload = {
+                    guest_name: nameInp ? nameInp.value.trim() : "",
+                    is_blocked: blockSw ? blockSw.checked : false,
+                    max_visits: maxVisInp ? parseInt(maxVisInp.value) || 0 : 0,
+                    max_devices: maxDevInp ? parseInt(maxDevInp.value) || 0 : 0
+                };
+
+                var res = await fetch("/api/auth/guest-profile", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Titan-Session": token
+                    },
+                    body: JSON.stringify(payload)
+                });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    if (msg) {
+                        msg.innerText = "✓ Đã lưu hồ sơ Khách thành công!";
+                        msg.style.background = "#f0fdf4";
+                        msg.style.color = "#16a34a";
+                        msg.style.border = "1px solid #bbf7d0";
+                        msg.classList.remove("hidden");
+                        setTimeout(function() { msg.classList.add("hidden"); }, 3500);
+                    }
+                } else {
+                    if (msg) {
+                        msg.innerText = "✕ Lỗi: " + (data.detail || data.message || "Không thể lưu hồ sơ");
+                        msg.style.background = "#fef2f2";
+                        msg.style.color = "#dc2626";
+                        msg.style.border = "1px solid #fecaca";
+                        msg.classList.remove("hidden");
+                    }
+                }
+            } catch(e) {
+                if (msg) {
+                    msg.innerText = "✕ Lỗi kết nối: " + e.message;
+                    msg.classList.remove("hidden");
+                }
+            }
+        }
+        window.saveGuestProfileAdmin = saveGuestProfileAdmin;
+
+        async function resetGuestVisitsAdmin() {
+            var msg = document.getElementById("guest-profile-admin-msg");
+            var statBadge = document.getElementById("guest-visits-stat-badge");
+            var maxVisInp = document.getElementById("guest-max-visits-input");
+            var token = sessionStorage.getItem("luv_auth_token") || "verified";
+
+            try {
+                var res = await fetch("/api/auth/guest-profile", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Titan-Session": token
+                    },
+                    body: JSON.stringify({ reset_visits: true })
+                });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    var maxV = (maxVisInp && parseInt(maxVisInp.value) > 0) ? parseInt(maxVisInp.value) : "∞";
+                    if (statBadge) statBadge.innerText = "Lượt: 0/" + maxV;
+                    if (msg) {
+                        msg.innerText = "✓ Đã đặt lại số lượt truy cập về 0!";
+                        msg.style.background = "#f0fdf4";
+                        msg.style.color = "#16a34a";
+                        msg.style.border = "1px solid #bbf7d0";
+                        msg.classList.remove("hidden");
+                        setTimeout(function() { msg.classList.add("hidden"); }, 3500);
+                    }
+                }
+            } catch(e) {
+                alert("Lỗi đặt lại lượt: " + e.message);
+            }
+        }
+        window.resetGuestVisitsAdmin = resetGuestVisitsAdmin;
+
+        async function deleteGuestProfileAdmin() {
+            if (!confirm("Bạn có chắc chắn muốn khôi phục hồ sơ và quyền khách về mặc định nhà sản xuất?")) return;
+            var token = sessionStorage.getItem("luv_auth_token") || "verified";
+            try {
+                var res = await fetch("/api/auth/guest-profile", {
+                    method: "DELETE",
+                    headers: { "X-Titan-Session": token }
+                });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    alert("Đã khôi phục hồ sơ Khách về mặc định ban đầu!");
+                    openSecurityModal();
+                }
+            } catch(e) {
+                alert("Lỗi khôi phục: " + e.message);
+            }
+        }
+        window.deleteGuestProfileAdmin = deleteGuestProfileAdmin;
+
+        async function revokeGuestDeviceAdmin(deviceId) {
+            if (!confirm("Gỡ bỏ thiết bị này khỏi danh sách kết nối?")) return;
+            var token = sessionStorage.getItem("luv_auth_token") || "verified";
+            try {
+                var res = await fetch("/api/auth/guest-device/revoke", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Titan-Session": token
+                    },
+                    body: JSON.stringify({ device_id: deviceId })
+                });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    openSecurityModal();
+                } else {
+                    alert("Lỗi gỡ bỏ thiết bị: " + (data.detail || data.message));
+                }
+            } catch(e) {
+                alert("Lỗi gỡ bỏ: " + e.message);
+            }
+        }
+        window.revokeGuestDeviceAdmin = revokeGuestDeviceAdmin;
+
+        async function resetAllGuestDevicesAdmin() {
+            if (!confirm("Đặt lại toàn bộ danh sách thiết bị kết nối của Khách?")) return;
+            var token = sessionStorage.getItem("luv_auth_token") || "verified";
+            try {
+                var res = await fetch("/api/auth/guest-device/reset", {
+                    method: "POST",
+                    headers: { "X-Titan-Session": token }
+                });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    renderGuestDevicesList([]);
+                }
+            } catch(e) {
+                alert("Lỗi đặt lại thiết bị: " + e.message);
+            }
+        }
+        window.resetAllGuestDevicesAdmin = resetAllGuestDevicesAdmin;
+
+        async function saveGuestPermissionsAdmin() {
+            var msg = document.getElementById("guest-perms-admin-msg");
+            var token = sessionStorage.getItem("luv_auth_token") || "verified";
+
+            var basicVal = document.getElementById("perm-grp-basic") ? document.getElementById("perm-grp-basic").checked : true;
+            var proVal = document.getElementById("perm-grp-pro") ? document.getElementById("perm-grp-pro").checked : false;
+            var studiosVal = document.getElementById("perm-grp-studios") ? document.getElementById("perm-grp-studios").checked : false;
+            var legalVal = document.getElementById("perm-grp-legal") ? document.getElementById("perm-grp-legal").checked : true;
+            var msdsVal = document.getElementById("perm-grp-msds") ? document.getElementById("perm-grp-msds").checked : true;
+            var nxtVal = document.getElementById("perm-grp-nxt") ? document.getElementById("perm-grp-nxt").checked : true;
+
+            var payload = {
+                tool_groups: {
+                    basic_pdf: basicVal,
+                    pro_tools: proVal,
+                    studios: studiosVal,
+                    legal: legalVal,
+                    msds: msdsVal,
+                    monthly_inventory: nxtVal
+                }
+            };
+
+            try {
+                var res = await fetch("/api/auth/guest-permissions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Titan-Session": token
+                    },
+                    body: JSON.stringify(payload)
+                });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    window.GUEST_PERMISSIONS_CACHE = data.permissions;
+                    if (msg) {
+                        msg.innerText = "✓ Đã cập nhật phân quyền 6 nhóm công cụ thành công!";
+                        msg.style.background = "#f0fdf4";
+                        msg.style.color = "#16a34a";
+                        msg.style.border = "1px solid #bbf7d0";
+                        msg.classList.remove("hidden");
+                        setTimeout(function() { msg.classList.add("hidden"); }, 3500);
+                    }
+                    if (typeof window.renderToolCards === "function") {
+                        window.renderToolCards();
+                    }
+                } else {
+                    if (msg) {
+                        msg.innerText = "✕ Lỗi: " + (data.detail || data.message || "Không thể cập nhật phân quyền");
+                        msg.style.background = "#fef2f2";
+                        msg.style.color = "#dc2626";
+                        msg.style.border = "1px solid #fecaca";
+                        msg.classList.remove("hidden");
+                    }
+                }
+            } catch(e) {
+                if (msg) {
+                    msg.innerText = "✕ Lỗi kết nối: " + e.message;
+                    msg.classList.remove("hidden");
+                }
+            }
+        }
+        window.saveGuestPermissionsAdmin = saveGuestPermissionsAdmin;
 
         function closeSecurityModal() {
             var modal = document.getElementById("security-settings-modal");
@@ -948,17 +1530,15 @@
                 // Remove permanent localStorage auto-unlock token: require authentication on each new access/tab
                 localStorage.removeItem("luv_auth_token");
                 var savedToken = sessionStorage.getItem("luv_auth_token");
+                var savedRole = sessionStorage.getItem("luv_user_role") || (savedToken && savedToken.indexOf("guest") !== -1 ? "guest" : "owner");
                 var url = savedToken ? ("/api/auth/status?token=" + encodeURIComponent(savedToken)) : "/api/auth/status";
                 fetch(url)
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data && data.authenticated === true && savedToken) {
-                            var g = document.getElementById("security-gate");
-                            if (g) {
-                                g.classList.add("unlocked");
-                                g.style.setProperty("display", "none", "important");
-                                g.setAttribute("aria-hidden", "true");
-                            }
+                            var effectiveRole = data.role || savedRole;
+                            unlockGateUI(savedToken, effectiveRole);
+                            updateTopbarRoleUI(effectiveRole, data);
                         } else {
                             var g = document.getElementById("security-gate");
                             if (g) {
@@ -1125,6 +1705,37 @@
                     </svg>
                     <span>Khóa</span>
                 </button>
+            </div>
+
+            <!-- Auth & Role Topbar Controls -->
+            <div id="navbar-auth-controls" class="navbar-auth-controls">
+                <!-- GUEST MODE VIEW (Hiển thị khi role === 'guest') -->
+                <div id="topbar-guest-controls" class="topbar-role-group hidden">
+                    <div id="topbar-guest-badge" class="topbar-guest-badge" title="Chế độ Khách: Chỉ xem, tra cứu và tải tài liệu">
+                        <span class="guest-status-dot"></span>
+                        <span id="topbar-guest-badge-text">👤 Khách (Chỉ Xem &amp; Tra Cứu)</span>
+                    </div>
+                    <button id="btn-switch-to-owner" type="button" onclick="lockApp()" class="btn-topbar-switch-owner" title="Chuyển sang tài khoản Chính chủ để mở khóa toàn bộ quyền quản trị">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span>🔒 Đăng nhập Chính chủ</span>
+                    </button>
+                </div>
+
+                <!-- OWNER MODE VIEW (Hiển thị khi role === 'owner') -->
+                <div id="topbar-owner-controls" class="topbar-role-group hidden">
+                    <div id="topbar-owner-badge" class="topbar-owner-badge" title="Tài khoản Chính chủ Quản trị Tối cao">
+                        <span class="owner-crown-icon">👑</span>
+                        <span class="owner-email-text">ntc270120cm@gmail.com</span>
+                    </div>
+                    <button id="btn-open-security-modal" type="button" onclick="openSecurityModal()" class="btn-topbar-shield" title="Mở bảng phân quyền sử dụng Chế độ Khách &amp; Quản trị bảo mật">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        <span>🛡️ Bảo Mật &amp; Phân Quyền</span>
+                    </button>
+                    <button id="btn-topbar-lock" type="button" onclick="lockApp()" class="btn-topbar-lock" title="Khóa màn hình ngay">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span>Khóa</span>
+                    </button>
+                </div>
             </div>
         </div>
     </header>

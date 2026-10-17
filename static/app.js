@@ -684,8 +684,87 @@ let readerObserver = null;
 
 
 // -------------------------------------------------------------
-// 1. RENDER HOME TOOL CARDS
+// 1. RBAC GUEST PERMISSIONS & RENDER HOME TOOL CARDS
 // -------------------------------------------------------------
+function isToolAllowedForGuest(toolId) {
+    const perms = window.GUEST_PERMISSIONS_CACHE;
+    if (!perms) return true;
+    if (perms.tools && perms.tools[toolId] !== undefined) {
+        if (!perms.tools[toolId]) return false;
+    }
+    const groups = perms.tool_groups || {};
+    const proTools = ["interlinear-translate", "vip-editor", "ai-translator", "ai-summarizer", "ocr"];
+    const studioTools = ["ai-studio", "hse-studio"];
+
+    if (proTools.includes(toolId)) {
+        return !!groups.pro_tools;
+    }
+    if (studioTools.includes(toolId)) {
+        return !!groups.studios;
+    }
+    if (toolId === "legal-lookup" || toolId === "legal") {
+        return groups.legal !== false;
+    }
+    if (toolId === "msds-studio" || toolId === "msds") {
+        return groups.msds !== false;
+    }
+    if (toolId === "monthly-inventory") {
+        return groups.monthly_inventory !== false;
+    }
+    return groups.basic_pdf !== false;
+}
+window.isToolAllowedForGuest = isToolAllowedForGuest;
+
+async function loadAndApplyGuestPermissions() {
+    try {
+        const token = sessionStorage.getItem("luv_auth_token") || "";
+        const res = await fetch("/api/auth/guest-permissions", {
+            headers: token ? { "X-Titan-Session": token } : {}
+        });
+        if (res.ok) {
+            const data = await res.json();
+            window.GUEST_PERMISSIONS_CACHE = data.permissions || data;
+            if (typeof renderToolCards === "function") {
+                renderToolCards();
+            }
+        }
+    } catch(e) {
+        console.error("Lỗi nạp phân quyền khách:", e);
+    }
+}
+window.loadAndApplyGuestPermissions = loadAndApplyGuestPermissions;
+
+function applyDeepSeekKeyMasking(isGuest) {
+    const keyInputIds = ["opt-deepseek-key", "opt-trans-key", "ai-deepseek-key", "ai-sum-key"];
+    keyInputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (isGuest) {
+                el.value = "••••••••••••••••";
+                el.setAttribute("disabled", "disabled");
+                el.setAttribute("readonly", "readonly");
+            } else {
+                el.removeAttribute("disabled");
+                el.removeAttribute("readonly");
+                if (el.value === "••••••••••••••••") {
+                    el.value = "";
+                }
+            }
+        }
+    });
+
+    const toggleBtns = document.querySelectorAll("#btn-toggle-key-visibility, .btn-toggle-key-visibility");
+    toggleBtns.forEach(btn => {
+        btn.style.display = isGuest ? "none" : "";
+    });
+
+    const saveBtns = document.querySelectorAll("#btn-save-deepseek-key, #btn-save-ai-key, .btn-save-deepseek-key");
+    saveBtns.forEach(btn => {
+        btn.style.display = isGuest ? "none" : "";
+    });
+}
+window.applyDeepSeekKeyMasking = applyDeepSeekKeyMasking;
+
 function renderToolCards() {
     const grid = document.getElementById("tools-grid");
     const emptyState = document.getElementById("tools-empty-state");
@@ -720,18 +799,26 @@ function renderToolCards() {
     if (emptyState) emptyState.classList.add("hidden");
 
     list.forEach(tool => {
+        const isGuest = document.body.getAttribute("data-role") === "guest";
+        const allowed = !isGuest || isToolAllowedForGuest(tool.id);
+
         const card = document.createElement("div");
         card.className = "tool-card";
+        if (!allowed) {
+            card.classList.add("tool-locked-guest");
+        }
         card.setAttribute("data-tool-id", tool.id);
         card.setAttribute("data-category", tool.category);
         card.setAttribute("tabindex", "0");
         card.setAttribute("role", "button");
         card.setAttribute("aria-label", tool.title);
 
-        const badgeClass = tool.category === "ai" ? "badge-ai" :
+        const badgeClass = !allowed ? "badge-locked" :
+                           tool.category === "ai" ? "badge-ai" :
                            tool.category === "convert" ? "badge-office" :
                            tool.category === "security" ? "badge-security" :
                            tool.category === "optimize" ? "badge-optimize" : "badge-pdf";
+        const badgeLabel = !allowed ? "🔒 Đã Khóa" : (tool.badge || "PDF");
 
         card.innerHTML = `
             <div>
@@ -739,7 +826,7 @@ function renderToolCards() {
                     <div class="tool-icon-wrapper">
                         ${icon(tool.id, "w-5 h-5")}
                     </div>
-                    <span class="badge ${badgeClass}">${tool.badge || "PDF"}</span>
+                    <span class="badge ${badgeClass}">${badgeLabel}</span>
                 </div>
                 <div class="tool-card-content">
                     <h3 class="tool-title">${tool.title}</h3>
@@ -747,18 +834,28 @@ function renderToolCards() {
                 </div>
             </div>
             <div class="tool-card-footer">
-                <span>Khởi chạy</span>
+                <span>${allowed ? 'Khởi chạy' : 'Đã khóa'}</span>
                 ${icon("arrow-right", "tool-arrow-icon")}
             </div>
         `;
 
-        card.onclick = () => openTool(tool.id);
-        card.onkeydown = (e) => {
-            if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                openTool(tool.id);
-            }
-        };
+        if (allowed) {
+            card.onclick = () => openTool(tool.id);
+            card.onkeydown = (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openTool(tool.id);
+                }
+            };
+        } else {
+            card.onclick = () => alert("Công cụ này đã bị khóa đối với Chế độ Khách bởi Quản trị viên.");
+            card.onkeydown = (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    alert("Công cụ này đã bị khóa đối với Chế độ Khách bởi Quản trị viên.");
+                }
+            };
+        }
 
         grid.appendChild(card);
     });
@@ -874,6 +971,13 @@ function setupKeyboardNavigation() {
 // 2. WORKSPACE & TOOL OPENING
 // -------------------------------------------------------------
 function openTool(toolId) {
+    if (document.body.getAttribute("data-role") === "guest" && typeof isToolAllowedForGuest === "function") {
+        if (!isToolAllowedForGuest(toolId)) {
+            alert("Công cụ này đã bị khóa đối với Chế độ Khách bởi Quản trị viên.");
+            return;
+        }
+    }
+
     if (toolId === "vip-editor") {
         if (typeof switchMainTab === "function") {
             switchMainTab("editor");
@@ -3060,6 +3164,10 @@ function toggleKeyVisibility() {
 }
 
 async function saveDeepSeekKeyInline() {
+    if (document.body.getAttribute("data-role") === "guest") {
+        alert("Thao tác lưu API Key chỉ dành riêng cho Quản trị viên (Chính chủ)!");
+        return;
+    }
     const keyInput = document.getElementById("opt-deepseek-key");
     const statusHint = document.getElementById("deepseek-key-status");
     const val = keyInput ? keyInput.value.trim() : "";
@@ -3096,6 +3204,14 @@ async function initOcrOptions() {
     const keyInput = document.getElementById("opt-deepseek-key");
     const statusHint = document.getElementById("deepseek-key-status");
     const localKey = localStorage.getItem("deepseek_api_key") || "";
+
+    if (document.body.getAttribute("data-role") === "guest") {
+        applyDeepSeekKeyMasking(true);
+        if (statusHint) {
+            statusHint.innerHTML = `<span style="color: var(--success-text); font-weight: 500;">✓ Hệ thống đã cấu hình DeepSeek API Key (Chế độ Khách).</span>`;
+        }
+        return;
+    }
     
     if (keyInput && localKey) {
         keyInput.value = localKey;
@@ -3156,6 +3272,15 @@ async function initTransKey() {
     const keyInput = document.getElementById("opt-trans-key");
     const statusHint = document.getElementById("trans-key-status");
     const localKey = localStorage.getItem("deepseek_api_key") || "";
+
+    if (document.body.getAttribute("data-role") === "guest") {
+        applyDeepSeekKeyMasking(true);
+        if (statusHint) {
+            statusHint.innerHTML = `<span style="color: var(--success-text); font-weight: 500;">✓ Hệ thống đã cấu hình DeepSeek API Key (Chế độ Khách).</span>`;
+        }
+        return;
+    }
+
     if (keyInput && localKey) {
         keyInput.value = localKey;
     }
@@ -3909,17 +4034,25 @@ function togglePasskeyVisibility() {
 }
 
 function quickUnlock() {
-    unlockGateUI("quick_bypass_token");
+    unlockGateUI("quick_bypass_token", "owner");
 }
 window.quickUnlock = quickUnlock;
 
-function unlockGateUI(token) {
+function unlockGateUI(token, role) {
     const effectiveToken = token || "verified";
+    const effectiveRole = role || (effectiveToken.indexOf("guest") !== -1 ? "guest" : "owner");
     try {
         sessionStorage.setItem("luv_auth_token", effectiveToken);
+        sessionStorage.setItem("luv_user_role", effectiveRole);
         localStorage.removeItem("luv_auth_token");
-        localStorage.setItem("luv_owner_authorized", "ntc270120cm@gmail.com");
+        if (effectiveRole === "owner") {
+            localStorage.setItem("luv_owner_authorized", "ntc270120cm@gmail.com");
+        } else {
+            localStorage.removeItem("luv_owner_authorized");
+        }
     } catch (e) {}
+
+    document.body.setAttribute("data-role", effectiveRole);
 
     if (securityGate) {
         securityGate.classList.add("unlocked");
@@ -3932,15 +4065,50 @@ function unlockGateUI(token) {
     if (securityPasskeyInput) {
         securityPasskeyInput.value = "";
     }
+
+    if (typeof window.updateTopbarRoleUI === "function") {
+        window.updateTopbarRoleUI(effectiveRole);
+    }
+
+    if (effectiveRole === "guest") {
+        if (typeof window.loadAndApplyGuestPermissions === "function") {
+            window.loadAndApplyGuestPermissions();
+        }
+        if (typeof window.applyDeepSeekKeyMasking === "function") {
+            window.applyDeepSeekKeyMasking(true);
+        }
+    } else {
+        if (typeof window.applyDeepSeekKeyMasking === "function") {
+            window.applyDeepSeekKeyMasking(false);
+        }
+        if (typeof window.renderToolCards === "function") {
+            window.renderToolCards();
+        }
+    }
 }
+window.unlockGateUI = unlockGateUI;
 
 function lockGateUI() {
     try {
         sessionStorage.removeItem("luv_auth_token");
+        sessionStorage.removeItem("luv_user_role");
         localStorage.removeItem("luv_auth_token");
+        localStorage.removeItem("luv_owner_authorized");
     } catch (e) {}
 
+    document.body.removeAttribute("data-role");
+    if (typeof window.updateTopbarRoleUI === "function") {
+        window.updateTopbarRoleUI(null);
+    }
+    if (typeof window.applyDeepSeekKeyMasking === "function") {
+        window.applyDeepSeekKeyMasking(false);
+    }
+    if (typeof window.renderToolCards === "function") {
+        window.renderToolCards();
+    }
+
     if (securityGate) {
+        securityGate.style.removeProperty("display");
         securityGate.style.display = "flex";
         securityGate.classList.remove("unlocked");
         securityGate.removeAttribute("aria-hidden");
@@ -3953,6 +4121,8 @@ function lockGateUI() {
         securityPasskeyInput.focus();
     }
 }
+window.lockApp = lockGateUI;
+window.lockGateUI = lockGateUI;
 
 async function handleSecurityUnlock(e) {
     if (e && typeof e.preventDefault === "function") e.preventDefault();
@@ -3984,7 +4154,7 @@ async function handleSecurityUnlock(e) {
         const data = await res.json();
 
         if (res.ok && data.success) {
-            unlockGateUI(data.token);
+            unlockGateUI(data.token, data.role || "owner");
             return;
         } else {
             showSecurityError(data.message || "Mật mã bảo mật không chính xác!");
@@ -3993,7 +4163,7 @@ async function handleSecurityUnlock(e) {
         // Fallback for offline local session if available
         const savedToken = localStorage.getItem("luv_auth_token") || sessionStorage.getItem("luv_auth_token");
         if (savedToken) {
-            unlockGateUI(savedToken);
+            unlockGateUI(savedToken, savedToken.indexOf("guest") !== -1 ? "guest" : "owner");
             return;
         }
         showSecurityError("Không thể kết nối máy chủ xác thực nội bộ. Vui lòng thử lại!");
@@ -4049,7 +4219,8 @@ async function checkSecuritySession() {
         if (res.ok) {
             const data = await res.json();
             if (data && data.authenticated === true && savedToken) {
-                unlockGateUI(savedToken);
+                const detectedRole = data.role || (savedToken.indexOf("guest") !== -1 ? "guest" : "owner");
+                unlockGateUI(savedToken, detectedRole);
                 return;
             }
         }
