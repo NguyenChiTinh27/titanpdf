@@ -3139,11 +3139,17 @@
       <button id="nxt-btn-add-chemicals-cil" class="nxt-btn nxt-btn-primary" title="Thêm hóa chất từ CSDL Sổ CIL vào kỳ này">
         ➕ Thêm Từ CIL
       </button>
+      <button id="nxt-btn-import-excel" class="nxt-btn nxt-btn-outline" title="Nhập dữ liệu hàng loạt từ file Excel kiểm kê kho">
+        📥 Nhập Excel
+      </button>
       <button id="nxt-btn-record-transaction" class="nxt-btn nxt-btn-info" title="Lập phiếu nhập kho hoặc xuất sử dụng">
         📝 Phiếu Nhập / Xuất
       </button>
       <button id="nxt-btn-export-excel" class="nxt-btn nxt-btn-success" title="Xuất báo cáo sử dụng hóa chất tháng ra Excel chuẩn EHS">
         📊 Xuất Excel (.xlsx)
+      </button>
+      <button id="nxt-btn-export-pdf" class="nxt-btn nxt-btn-danger" title="Xuất báo cáo sử dụng hóa chất tháng ra tệp PDF chuẩn A4">
+        📄 Xuất PDF (.pdf)
       </button>
       <button id="nxt-btn-print-report" class="nxt-btn nxt-btn-secondary" title="In trực tiếp hoặc xem bản in A4">
         🖨️ In Báo Cáo
@@ -3378,6 +3384,36 @@
     <div class="nxt-modal-footer">
       <button class="nxt-btn nxt-btn-secondary" onclick="window.closeNewPeriodModal()">Hủy</button>
       <button class="nxt-btn nxt-btn-primary" onclick="window.createMonthlyPeriodFromModal()">✨ Khởi Tạo Kỳ Mới</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 4: BATCH IMPORT FROM EXCEL -->
+<div id="nxt-modal-import-excel" class="nxt-modal-backdrop hidden" aria-hidden="true">
+  <div class="nxt-modal-card">
+    <div class="nxt-modal-header">
+      <h3 class="nxt-modal-title">📥 Nhập Dữ Liệu Tồn Kho Hàng Loạt Từ Excel</h3>
+      <button class="nxt-modal-close" onclick="window.closeMonthlyImportExcelModal()">✕</button>
+    </div>
+    <div class="nxt-modal-body">
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:0.85rem; color:#1e40af;">
+        <div style="font-weight:700; margin-bottom:4px;">💡 Hướng dẫn nạp file Excel kho:</div>
+        <div>Hệ thống tự động nhận diện các cột: Mã hàng, Tên hóa chất, Số CAS, ĐVT, Tồn đầu kỳ, Nhập trong tháng, Xuất sử dụng, Ngưỡng an toàn, Vị trí kho.</div>
+        <div style="margin-top:8px;">
+          <a href="/api/monthly-inventory/download-template" download="Bieu_Mau_Nhap_Xuat_Ton_Kho_Template.xlsx" style="color:#2563eb; font-weight:700; text-decoration:underline;">
+            📥 Tải tệp Excel mẫu chuẩn (.xlsx) tại đây
+          </a>
+        </div>
+      </div>
+      <div class="nxt-form-group">
+        <label class="nxt-form-label" for="nxt-import-excel-file">Chọn Tệp Excel (.xlsx) *</label>
+        <input type="file" id="nxt-import-excel-file" class="nxt-form-input" accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </div>
+      <div id="nxt-import-result-msg" style="display:none; font-size:0.85rem; padding:10px; border-radius:6px; margin-top:10px;"></div>
+    </div>
+    <div class="nxt-modal-footer">
+      <button class="nxt-btn nxt-btn-secondary" onclick="window.closeMonthlyImportExcelModal()">Hủy</button>
+      <button id="nxt-btn-submit-import-excel" class="nxt-btn nxt-btn-primary" onclick="window.submitMonthlyImportExcel()">⚡ Bắt Đầu Nạp Dữ Liệu</button>
     </div>
   </div>
 </div>

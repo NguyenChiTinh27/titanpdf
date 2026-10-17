@@ -21,7 +21,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Body, HTTPException, Query, Response, status
+from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
@@ -639,6 +639,97 @@ def print_preview_by_period(period_ident: str):
     y = period["year"]
     html = MonthlyInventoryEngine.render_print_html(month=m, year=y)
     return HTMLResponse(content=html, status_code=200)
+
+
+@monthly_inventory_router.get("/export-pdf", summary="Kết xuất tệp Báo cáo PDF (.pdf)")
+def export_pdf(
+    month: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    period_id: Optional[int] = Query(None),
+    period_key: Optional[str] = Query(None),
+    period: Optional[str] = Query(None),
+):
+    """
+    Kết xuất tệp Báo Cáo Nhập - Xuất - Tồn Hóa Chất Tháng ra tệp PDF khổ A4 ngang chính thức,
+    chuẩn hóa đồ họa vector, có đầy đủ bảng số liệu và khung ký duyệt 3 bên.
+    """
+    target_month = month
+    target_year = year
+
+    p_str = period_key or period
+    if p_str and "-" in p_str:
+        parts = p_str.split("-")
+        try:
+            target_year = int(parts[0])
+            target_month = int(parts[1])
+        except Exception:
+            pass
+
+    if target_month is None or target_year is None:
+        now = datetime.now()
+        target_month = target_month or now.month
+        target_year = target_year or now.year
+
+    try:
+        pdf_bytes = MonthlyInventoryEngine.export_pdf(month=target_month, year=target_year)
+        filename = f"Bao_Cao_Su_Dung_Hoa_Chat_Thang_{target_month:02d}_{target_year}.pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+    except Exception as e:
+        logger.error("Lỗi export_pdf: %s", e)
+        raise HTTPException(status_code=500, detail=f"Lỗi kết xuất PDF báo cáo tháng: {str(e)}")
+
+
+@monthly_inventory_router.get("/download-template", summary="Tải tệp Excel mẫu để nhập dữ liệu kho (.xlsx)")
+def download_template():
+    """Tải tệp Excel mẫu với đầy đủ tiêu đề cột và hướng dẫn để người dùng điền số liệu nhập kho hàng loạt."""
+    try:
+        tmpl_bytes = MonthlyInventoryEngine.generate_excel_template()
+        filename = "Bieu_Mau_Nhap_Xuat_Ton_Kho_Template.xlsx"
+        return Response(
+            content=tmpl_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+    except Exception as e:
+        logger.error("Lỗi download_template: %s", e)
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo tệp mẫu: {str(e)}")
+
+
+@monthly_inventory_router.post("/import-excel", summary="Nhập dữ liệu hàng loạt từ file Excel kho (.xlsx)")
+async def import_excel(
+    file: UploadFile = File(..., description="Tệp Excel (.xlsx) danh sách hóa chất kho"),
+    period_key: Optional[str] = Form(None),
+    period_id: Optional[int] = Form(None),
+):
+    """
+    Đọc và nạp dữ liệu hàng loạt từ tệp Excel thực tế của kho vào kỳ báo cáo được chỉ định.
+    Tự động khớp hóa chất với Sổ CIL và cập nhật Tồn đầu, Nhập, Xuất.
+    """
+    ident = _determine_period_ident(period_id=period_id, period_key=period_key)
+    try:
+        content = await file.read()
+        res = MonthlyInventoryEngine.import_excel(
+            period_ident=ident,
+            file_bytes=content,
+            filename=file.filename or "upload.xlsx",
+        )
+        return res
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error("Lỗi import_excel: %s", e)
+        raise HTTPException(status_code=500, detail=f"Lỗi nhập dữ liệu từ Excel: {str(e)}")
 
 
 # =============================================================================

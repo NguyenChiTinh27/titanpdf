@@ -2002,3 +2002,375 @@ class MonthlyInventoryEngine:
 </body>
 </html>"""
         return html_content
+
+    @classmethod
+    def export_pdf(cls, month: int, year: int) -> bytes:
+        """
+        Kết xuất Báo Cáo Nhập - Xuất - Tồn Hóa Chất Tháng ra định dạng tệp PDF (A4 Ngang)
+        chuẩn doanh nghiệp với đầy đủ biểu mẫu, bảng số liệu và khung chữ ký 3 bên.
+        Sử dụng Chromium headless DevTools Protocol qua Playwright để render vector PDF chất lượng cao.
+        Có fallback sang ReportLab nếu môi trường không khởi tạo được browser.
+        """
+        html_content = cls.render_print_html(month=month, year=year)
+
+        # 1. Thử dùng Playwright Chromium headless (cho ra bản in đẹp nhất, chuẩn CSS 100%)
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.set_content(html_content, wait_until="load")
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    landscape=True,
+                    print_background=True,
+                    margin={"top": "8mm", "bottom": "8mm", "left": "8mm", "right": "8mm"},
+                )
+                browser.close()
+                return pdf_bytes
+        except Exception as pe:
+            logger.warning("Playwright PDF generation failed, attempting ReportLab fallback: %s", pe)
+
+        # 2. Fallback sang ReportLab nếu Playwright không khả dụng
+        try:
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib import colors
+
+            period = cls.get_period(f"{year:04d}-{month:02d}")
+            if not period:
+                period = cls.create_period(month=month, year=year)
+            records = cls.list_records(period["id"])
+
+            buf = io.BytesIO()
+            doc = SimpleDocTemplate(
+                buf,
+                pagesize=landscape(A4),
+                leftMargin=20,
+                rightMargin=20,
+                topMargin=25,
+                bottomMargin=25,
+            )
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                "RepTitle",
+                parent=styles["Normal"],
+                fontName="Helvetica-Bold",
+                fontSize=14,
+                leading=18,
+                alignment=1,
+                textColor=colors.HexColor("#1e3a8a"),
+            )
+            sub_style = ParagraphStyle(
+                "RepSub",
+                parent=styles["Normal"],
+                fontName="Helvetica",
+                fontSize=9,
+                leading=12,
+                alignment=1,
+                textColor=colors.HexColor("#475569"),
+            )
+
+            story = [
+                Paragraph(f"BÁO CÁO TÌNH HÌNH NHẬP - XUẤT - TỒN VÀ SỬ DỤNG HÓA CHẤT THÁNG {month:02d}/{year}", title_style),
+                Spacer(1, 4),
+                Paragraph(f"Đơn vị: {ENTERPRISE_INFO['company_name_vi']} | MST: {ENTERPRISE_INFO['tax_code']}", sub_style),
+                Spacer(1, 10),
+            ]
+
+            table_data = [
+                ["STT", "Mã SP", "Tên Hóa Chất", "Số CAS", "ĐVT", "Tồn Đầu", "Nhập Kỳ", "Xuất Kỳ", "Tồn Cuối", "Ngưỡng", "Vị Trí Kho"]
+            ]
+            for idx, r in enumerate(records, start=1):
+                c_name = r.get("chemical_name") or r.get("product_name") or r.get("chemical_id")
+                table_data.append([
+                    str(idx),
+                    str(r.get("product_code") or r.get("chemical_id")),
+                    c_name[:25],
+                    str(r.get("cas_number") or ""),
+                    str(r.get("unit") or "kg"),
+                    f"{r.get('opening_stock', 0):,.1f}",
+                    f"{r.get('import_qty', 0):,.1f}",
+                    f"{r.get('export_qty', 0):,.1f}",
+                    f"{r.get('closing_stock', 0):,.1f}",
+                    f"{r.get('safety_threshold') or 'N/A'}",
+                    str(r.get("storage_location") or "Kho chính")[:12],
+                ])
+
+            t = Table(table_data)
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a8a")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 8),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#94a3b8")),
+            ]))
+            story.append(t)
+            doc.build(story)
+            return buf.getvalue()
+        except Exception as re_err:
+            logger.error("ReportLab fallback also failed: %s", re_err)
+            raise RuntimeError(f"Không thể tạo file PDF báo cáo: {re_err}")
+
+    @classmethod
+    def generate_excel_template(cls) -> bytes:
+        """
+        Tạo tệp Excel mẫu (.xlsx) phục vụ cho thủ kho nhập dữ liệu hàng loạt (Batch Import).
+        Bao gồm các cột chuẩn, hướng dẫn và công thức mẫu.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "NXT_Template"
+
+        header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        header_font = Font(name="Times New Roman", size=10, bold=True, color="FFFFFF")
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style="thin", color="CBD5E1"),
+            right=Side(style="thin", color="CBD5E1"),
+            top=Side(style="thin", color="CBD5E1"),
+            bottom=Side(style="thin", color="CBD5E1"),
+        )
+
+        headers = [
+            "Mã Sản Phẩm (*)", "Tên Hóa Chất (*)", "Số CAS", "Đơn Vị Tính",
+            "Tồn Đầu Kỳ", "Nhập Trong Tháng", "Xuất Sử Dụng", "Ngưỡng An Toàn (kg)",
+            "Vị Trí Lưu Kho", "Mục Đích Sử Dụng", "Ghi Chú"
+        ]
+
+        ws.append(headers)
+        ws.row_dimensions[1].height = 28
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_align
+            cell.border = thin_border
+
+        sample_data = [
+            ["FTU0001", "Dung môi Toluene", "108-88-3", "kg", 500.0, 200.0, 350.0, 50000.0, "Kho Dung Môi A1", "Pha loãng sơn phủ", "Tiền chất CN IV.C NĐ 26"],
+            ["FTU0002", "Axeton (Acetone)", "67-64-1", "kg", 300.0, 150.0, 200.0, 50000.0, "Kho Dung Môi A2", "Tẩy rửa bản mạch", "Tiền chất CN IV.C NĐ 26"],
+            ["FTU0003", "Axit Sunfuric 98%", "7664-93-9", "kg", 1000.0, 500.0, 400.0, 50000.0, "Kho Hóa Chất Axit", "Xử lý nước thải", "Hóa chất có điều kiện NĐ 24"],
+        ]
+        for row in sample_data:
+            ws.append(row)
+
+        for row_idx in range(2, len(sample_data) + 2):
+            for col_idx in range(1, len(headers) + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.font = Font(name="Times New Roman", size=10)
+                cell.border = thin_border
+                if col_idx in [5, 6, 7, 8]:
+                    cell.alignment = Alignment(horizontal="right", vertical="center")
+                    cell.number_format = "#,##0.00"
+                elif col_idx in [1, 3, 4]:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                else:
+                    cell.alignment = Alignment(horizontal="left", vertical="center")
+
+        widths = [16, 25, 14, 12, 14, 16, 14, 18, 18, 22, 25]
+        for col_idx, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = w
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    @classmethod
+    def import_excel(cls, period_ident: Union[int, str], file_bytes: bytes, filename: str = "") -> Dict[str, Any]:
+        """
+        Nhập dữ liệu hàng loạt từ tệp Excel (.xlsx) vào kỳ báo cáo được chỉ định.
+        Hệ thống tự động nhận diện các cột theo tên hoặc chỉ số, đối chiếu hóa chất trong Sổ CIL
+        và tự động cập nhật / tạo mới dòng tồn kho kèm tính toán Tồn Cuối Kỳ và Cảnh Báo An Toàn.
+        """
+        period = cls.get_period(period_ident)
+        if not period:
+            raise ValueError(f"Không tìm thấy kỳ báo cáo '{period_ident}' để nhập dữ liệu.")
+
+        period_id = int(period["id"])
+        period_key = str(period["period_key"])
+
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+            ws = wb.active
+        except Exception as e:
+            raise ValueError(f"Tệp không phải là bảng tính Excel hợp lệ (.xlsx): {str(e)}")
+
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows or len(rows) < 2:
+            return {
+                "success": False,
+                "message": "Tệp Excel không có dòng dữ liệu nào sau tiêu đề cột.",
+                "imported_count": 0,
+                "updated_count": 0,
+                "errors": ["File rỗng hoặc chỉ có dòng tiêu đề."]
+            }
+
+        header_row = [str(c or "").strip().lower() for c in rows[0]]
+
+        col_code = -1
+        col_name = -1
+        col_cas = -1
+        col_unit = -1
+        col_open = -1
+        col_imp = -1
+        col_exp = -1
+        col_threshold = -1
+        col_loc = -1
+        col_purpose = -1
+        col_notes = -1
+
+        for idx, h in enumerate(header_row):
+            if any(k in h for k in ["mã", "code", "ma_san_pham", "product_code", "chemical_id", "ma_hang"]):
+                if col_code == -1: col_code = idx
+            elif any(k in h for k in ["tên", "name", "ten_hoa_chat", "chemical_name", "product_name"]):
+                if col_name == -1: col_name = idx
+            elif any(k in h for k in ["cas", "so_cas"]):
+                if col_cas == -1: col_cas = idx
+            elif any(k in h for k in ["đvt", "dvt", "đơn vị", "don_vi", "unit"]):
+                if col_unit == -1: col_unit = idx
+            elif any(k in h for k in ["đầu", "ton_dau", "dau_ky", "opening", "initial"]):
+                if col_open == -1: col_open = idx
+            elif any(k in h for k in ["nhập", "nhap", "tong_nhap", "import"]):
+                if col_imp == -1: col_imp = idx
+            elif any(k in h for k in ["xuất", "xuat", "tong_xuat", "export", "su_dung"]):
+                if col_exp == -1: col_exp = idx
+            elif any(k in h for k in ["ngưỡng", "nguong", "dinh_muc", "threshold"]):
+                if col_threshold == -1: col_threshold = idx
+            elif any(k in h for k in ["vị trí", "vi_tri", "kho", "location"]):
+                if col_loc == -1: col_loc = idx
+            elif any(k in h for k in ["mục đích", "muc_dich", "purpose"]):
+                if col_purpose == -1: col_purpose = idx
+            elif any(k in h for k in ["ghi chú", "ghi_chu", "notes", "luu_y"]):
+                if col_notes == -1: col_notes = idx
+
+        if col_code == -1 and len(header_row) >= 1: col_code = 0
+        if col_name == -1 and len(header_row) >= 2: col_name = 1
+        if col_cas == -1 and len(header_row) >= 3: col_cas = 2
+        if col_unit == -1 and len(header_row) >= 4: col_unit = 3
+        if col_open == -1 and len(header_row) >= 5: col_open = 4
+        if col_imp == -1 and len(header_row) >= 6: col_imp = 5
+        if col_exp == -1 and len(header_row) >= 7: col_exp = 6
+        if col_threshold == -1 and len(header_row) >= 8: col_threshold = 7
+        if col_loc == -1 and len(header_row) >= 9: col_loc = 8
+        if col_purpose == -1 and len(header_row) >= 10: col_purpose = 9
+        if col_notes == -1 and len(header_row) >= 11: col_notes = 10
+
+        imported_count = 0
+        updated_count = 0
+        errors = []
+
+        def _to_float(v) -> float:
+            if v is None: return 0.0
+            if isinstance(v, (int, float)): return float(v)
+            try:
+                s = str(v).replace(",", "").replace(" ", "").strip()
+                return float(s) if s else 0.0
+            except Exception:
+                return 0.0
+
+        existing_records = {r["chemical_id"]: r for r in cls.list_records(period_id)}
+
+        cil_chems = {}
+        with cls.get_connection() as conn:
+            cil_rows = conn.execute("SELECT * FROM chemicals").fetchall()
+            for cr in cil_rows:
+                d = dict(cr)
+                cid = d.get("chemical_id") or d.get("product_code")
+                if cid:
+                    cil_chems[cid] = d
+                cas_p = d.get("cas_primary")
+                if cas_p:
+                    cil_chems[cas_p] = d
+
+        for row_idx, row_vals in enumerate(rows[1:], start=2):
+            if not any(row_vals):
+                continue
+
+            code_val = str(row_vals[col_code] or "").strip() if col_code >= 0 and col_code < len(row_vals) else ""
+            name_val = str(row_vals[col_name] or "").strip() if col_name >= 0 and col_name < len(row_vals) else ""
+            cas_val = str(row_vals[col_cas] or "").strip() if col_cas >= 0 and col_cas < len(row_vals) else ""
+            unit_val = str(row_vals[col_unit] or "kg").strip() if col_unit >= 0 and col_unit < len(row_vals) else "kg"
+            open_val = _to_float(row_vals[col_open]) if col_open >= 0 and col_open < len(row_vals) else 0.0
+            imp_val = _to_float(row_vals[col_imp]) if col_imp >= 0 and col_imp < len(row_vals) else 0.0
+            exp_val = _to_float(row_vals[col_exp]) if col_exp >= 0 and col_exp < len(row_vals) else 0.0
+            thresh_val = _to_float(row_vals[col_threshold]) if col_threshold >= 0 and col_threshold < len(row_vals) and row_vals[col_threshold] is not None else None
+            loc_val = str(row_vals[col_loc] or "").strip() if col_loc >= 0 and col_loc < len(row_vals) else ""
+            purp_val = str(row_vals[col_purpose] or "").strip() if col_purpose >= 0 and col_purpose < len(row_vals) else ""
+            notes_val = str(row_vals[col_notes] or "").strip() if col_notes >= 0 and col_notes < len(row_vals) else ""
+
+            if not code_val and not name_val:
+                continue
+
+            chem_id = code_val or f"CHEM-{cas_val or row_idx:04d}"
+
+            matched_cil = cil_chems.get(chem_id) or (cil_chems.get(cas_val) if cas_val else None)
+            if matched_cil:
+                chem_id = matched_cil.get("chemical_id") or matched_cil.get("product_code") or chem_id
+                name_val = name_val or matched_cil.get("product_name_vi") or matched_cil.get("product_name_original") or ""
+                cas_val = cas_val or matched_cil.get("cas_primary") or ""
+
+            if chem_id in existing_records:
+                rec_id = existing_records[chem_id]["id"]
+                up_fields = {
+                    "opening_stock": open_val,
+                    "import_qty": imp_val,
+                    "export_qty": exp_val,
+                }
+                if loc_val: up_fields["storage_location"] = loc_val
+                if purp_val: up_fields["export_purpose_breakdown"] = purp_val
+                if notes_val: up_fields["safety_notes"] = notes_val
+                if thresh_val is not None: up_fields["safety_threshold"] = thresh_val
+                cls.update_record(rec_id, up_fields)
+                updated_count += 1
+            else:
+                closing = round(open_val + imp_val - exp_val, 4)
+                if closing < 0:
+                    warn = "negative_stock"
+                    if not notes_val:
+                        notes_val = f"CẢNH BÁO: Tồn cuối kỳ âm ({closing:,.1f} {unit_val}) do xuất vượt tồn kho!"
+                elif thresh_val is not None and thresh_val > 0 and closing >= thresh_val:
+                    warn = "exceed_threshold" if closing > thresh_val else "at_threshold"
+                    if not notes_val:
+                        notes_val = f"CẢNH BÁO: Tồn kho đạt/vượt ngưỡng an toàn Phụ lục IV NĐ 24 ({closing:,.1f} / {thresh_val:,.1f} {unit_val})"
+                else:
+                    warn = "normal"
+
+                with cls.get_connection() as conn:
+                    conn.execute("""
+                        INSERT INTO monthly_inventory_records (
+                            period_id, period_key, chemical_id, product_code, chemical_name, product_name,
+                            cas_number, supplier, unit, opening_stock, initial_stock, import_qty, total_import,
+                            export_qty, total_export, closing_stock, ending_stock, storage_location,
+                            safety_threshold, legal_classification, ghs_symbols, warning_status, safety_notes, notes,
+                            export_purpose_breakdown
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?,
+                            ?
+                        )
+                    """, (
+                        period_id, period_key, chem_id, code_val or chem_id, name_val or chem_id, name_val or chem_id,
+                        cas_val, "", unit_val or "kg", open_val, open_val, imp_val, imp_val,
+                        exp_val, exp_val, closing, closing, loc_val or "Kho chính",
+                        thresh_val, "", "", warn, notes_val, notes_val,
+                        purp_val
+                    ))
+                    conn.commit()
+                existing_records[chem_id] = {"id": -1, "chemical_id": chem_id}
+                imported_count += 1
+
+        return {
+            "success": True,
+            "period_key": period_key,
+            "imported_count": imported_count,
+            "updated_count": updated_count,
+            "total_processed": imported_count + updated_count,
+            "errors": errors,
+            "message": f"Nạp thành công {imported_count + updated_count} dòng hóa chất vào kỳ {period_key} ({imported_count} tạo mới, {updated_count} cập nhật)."
+        }
+

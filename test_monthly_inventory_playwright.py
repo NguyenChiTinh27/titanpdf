@@ -161,6 +161,30 @@ async def main():
             await page.wait_for_timeout(400)
             print("  ✓ Mode switched back to: Bảng Tổng Hợp (NXT)")
 
+        # Verify new Export PDF and Import Excel buttons
+        pdf_btn = await page.query_selector('#nxt-btn-export-pdf')
+        assert pdf_btn is not None, "Button #nxt-btn-export-pdf must exist"
+        print("  ✓ Verified button: 📄 Xuất PDF (.pdf)")
+
+        import_btn = await page.query_selector('#nxt-btn-import-excel')
+        assert import_btn is not None, "Button #nxt-btn-import-excel must exist"
+        print("  ✓ Verified button: 📥 Nhập Excel")
+
+        # Test opening and closing Import Excel modal
+        await import_btn.click()
+        await page.wait_for_timeout(300)
+        import_modal = await page.query_selector('#nxt-modal-import-excel')
+        is_hidden = await import_modal.evaluate("el => el.classList.contains('hidden')")
+        assert not is_hidden, "Import Excel modal should be visible"
+        print("  ✓ Successfully opened: 📥 Modal Nhập Excel Hàng Loạt")
+
+        # Close modal
+        await page.evaluate("() => window.closeMonthlyImportExcelModal()")
+        await page.wait_for_timeout(200)
+        is_hidden_now = await import_modal.evaluate("el => el.classList.contains('hidden')")
+        assert is_hidden_now, "Import Excel modal should be hidden after closing"
+        print("  ✓ Successfully closed: 📥 Modal Nhập Excel Hàng Loạt")
+
         # 6. Take Verified Screenshot
         print("[6/6] Capturing high-resolution verified UI screenshot...")
         screenshot_path = "e2e_monthly_inventory_tab_verified.png"

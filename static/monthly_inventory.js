@@ -850,6 +850,88 @@
     a.remove();
   }
 
+  function exportMonthlyPdf() {
+    if (!state.currentPeriodKey) return;
+    showToast('Đang kết xuất tệp Báo Cáo PDF chính thức (A4 Ngang)...', 'info');
+    const url = `${API_BASE}/export-pdf?period_key=${encodeURIComponent(state.currentPeriodKey)}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Bao_Cao_Hoa_Chat_Thang_${state.currentPeriodKey}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function openImportExcelModal() {
+    const modal = byId('nxt-modal-import-excel');
+    if (!modal) return;
+    const fileInp = byId('nxt-import-excel-file');
+    const msg = byId('nxt-import-result-msg');
+    if (fileInp) fileInp.value = '';
+    if (msg) {
+      msg.style.display = 'none';
+      msg.textContent = '';
+    }
+    modal.classList.remove('hidden');
+  }
+
+  function closeImportExcelModal() {
+    const modal = byId('nxt-modal-import-excel');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  async function submitImportExcel() {
+    const fileInp = byId('nxt-import-excel-file');
+    const msg = byId('nxt-import-result-msg');
+    const btn = byId('nxt-btn-submit-import-excel');
+
+    if (!fileInp || !fileInp.files || fileInp.files.length === 0) {
+      showToast('Vui lòng chọn một tệp Excel (.xlsx) để nạp', 'error');
+      return;
+    }
+
+    const file = fileInp.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('period_key', state.currentPeriodKey);
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Đang phân tích & nạp...';
+      }
+      showToast('Đang đọc và phân tích file Excel kho...', 'info');
+
+      const res = await fetch(`${API_BASE}/import-excel`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Nạp file thất bại');
+      }
+
+      showToast(data.message || 'Nạp dữ liệu từ Excel thành công!', 'success');
+      closeImportExcelModal();
+      await loadPeriodData(state.currentPeriodKey);
+    } catch (err) {
+      if (msg) {
+        msg.style.display = 'block';
+        msg.style.background = '#fef2f2';
+        msg.style.color = '#dc2626';
+        msg.style.border = '1px solid #fecaca';
+        msg.textContent = '❌ Lỗi: ' + err.message;
+      }
+      showToast('Lỗi nạp Excel: ' + err.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Bắt Đầu Nạp Dữ Liệu';
+      }
+    }
+  }
+
   function printMonthlyReport() {
     if (!state.currentPeriodKey) return;
     const url = `${API_BASE}/print-html?period_key=${encodeURIComponent(state.currentPeriodKey)}`;
@@ -1166,11 +1248,17 @@
     const addCilBtn = byId('nxt-btn-add-chemicals-cil');
     if (addCilBtn) addCilBtn.addEventListener('click', openAddCilModal);
 
+    const importExcelBtn = byId('nxt-btn-import-excel');
+    if (importExcelBtn) importExcelBtn.addEventListener('click', openImportExcelModal);
+
     const recordTransBtn = byId('nxt-btn-record-transaction');
     if (recordTransBtn) recordTransBtn.addEventListener('click', () => openTransactionModal());
 
     const exportBtn = byId('nxt-btn-export-excel');
     if (exportBtn) exportBtn.addEventListener('click', exportMonthlyExcel);
+
+    const exportPdfBtn = byId('nxt-btn-export-pdf');
+    if (exportPdfBtn) exportPdfBtn.addEventListener('click', exportMonthlyPdf);
 
     const printBtn = byId('nxt-btn-print-report');
     if (printBtn) printBtn.addEventListener('click', printMonthlyReport);
@@ -1203,6 +1291,10 @@
   window.openTransactionModalForChemical = (chemId) => openTransactionModal(chemId, 'EXPORT');
   window.closeMonthlyTransactionModal = closeTransactionModal;
   window.submitMonthlyTransaction = submitTransaction;
+  window.exportMonthlyPdf = exportMonthlyPdf;
+  window.openMonthlyImportExcelModal = openImportExcelModal;
+  window.closeMonthlyImportExcelModal = closeImportExcelModal;
+  window.submitMonthlyImportExcel = submitImportExcel;
   window.createMonthlyPeriodFromModal = async () => {
     const m = byId('nxt-new-period-month').value;
     const y = byId('nxt-new-period-year').value;
