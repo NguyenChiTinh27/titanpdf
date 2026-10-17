@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>{{PRODUCT_NAME}} — Tra Cứu Khẩn Cấp MSDS | ZhanChen EHS</title>
+    <style>
+        :root {
+            --bg-page: #0b0f19;
+            --bg-card: #131b2e;
+            --bg-card-sub: #1e293b;
+            --border-card: #2d3748;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --danger-red: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.15);
+            --warning-amber: #f59e0b;
+            --warning-bg: rgba(245, 158, 11, 0.15);
+            --safe-green: #10b981;
+            --safe-bg: rgba(16, 185, 129, 0.15);
+            --blue-accent: #0ea5e9;
+            --purple-accent: #8b5cf6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            line-height: 1.5;
+            padding: 12px;
+            padding-bottom: 90px;
+            max-width: 540px;
+            margin: 0 auto;
+        }
+
+        /* Top Brand Bar */
+        .brand-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+        .brand-logo-text {
+            font-size: 13px;
+            font-weight: 700;
+            color: #38bdf8;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .brand-badge {
+            font-size: 11px;
+            background: rgba(14, 165, 233, 0.2);
+            color: #38bdf8;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+
+        /* Signal Word Banner */
+        .signal-banner {
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            text-align: center;
+            border: 2px solid;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .signal-banner.danger {
+            background: linear-gradient(180deg, rgba(239, 68, 68, 0.25) 0%, rgba(185, 28, 28, 0.15) 100%);
+            border-color: var(--danger-red);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+        }
+        .signal-banner.warning {
+            background: linear-gradient(180deg, rgba(245, 158, 11, 0.25) 0%, rgba(180, 83, 9, 0.15) 100%);
+            border-color: var(--warning-amber);
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+        }
+        .signal-banner.safe {
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.25) 0%, rgba(4, 120, 87, 0.15) 100%);
+            border-color: var(--safe-green);
+        }
+        .signal-word {
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .signal-subtext {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        /* Chemical Identity Card */
+        .chem-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .chem-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .chem-name {
+            font-size: 20px;
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1.3;
+        }
+        .code-tag {
+            background: #334155;
+            color: #f1f5f9;
+            font-family: monospace;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        .chem-orig-name {
+            font-size: 13px;
+            color: var(--text-sub);
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+        .chem-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            background: var(--bg-card-sub);
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+        .meta-item b {
+            color: #cbd5e1;
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+        .meta-item span {
+            color: #38bdf8;
+            font-weight: 600;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        /* GHS Pictograms Row */
+        .ghs-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 10px;
+            border: 1px dashed var(--border-card);
+        }
+        .ghs-icon-wrap {
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 2px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        .ghs-icon-wrap svg,
+        .ghs-icon-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Emergency Section Cards */
+        .section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .sec-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .sec-icon {
+            font-size: 18px;
+        }
+        .sec-title-fire { color: #f87171; }
+        .sec-title-spill { color: #38bdf8; }
+        .sec-title-firstaid { color: #34d399; }
+        .sec-title-ppe { color: #c084fc; }
+
+        /* Block contents */
+        .action-box {
+            background: var(--bg-card-sub);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .action-box:last-child {
+            margin-bottom: 0;
+        }
+        .action-box-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .box-recommended {
+            border-left: 3px solid #10b981;
+        }
+        .box-recommended .action-box-title {
+            color: #34d399;
+        }
+        .box-forbidden {
+            border-left: 3px solid #ef4444;
+            background: rgba(239, 68, 68, 0.08);
+        }
+        .box-forbidden .action-box-title {
+            color: #f87171;
+        }
+
+        /* 4 Steps First Aid Grid */
+        .first-aid-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .first-aid-item {
+            background: var(--bg-card-sub);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+        .first-aid-label {
+            font-weight: 700;
+            color: #34d399;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* PPE Grid */
+        .ppe-chips {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .ppe-chip {
+            background: var(--bg-card-sub);
+            border: 1px solid rgba(192, 132, 252, 0.2);
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 12px;
+            color: #e2e8f0;
+        }
+        .ppe-chip b {
+            display: block;
+            color: #c084fc;
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+
+        /* 1-Tap Emergency Hotlines */
+        .hotline-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(11, 15, 25, 0.95);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border-card);
+            padding: 10px 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1.4fr;
+            gap: 8px;
+            max-width: 540px;
+            margin: 0 auto;
+            z-index: 1000;
+        }
+        .call-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 12px;
+            padding: 12px 6px;
+            border-radius: 10px;
+            color: #ffffff;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            min-height: 44px;
+        }
+        .btn-fire {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+        .btn-med {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+        }
+        .btn-hse {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        }
+
+        .hazard-tags-wrap {
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--text-sub);
+            background: var(--bg-card-sub);
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        .hazard-tags-wrap b {
+            color: #f1f5f9;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-sub);
+            margin-top: 20px;
+            padding: 10px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Brand Header -->
+    <div class="brand-header">
+        <div class="brand-logo-text">🛡️ ZHANCHEN EHS EMERGENCY</div>
+        <div class="brand-badge">QUẢN LÝ HÓA CHẤT 2026</div>
+    </div>
+
+    <!-- Signal Word Banner -->
+    <div class="signal-banner {{SIGNAL_CLASS}}">
+        <div class="signal-word">{{SIGNAL_WORD}}</div>
+        <div class="signal-subtext">{{HAZARD_SUMMARY}}</div>
+    </div>
+
+    <!-- Chemical Identity Card -->
+    <div class="chem-card">
+        <div class="chem-header">
+            <h1 class="chem-name">{{PRODUCT_NAME}}</h1>
+            <div class="code-tag">{{PRODUCT_CODE}}</div>
+        </div>
+        <div class="chem-orig-name">{{ORIGINAL_NAME}}</div>
+
+        <div class="chem-meta-grid">
+            <div class="meta-item">
+                <b>Số CAS Chính:</b>
+                <span>{{CAS_NUMBER}}</span>
+            </div>
+            <div class="meta-item">
+                <b>Phân Loại Hàng:</b>
+                <span>{{ITEM_TYPE_LABEL}}</span>
+            </div>
+            <div class="meta-item">
+                <b>Điểm Chớp Cháy:</b>
+                <span>{{FLASH_POINT}}</span>
+            </div>
+            <div class="meta-item">
+                <b>Vị Trí Lưu Kho:</b>
+                <span>{{STORAGE_LOCATION}}</span>
+            </div>
+        </div>
+
+        <!-- Inline GHS Pictograms -->
+        <div class="ghs-row">
+            {{GHS_ICONS_HTML}}
+        </div>
+
+        <div class="hazard-tags-wrap">
+            <b>Cảnh báo mối nguy (H-Statements):</b><br>
+            {{H_STATEMENTS}}
+        </div>
+    </div>
+
+    <!-- 1. 🔥 CHỮA CHÁY & DẬP LỬA (Fire Fighting) -->
+    <div class="section-card">
+        <div class="sec-title-row sec-title-fire">
+            <span class="sec-icon">🔥</span>
+            <span>ỨNG PHÓ CHÁY NỔ & DẬP LỬA</span>
+        </div>
+        <div class="action-box box-recommended">
+            <div class="action-box-title">✅ PHƯƠNG TIỆN CHỮA CHÁY KHUYÊN DÙNG</div>
+            <div>{{FIRE_RECOMMENDED}}</div>
+        </div>
+        <div class="action-box box-forbidden">
+            <div class="action-box-title">❌ CẤM KỴ TUYỆT ĐỐI KHI DẬP LỬA</div>
+            <div>{{FIRE_FORBIDDEN}}</div>
+        </div>
+        <div class="action-box" style="margin-top: 8px;">
+            <div class="action-box-title" style="color: #cbd5e1;">⚠️ LƯU Ý ĐẶC BIỆT KHI CHÁY</div>
+            <div>Thùng phuy, bồn chứa có nguy cơ phát nổ do quá áp khi gặp nhiệt cao. Phun sương nước từ vị trí an toàn để làm mát vỏ bồn từ xa.</div>
+        </div>
+    </div>
+
+    <!-- 2. 🌊 TRÀN ĐỔ & RÒ RỈ (Spills) -->
+    <div class="section-card">
+        <div class="sec-title-row sec-title-spill">
+            <span class="sec-icon">🌊</span>
+            <span>XỬ LÝ SỰ CỐ TRÀN ĐỔ & RÒ RỈ</span>
+        </div>
+        <div class="action-box">
+            <div class="action-box-title" style="color: #38bdf8;">1. CÔ LẬP & DẬP TẮT NGUỒN NHIỆT</div>
+            <div>Ngắt toàn bộ cầu dao điện khu vực rò rỉ, cấm hút thuốc, cấm phát sinh tia lửa điện hoặc sử dụng thiết bị cầm tay không phòng nổ.</div>
+        </div>
+        <div class="action-box">
+            <div class="action-box-title" style="color: #38bdf8;">2. NGĂN CHẶN LAN RỘNG</div>
+            <div>Sử dụng phao quây cát khô, mùn cưa hoặc vật liệu thấm hút hóa chất bao quanh khu vực rò rỉ. Tuyệt đối không để hóa chất chảy vào cống rãnh thoát nước.</div>
+        </div>
+        <div class="action-box">
+            <div class="action-box-title" style="color: #38bdf8;">3. THU GOM & THÔNG GIÓ</div>
+            <div>{{SPILL_MEASURES}}</div>
+        </div>
+    </div>
+
+    <!-- 3. 🚑 4 BƯỚC SƠ CỨU NHANH (First Aid) -->
+    <div class="section-card">
+        <div class="sec-title-row sec-title-firstaid">
+            <span class="sec-icon">🚑</span>
+            <span>4 BƯỚC SƠ CỨU NHANH TẠI HIỆN TRƯỜNG</span>
+        </div>
+        <div class="first-aid-list">
+            <div class="first-aid-item">
+                <div class="first-aid-label">👁️ 1. DÍNH VÀO MẮT</div>
+                <div>{{FIRST_AID_EYES}}</div>
+            </div>
+            <div class="first-aid-item">
+                <div class="first-aid-label">🧴 2. DÍNH VÀO DA</div>
+                <div>{{FIRST_AID_SKIN}}</div>
+            </div>
+            <div class="first-aid-item">
+                <div class="first-aid-label">🫁 3. HÍT PHẢI HƠI HÓA CHẤT</div>
+                <div>{{FIRST_AID_INHALATION}}</div>
+            </div>
+            <div class="first-aid-item">
+                <div class="first-aid-label">⚠️ 4. NUỐT PHẢI</div>
+                <div>{{FIRST_AID_INGESTION}}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 🛡️ TRANG BỊ BẢO HỘ LAO ĐỘNG (PPE) -->
+    <div class="section-card">
+        <div class="sec-title-row sec-title-ppe">
+            <span class="sec-icon">🛡️</span>
+            <span>TRANG BỊ BẢO HỘ LAO ĐỘNG BẮT BUỘC (PPE)</span>
+        </div>
+        <div class="ppe-chips">
+            <div class="ppe-chip">
+                <b>BẢO VỆ MẮT:</b>
+                {{PPE_EYES}}
+            </div>
+            <div class="ppe-chip">
+                <b>HÔ HẤP:</b>
+                {{PPE_RESPIRATORY}}
+            </div>
+            <div class="ppe-chip">
+                <b>BẢO VỆ TAY:</b>
+                {{PPE_HANDS}}
+            </div>
+            <div class="ppe-chip">
+                <b>THÂN & CHÂN:</b>
+                {{PPE_SKIN}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Notes -->
+    <div class="footer-note">
+        <b>CÔNG TY TNHH SƠN ZHANCHEN (VIỆT NAM)</b><br>
+        Hệ thống Tra Cứu Khẩn Cấp Di Động TitanPDF — Tuân thủ Luật Hóa chất 69/2025/QH15 & Thông tư 01/2026/TT-BCT.<br>
+        Trong trường hợp sự cố vượt tầm kiểm soát, kích hoạt ngay Kế hoạch PNUPSC cơ sở.
+    </div>
+
+    <!-- Fixed Bottom 1-Tap Emergency Hotlines -->
+    <div class="hotline-bar">
+        <a href="tel:114" class="call-btn btn-fire">
+            <span>🚨 114 PCCC</span>
+        </a>
+        <a href="tel:115" class="call-btn btn-med">
+            <span>🚑 115 Y TẾ</span>
+        </a>
+        <a href="tel:02743768888" class="call-btn btn-hse">
+            <span>☎️ HSE ZHANCHEN</span>
+        </a>
+    </div>
+
+</body>
+</html>

@@ -4,6 +4,7 @@ import shutil
 import zipfile
 import json
 import re
+import html
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -15,10 +16,11 @@ import socket
 import secrets
 import subprocess
 from pydantic import BaseModel
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Body, Request, Response
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Body, Request, Response, Query
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.background import BackgroundTask
 try:
     from reportlab.graphics.barcode import qr
     from reportlab.graphics.shapes import Drawing
@@ -84,6 +86,38 @@ async def add_no_cache_headers(request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+
+def cleanup_old_exports(max_age_seconds: int = 3600) -> int:
+    """Tự động dọn dẹp các tệp ZIP hoặc tệp tạm trong exports/ đã tồn tại quá max_age_seconds (mặc định 1 giờ)."""
+    from core.msds_intelligence import EXPORTS_DIR
+    removed_count = 0
+    now = time.time()
+    try:
+        if EXPORTS_DIR.exists():
+            for p in EXPORTS_DIR.iterdir():
+                if p.is_file() and (p.name.startswith("temp_") or p.name.endswith(".zip") or p.name.startswith("The_An_Toan_") or p.name.startswith("MSDS_Goc_")):
+                    try:
+                        if now - p.stat().st_mtime > max_age_seconds:
+                            p.unlink()
+                            removed_count += 1
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return removed_count
+
+
+@app.on_event("startup")
+def app_startup_event():
+    """Khởi động ứng dụng: cấu hình DB và dọn dẹp thư mục exports/."""
+    from core.msds_intelligence import MSDSDatabase
+    try:
+        MSDSDatabase.init_db()
+    except Exception:
+        pass
+    cleanup_old_exports()
+
 
 @app.get("/api/health")
 def api_health():
@@ -1863,6 +1897,645 @@ def api_msds_download_original(chem_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi tải tệp MSDS gốc: {str(e)}")
+
+
+# ==============================================================================
+# BATCH DOWNLOAD ENDPOINTS (MILESTONE M1)
+# ==============================================================================
+
+class BatchMsdsDownloadRequest(BaseModel):
+    ids: Optional[List[str]] = None
+    scope: Optional[str] = None
+
+
+def _resolve_batch_msds_chemicals(ids_list: Optional[List[str]], ids_str: Optional[str], scope: Optional[str]):
+    from core.msds_intelligence import MSDSDatabase
+    target_ids = []
+    if ids_list:
+        target_ids.extend([str(x).strip() for x in ids_list if str(x).strip()])
+    if ids_str:
+        target_ids.extend([x.strip() for x in ids_str.split(",") if x.strip()])
+    
+    all_chems = MSDSDatabase.list_chemicals()
+    if scope == "all" or not target_ids:
+        return all_chems
+    
+    id_set = {t.upper() for t in target_ids}
+    matched = []
+    for c in all_chems:
+        cid = str(c.get("chemical_id") or "").upper()
+        pcode = str(c.get("product_code") or "").upper()
+        db_id = str(c.get("id") or "").upper()
+        if cid in id_set or pcode in id_set or db_id in id_set:
+            matched.append(c)
+    return matched
+
+
+def _handle_batch_download_original(ids_list: Optional[List[str]], ids_str: Optional[str], scope: Optional[str]):
+    from core.msds_intelligence import MSDSDatabase, EXPORTS_DIR, to_unaccented_slug
+    try:
+        chems = _resolve_batch_msds_chemicals(ids_list, ids_str, scope)
+        if not chems:
+            raise HTTPException(status_code=404, detail="Không tìm thấy hóa chất nào để tải tệp MSDS gốc.")
+
+        EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        now_dt = datetime.now()
+        date_str = now_dt.strftime("%Y%m%d")
+        zip_filename = f"MSDS_Goc_TongHop_{date_str}.zip"
+        unique_zip_path = EXPORTS_DIR / f"MSDS_Goc_TongHop_{date_str}_{uuid.uuid4().hex[:8]}.zip"
+
+        packed_files = []
+        missing_files = []
+        seen_names = set()
+
+        with zipfile.ZipFile(unique_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for chem in chems:
+                cid = str(chem.get("chemical_id") or "").strip()
+                pcode = to_unaccented_slug(chem.get("product_code") or cid or "CHEM")
+                pname = to_unaccented_slug(chem.get("product_name_vi") or chem.get("product_name_original") or "HoaChat")
+
+                phys_path = MSDSDatabase.resolve_msds_file_path(cid)
+                if phys_path and phys_path.exists() and phys_path.is_file():
+                    ext = phys_path.suffix.lower() or ".pdf"
+                    base_name = f"{pcode}_{pname}"
+                    inner_name = f"{base_name}{ext}"
+                    counter = 2
+                    while inner_name in seen_names:
+                        inner_name = f"{base_name}_{counter}{ext}"
+                        counter += 1
+                    seen_names.add(inner_name)
+
+                    zf.write(phys_path, arcname=inner_name)
+                    packed_files.append((cid, pcode, pname, inner_name))
+                else:
+                    missing_files.append((cid, pcode, pname))
+
+            manifest_lines = [
+                "================================================================================",
+                "DANH MỤC TỆP MSDS GỐC ĐƯỢC ĐÓNG GÓI TỪ HỆ THỐNG TITANPDF EHS CHEMICAL SUITE",
+                "================================================================================",
+                f"Thời gian kết xuất: {now_dt.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Tổng số hóa chất yêu cầu: {len(chems)}",
+                f"Số tệp đóng gói thành công: {len(packed_files)}",
+                f"Số tệp thiếu/chưa có file gốc: {len(missing_files)}",
+                "",
+                "DANH SÁCH TỆP TRONG LƯU TRỮ ZIP:",
+            ]
+            for idx, (cid, pcode, pname, inner_name) in enumerate(packed_files, 1):
+                manifest_lines.append(f"  {idx:02d}. [{cid}] {pcode} - {pname} -> {inner_name}")
+
+            if missing_files:
+                manifest_lines.extend([
+                    "",
+                    "CẢNH BÁO - HÓA CHẤT CHƯA CÓ TỆP MSDS VẬT LÝ TRONG KHO data/msds_files:",
+                ])
+                for idx, (cid, pcode, pname) in enumerate(missing_files, 1):
+                    manifest_lines.append(f"  {idx:02d}. [{cid}] {pcode} - {pname}")
+
+            manifest_content = "\n".join(manifest_lines)
+            zf.writestr("_README_DANH_SACH_TEP.txt", manifest_content.encode("utf-8"))
+
+        return FileResponse(
+            str(unique_zip_path),
+            filename=zip_filename,
+            media_type="application/zip",
+            background=BackgroundTask(os.remove, str(unique_zip_path))
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi đóng gói ZIP MSDS gốc: {str(e)}")
+
+
+@app.post("/api/msds/download-batch-original")
+def api_msds_download_batch_original_post(
+    req: Optional[BatchMsdsDownloadRequest] = Body(None),
+    ids: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None)
+):
+    """Đóng gói và tải hàng loạt tệp MSDS gốc dạng ZIP theo danh sách ID hoặc toàn bộ kho."""
+    req_ids = req.ids if req else None
+    req_scope = (req.scope if req else None) or scope
+    return _handle_batch_download_original(req_ids, ids, req_scope)
+
+
+@app.get("/api/msds/download-batch-original")
+def api_msds_download_batch_original_get(
+    ids: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None)
+):
+    """Đóng gói và tải hàng loạt tệp MSDS gốc dạng ZIP qua GET query parameters."""
+    return _handle_batch_download_original(None, ids, scope)
+
+
+def _handle_batch_export_safety_cards(ids_list: Optional[List[str]], ids_str: Optional[str], scope: Optional[str]):
+    from core.msds_intelligence import MSDSDatabase, MSDSSafetyCardExporter, EXPORTS_DIR, to_unaccented_slug
+    try:
+        chems = _resolve_batch_msds_chemicals(ids_list, ids_str, scope)
+        if not chems:
+            raise HTTPException(status_code=404, detail="Không tìm thấy hóa chất nào để xuất Thẻ an toàn.")
+
+        EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        now_dt = datetime.now()
+        date_str = now_dt.strftime("%Y%m%d")
+        zip_filename = f"The_An_Toan_TongHop_{date_str}.zip"
+        unique_zip_path = EXPORTS_DIR / f"The_An_Toan_TongHop_{date_str}_{uuid.uuid4().hex[:8]}.zip"
+
+        seen_names = set()
+        temp_docx_files = []
+
+        with zipfile.ZipFile(unique_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for chem in chems:
+                cid = str(chem.get("chemical_id") or "").strip()
+                pcode = to_unaccented_slug(chem.get("product_code") or cid or "CHEM")
+                pname = to_unaccented_slug(chem.get("product_name_vi") or chem.get("product_name_original") or "HoaChat")
+
+                base_name = f"The_An_Toan_{pcode}_{pname}"
+                inner_name = f"{base_name}.docx"
+                counter = 2
+                while inner_name in seen_names:
+                    inner_name = f"{base_name}_{counter}.docx"
+                    counter += 1
+                seen_names.add(inner_name)
+
+                temp_card_path = EXPORTS_DIR / f"temp_{uuid.uuid4().hex[:8]}_{inner_name}"
+                docx_path = MSDSSafetyCardExporter.generate_safety_card_docx(chem, custom_path=temp_card_path)
+                temp_docx_files.append(docx_path)
+
+                zf.write(docx_path, arcname=inner_name)
+
+            manifest_lines = [
+                "================================================================================",
+                "DANH MỤC THẺ AN TOÀN HÓA CHẤT KHẨN CẤP WORD (.DOCX) - MỤC 3 GHS CHECKSUMLIST",
+                "================================================================================",
+                f"Thời gian kết xuất: {now_dt.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Tổng số Thẻ an toàn đã sinh: {len(seen_names)}",
+                "",
+                "DANH SÁCH TỆP TRONG LƯU TRỮ ZIP:",
+            ]
+            for idx, fname in enumerate(sorted(seen_names), 1):
+                manifest_lines.append(f"  {idx:02d}. {fname}")
+
+            manifest_content = "\n".join(manifest_lines)
+            zf.writestr("_README_DANH_SACH_THE.txt", manifest_content.encode("utf-8"))
+
+        for tf in temp_docx_files:
+            try:
+                if tf and tf.exists():
+                    tf.unlink()
+            except Exception:
+                pass
+
+        return FileResponse(
+            str(unique_zip_path),
+            filename=zip_filename,
+            media_type="application/zip",
+            background=BackgroundTask(os.remove, str(unique_zip_path))
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi đóng gói ZIP Thẻ an toàn Word: {str(e)}")
+
+
+@app.post("/api/msds/export-batch-safety-cards")
+def api_msds_export_batch_safety_cards_post(
+    req: Optional[BatchMsdsDownloadRequest] = Body(None),
+    ids: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None)
+):
+    """Xuất hàng loạt Thẻ an toàn Word (.docx) dạng ZIP theo danh sách ID hoặc toàn bộ kho."""
+    req_ids = req.ids if req else None
+    req_scope = (req.scope if req else None) or scope
+    return _handle_batch_export_safety_cards(req_ids, ids, req_scope)
+
+
+@app.get("/api/msds/export-batch-safety-cards")
+def api_msds_export_batch_safety_cards_get(
+    ids: Optional[str] = Query(None),
+    scope: Optional[str] = Query(None)
+):
+    """Xuất hàng loạt Thẻ an toàn Word (.docx) dạng ZIP qua GET query parameters."""
+    return _handle_batch_export_safety_cards(None, ids, scope)
+
+
+# ==============================================================================
+# GHS DECANTING LABEL MAKER & PRINT ENGINE ENDPOINTS (MILESTONE M2)
+# Under Circular 01/2026/TT-BCT (Ministry of Industry and Trade)
+# ==============================================================================
+
+class GhsLabelPdfExportRequest(BaseModel):
+    ids: Optional[List[str]] = None
+    chem_id: Optional[str] = None
+    size: Optional[str] = "A4_4UP"
+    facility: Optional[str] = None
+    decanting_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+    lot_number: Optional[str] = None
+
+
+@app.get("/api/msds/label-data/{chem_id}")
+def api_msds_label_data(chem_id: str):
+    """
+    Trả về dữ liệu định dạng nhãn chiết rót GHS theo Thông tư 01/2026/TT-BCT:
+    Tên chất, mã SP, CAS, đơn vị chiết rót, từ cảnh báo, hình đồ GHS, cảnh báo nguy cơ (H),
+    biện pháp phòng ngừa & sơ cứu (P), hotline ứng phó khẩn cấp.
+    """
+    from core.ghs_label_engine import prepare_label_data
+    from core.msds_intelligence import MSDSDatabase
+    chem = MSDSDatabase.get_chemical(chem_id)
+    if not chem:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy hóa chất với mã '{chem_id}'.")
+    data = prepare_label_data(chem)
+    return data
+
+
+@app.get("/api/msds/label-print-html/{chem_id}", response_class=HTMLResponse)
+def api_msds_label_print_html(chem_id: str, size: Optional[str] = Query("A4_4UP")):
+    """
+    Trả về trang HTML in nhãn phụ GHS chiết rót độc lập với CSS @media print chuẩn hóa,
+    hỗ trợ 4 preset: A4_4UP, A5, DECAL_150, DECAL_75. Fallback về A4_4UP nếu preset không hợp lệ.
+    """
+    from core.ghs_label_engine import prepare_label_data, generate_label_html
+    from core.msds_intelligence import MSDSDatabase
+    chem = MSDSDatabase.get_chemical(chem_id)
+    if not chem:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy hóa chất với mã '{chem_id}'.")
+    data = prepare_label_data(chem)
+    html_content = generate_label_html(data, size=size or "A4_4UP")
+    return HTMLResponse(content=html_content, status_code=200, media_type="text/html; charset=utf-8")
+
+
+@app.post("/api/msds/export-ghs-labels-pdf")
+def api_msds_export_ghs_labels_pdf(
+    req: Optional[GhsLabelPdfExportRequest] = Body(None),
+    chem_id: Optional[str] = Query(None),
+    size: Optional[str] = Query(None)
+):
+    """
+    Sinh và xuất tệp PDF vector (%PDF-) nhãn phụ GHS chiết rót theo Thông tư 01/2026/TT-BCT.
+    Hỗ trợ in nhãn đơn hoặc in hàng loạt nhiều hóa chất trên các khổ A4_4UP, A5, DECAL_150, DECAL_75.
+    """
+    from core.ghs_label_engine import prepare_label_data, generate_labels_pdf, normalize_preset_size
+    from core.msds_intelligence import MSDSDatabase
+
+    target_ids = []
+    preset_size = "A4_4UP"
+
+    if req:
+        if req.ids:
+            target_ids.extend([str(i).strip() for i in req.ids if str(i).strip()])
+        if req.chem_id and str(req.chem_id).strip() not in target_ids:
+            target_ids.append(str(req.chem_id).strip())
+        if req.size:
+            preset_size = req.size
+
+    if chem_id and chem_id not in target_ids:
+        target_ids.append(chem_id)
+    if size:
+        preset_size = size
+
+    # If no IDs specified, default to active inventory or sample
+    if not target_ids:
+        all_chems = MSDSDatabase.list_chemicals()
+        target_ids = [c.get("chemical_id") for c in all_chems if c.get("chemical_id")]
+
+    if not target_ids:
+        raise HTTPException(status_code=404, detail="Không có hóa chất nào được chỉ định để xuất nhãn.")
+
+    preset = normalize_preset_size(preset_size)
+    label_items = []
+    for cid in target_ids:
+        c = MSDSDatabase.get_chemical(cid)
+        if c:
+            label_items.append(prepare_label_data(c))
+        else:
+            label_items.append(prepare_label_data(cid))
+
+    pdf_bytes = generate_labels_pdf(label_items, size=preset)
+    now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"Nhan_GHS_{preset}_{now_str}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "application/pdf"
+        }
+    )
+
+
+# ==============================================================================
+# CHEMICAL STORAGE COMPATIBILITY MATRIX & WAREHOUSE CHECKER (MILESTONE M3)
+# Under Vietnamese Standard TCVN 5507:2002 & GHS
+# ==============================================================================
+
+class StorageCompatibilityCheckRequest(BaseModel):
+    items: Optional[List[Dict[str, Any]]] = None
+    ids: Optional[List[str]] = None
+    chem_a: Optional[Any] = None
+    chem_b: Optional[Any] = None
+
+
+@app.get("/api/msds/storage-compatibility-matrix")
+def api_msds_storage_compatibility_matrix():
+    """
+    Trả về định nghĩa toàn diện của ma trận tương thích lưu kho 11x11 theo TCVN 5507:2002:
+    Danh mục 11 nhóm nguy hại, bảng tra 11x11, chú dẫn mã C/S/X và trích dẫn quy phạm TCVN 5507.
+    """
+    from core.storage_compatibility_engine import get_matrix_definition
+    return get_matrix_definition()
+
+
+@app.post("/api/msds/storage-compatibility-check")
+def api_msds_storage_compatibility_check(
+    req: Optional[StorageCompatibilityCheckRequest] = Body(None),
+    ids: Optional[str] = Query(None)
+):
+    """
+    Đánh giá tương thích lưu kho hóa chất kho theo TCVN 5507:2002:
+    Hỗ trợ kiểm tra theo danh sách hóa chất (items), danh sách ID (ids), hoặc kiểm tra cặp (chem_a, chem_b).
+    Mặc định kiểm tra toàn bộ hóa chất đang hoạt động trong CSDL nếu không truyền tham số.
+    """
+    from core.storage_compatibility_engine import (
+        check_inventory_compatibility,
+        evaluate_pairwise,
+        get_matrix_definition
+    )
+    from core.msds_intelligence import MSDSDatabase
+
+    target_items: Optional[List[Any]] = None
+
+    if req:
+        if req.chem_a is not None and req.chem_b is not None:
+            # Pairwise direct check
+            res_pair = evaluate_pairwise(req.chem_a, req.chem_b)
+            return {
+                "success": True,
+                "total_chemicals": 2,
+                "total_pairs": 1,
+                "status": res_pair["status"],
+                "code": res_pair["code"],
+                "badge": res_pair["badge"],
+                "color": res_pair["color"],
+                "danger_mechanism": res_pair["danger_mechanism"],
+                "safety_measures": res_pair["safety_measures"],
+                "recommended_measures": res_pair["recommended_measures"],
+                "tcvn_reference": res_pair["tcvn_reference"],
+                "pairwise": res_pair,
+                "conflicts": [res_pair] if res_pair["code"] == "X" else [],
+                "warnings": [res_pair] if res_pair["code"] == "S" else [],
+                "compatible": [res_pair] if res_pair["code"] == "C" else [],
+                "conflict_count": 1 if res_pair["code"] == "X" else 0,
+                "warning_count": 1 if res_pair["code"] == "S" else 0,
+                "compatible_count": 1 if res_pair["code"] == "C" else 0,
+                "summary": res_pair["danger_mechanism"],
+                "pairs": [res_pair]
+            }
+
+        if req.items is not None:
+            target_items = req.items
+        elif req.ids is not None:
+            target_items = []
+            for cid in req.ids:
+                c = MSDSDatabase.get_chemical(cid)
+                target_items.append(c or {"id": cid, "name": cid})
+
+    if target_items is None and ids:
+        id_list = [i.strip() for i in ids.split(",") if i.strip()]
+        target_items = []
+        for cid in id_list:
+            c = MSDSDatabase.get_chemical(cid)
+            target_items.append(c or {"id": cid, "name": cid})
+
+    if target_items is None:
+        # Default to all active chemicals in database
+        target_items = MSDSDatabase.list_chemicals()
+
+    result = check_inventory_compatibility(target_items)
+    result["success"] = True
+    return result
+
+
+@app.get("/api/msds/storage-compatibility-check")
+def api_msds_storage_compatibility_check_get(
+    ids: Optional[str] = Query(None),
+    chem_a: Optional[str] = Query(None),
+    chem_b: Optional[str] = Query(None)
+):
+    """Đánh giá tương thích lưu kho hóa chất kho qua GET query parameters."""
+    req = None
+    if chem_a or chem_b or ids:
+        req = StorageCompatibilityCheckRequest(
+            ids=[i.strip() for i in ids.split(",") if i.strip()] if ids else None,
+            chem_a=chem_a,
+            chem_b=chem_b
+        )
+    return api_msds_storage_compatibility_check(req=req, ids=ids)
+
+
+# ==============================================================================
+# ANNUAL CHEMICAL REPORT EXPORTER (MILESTONE M4)
+# Under Circular 02/2026/TT-BCT & Law on Chemicals No. 69/2025/QH15
+# ==============================================================================
+
+@app.get("/api/msds/export-annual-chemical-report")
+@app.get("/api/msds/export-annual-report")
+def api_msds_export_annual_chemical_report(year: Optional[int] = Query(None)):
+    """
+    Kết xuất Báo Cáo Hoạt Động Hóa Chất Hàng Năm nộp Sở Công Thương
+    theo Biểu mẫu 05a Thông tư 02/2026/TT-BCT ra file Excel (.xlsx) đa bảng tính:
+    - Sheet 1: THONG_TIN_CHUNG
+    - Sheet 2: HOAT_DONG_HOA_CHAT (đối soát 100% CSDL hóa chất CIL)
+    - Sheet 3: AN_TOAN_SU_CO (Kế hoạch PNUPSC, huấn luyện Nhóm 1-3, diễn tập Biểu mẫu 04)
+    - Sheet 4: TIEN_CHAT_KSDB (Tiền chất NĐ 26 & Kiểm soát đặc biệt NĐ 24)
+    - Sheet 5: QUAN_TRAC_QCVN01 (Quan trắc môi trường lao động 70 yếu tố QCVN 01:2025/BYT)
+    """
+    from core.annual_report_exporter import AnnualChemicalReportExporter
+    try:
+        report_year = year or datetime.now().year
+        date_str = datetime.now().strftime("%Y%m%d")
+        xlsx_bytes = AnnualChemicalReportExporter.export_annual_report_bytes(year=report_year)
+        filename = f"Bao_Cao_Hoa_Chat_Hang_Nam_TT02_2026_{date_str}.xlsx"
+
+        return Response(
+            content=xlsx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+        )
+    except Exception as e:
+        logger.error("Lỗi xuất Báo Cáo Hóa Chất Hàng Năm TT02: %s", e)
+        raise HTTPException(status_code=500, detail=f"Lỗi xuất Báo Cáo Hóa Chất Hàng Năm: {str(e)}")
+
+
+# ==============================================================================
+# FIELD MOBILE QR EMERGENCY SYSTEM (MILESTONE M5)
+# Zero-auth Field Emergency Tra Cứu Khẩn Cấp & QR Code Generator
+# ==============================================================================
+
+@app.get("/api/msds/qr-code/{chem_id}")
+@app.get("/api/msds/qr/{chem_id}")
+def api_msds_qr_code(chem_id: str, request: Request, size: int = Query(220)):
+    """
+    Tạo mã QR Code vector SVG bằng ReportLab native, nhúng URL dẫn trực tiếp
+    vào trang ứng phó khẩn cấp di động /mobile-msds/{chem_id}.
+    Không phụ thuộc thư viện mạng bên ngoài.
+    """
+    from core.msds_intelligence import MSDSDatabase
+    chem = MSDSDatabase.get_chemical(chem_id)
+    if not chem:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy hóa chất với mã '{chem_id}'.")
+
+    # Resolve server host or domain
+    base_url = get_titan_base_url(request)
+    mobile_url = f"{base_url}/mobile-msds/{chem_id}"
+    svg_qr = generate_qr_svg(mobile_url, size=size)
+
+    return Response(
+        content=svg_qr.encode("utf-8"),
+        media_type="image/svg+xml",
+        headers={
+            "Cache-Control": "public, max-age=3600"
+        }
+    )
+
+
+def _render_mobile_emergency_html(chem: Dict[str, Any]) -> str:
+    """Điền dữ liệu thực tế của hóa chất vào mẫu giao diện di động static/msds_emergency.html."""
+    from core.ghs_label_engine import get_ghs_svg
+
+    template_path = Path(STATIC_DIR) / "msds_emergency.html"
+    if template_path.exists():
+        template_text = template_path.read_text(encoding="utf-8")
+    else:
+        template_text = "<html><body><h1>{{PRODUCT_NAME}}</h1></body></html>"
+
+    chem_id = chem.get("chemical_id") or "CHM"
+    pcode = chem.get("product_code") or chem_id
+    pname_vi = chem.get("product_name_vi") or chem.get("product_name_original") or chem_id
+    pname_orig = chem.get("product_name_original") or ""
+    cas = chem.get("cas_primary") or "N/A"
+    item_type = chem.get("item_type") or "raw_material"
+    item_type_label = "🧪 Nguyên Liệu (Raw Material)" if item_type == "raw_material" else "🏷️ Thành Phẩm (Finished Product)"
+    flash_point = chem.get("flash_point") or "Chưa xác định"
+    storage = chem.get("storage_condition") or "Kho chuyên dụng thoáng mát, khô ráo, tránh ánh nắng trực tiếp và nguồn nhiệt."
+
+    signal_word = (chem.get("signal_word") or "CẢNH BÁO / WARNING").strip()
+    sw_lower = signal_word.lower()
+    if "nguy hiểm" in sw_lower or "danger" in sw_lower:
+        signal_class = "danger"
+        hazard_summary = "MỨC ĐỘ NGUY HIỂM CAO — CẦN TUÂN THỦ NGHIÊM NGẶT QUY TRÌNH AN TOÀN"
+    elif "non dg" in sw_lower or "an toàn" in sw_lower:
+        signal_class = "safe"
+        hazard_summary = "HÓA CHẤT AN TOÀN — ÍT NGUY HẠI CHO SỨC KHỎE VÀ MÔI TRƯỜNG"
+    else:
+        signal_class = "warning"
+        hazard_summary = "MỨC ĐỘ CẢNH BÁO — CẦN TRANG BỊ BẢO HỘ ĐẦY ĐỦ KHI TIẾP XÚC"
+
+    ghs_codes = chem.get("ghs_codes_list") or []
+    if isinstance(chem.get("ghs_codes"), list):
+        ghs_codes = chem["ghs_codes"]
+    elif isinstance(chem.get("ghs_codes"), str):
+        try:
+            ghs_codes = json.loads(chem["ghs_codes"])
+        except Exception:
+            ghs_codes = [chem["ghs_codes"]] if chem["ghs_codes"] else []
+
+    ghs_icons_html_parts = []
+    for gcode in ghs_codes:
+        gclean = str(gcode).strip().upper()
+        if gclean in ("NON DG", "NON-DG", ""):
+            continue
+        svg_code = get_ghs_svg(gclean)
+        ghs_icons_html_parts.append(f'<div class="ghs-icon-wrap" title="{gclean}">{svg_code}</div>')
+
+    ghs_icons_html = "".join(ghs_icons_html_parts) if ghs_icons_html_parts else '<div style="color: #10b981; font-weight: 700; font-size: 13px;">✅ Không có hình đồ nguy hại GHS</div>'
+
+    h_statements = chem.get("hazard_statements") or "Tuân thủ các biện pháp an toàn chung khi vận hành."
+
+    # Fire measures
+    is_flam = "GHS02" in ghs_codes or ("flash_point" in chem and chem["flash_point"] and "<" in str(chem["flash_point"]))
+    fire_rec = chem.get("fire_measures") or "Bột hóa chất khô ABC, Carbon Dioxide (CO2), bọt Foam kháng cồn chuyên dụng."
+    fire_forbid = "TUYỆT ĐỐI CẤM PHUN TIA NƯỚC ÁP LỰC CAO trực tiếp vào dung môi lỏng vì làm bắn tóe và lan rộng đám cháy." if is_flam else "Tránh phun tia nước áp lực cao gây tràn đổ và phát tán hóa chất ra môi trường."
+
+    # Spill measures
+    spill_measures = chem.get("spill_measures") or "Cách ly khu vực rò rỉ, thông gió tốt. Dùng vật liệu trơ (cát khô, mùn cưa, tấm thấm hóa chất) thu gom vào thùng chứa kín dán nhãn chất thải nguy hại."
+
+    # First aid
+    first_aid_eyes = chem.get("first_aid_eyes") or "Rửa ngay dưới vòi rửa mắt khẩn cấp liên tục tối thiểu 15 phút, giữ mí mắt mở. Chuyển ngay đến cơ sở y tế."
+    first_aid_skin = chem.get("first_aid_skin") or "Cởi bỏ ngay quần áo nhiễm hóa chất. Rửa kỹ vùng da tiếp xúc bằng xà phòng và nhiều nước sạch."
+    first_aid_inhalation = chem.get("first_aid_inhalation") or "Đưa nạn nhân ra nơi thoáng khí ngay lập tức. Đặt nằm nửa ngồi, nới lỏng cổ áo. Hô hấp nhân tạo nếu khó thở."
+    first_aid_ingestion = chem.get("first_aid_ingestion") or "TUYỆT ĐỐI KHÔNG KÍCH NÔN khi nghi ngờ dung môi hữu cơ. Cho uống 1-2 ly nước sạch, đưa đi cấp cứu ngay kèm MSDS."
+
+    # PPE
+    ppe_eyes = chem.get("eye_protection") or "Kính bảo hộ chống văng bắn hóa chất (tiêu chuẩn EN 166)"
+    ppe_resp = chem.get("respiratory_protection") or "Mặt nạ phòng độc nửa mặt kèm phin lọc hơi hữu cơ / axit"
+    ppe_hands = chem.get("hand_protection") or "Găng tay cao su Nitrile chống hóa chất thẩm thấu"
+    ppe_skin = chem.get("skin_protection") or "Quần áo bảo hộ lao động, tạp dề chống hóa chất, ủng chống tĩnh điện"
+
+    replacements = {
+        "{{PRODUCT_NAME}}": html.escape(str(pname_vi)),
+        "{{PRODUCT_CODE}}": html.escape(str(pcode)),
+        "{{ORIGINAL_NAME}}": html.escape(str(pname_orig)),
+        "{{CAS_NUMBER}}": html.escape(str(cas)),
+        "{{ITEM_TYPE_LABEL}}": html.escape(str(item_type_label)),
+        "{{FLASH_POINT}}": html.escape(str(flash_point)),
+        "{{STORAGE_LOCATION}}": html.escape(str(storage)),
+        "{{SIGNAL_WORD}}": html.escape(str(signal_word)),
+        "{{SIGNAL_CLASS}}": html.escape(str(signal_class)),
+        "{{HAZARD_SUMMARY}}": html.escape(str(hazard_summary)),
+        "{{GHS_ICONS_HTML}}": ghs_icons_html,
+        "{{H_STATEMENTS}}": html.escape(str(h_statements)),
+        "{{FIRE_RECOMMENDED}}": html.escape(str(fire_rec)),
+        "{{FIRE_FORBIDDEN}}": html.escape(str(fire_forbid)),
+        "{{SPILL_MEASURES}}": html.escape(str(spill_measures)),
+        "{{FIRST_AID_EYES}}": html.escape(str(first_aid_eyes)),
+        "{{FIRST_AID_SKIN}}": html.escape(str(first_aid_skin)),
+        "{{FIRST_AID_INHALATION}}": html.escape(str(first_aid_inhalation)),
+        "{{FIRST_AID_INGESTION}}": html.escape(str(first_aid_ingestion)),
+        "{{PPE_EYES}}": html.escape(str(ppe_eyes)),
+        "{{PPE_RESPIRATORY}}": html.escape(str(ppe_resp)),
+        "{{PPE_HANDS}}": html.escape(str(ppe_hands)),
+        "{{PPE_SKIN}}": html.escape(str(ppe_skin)),
+    }
+
+    rendered = template_text
+    for key, val in replacements.items():
+        rendered = rendered.replace(key, str(val))
+    return rendered
+
+
+@app.get("/mobile-msds/{chem_id}", response_class=HTMLResponse)
+@app.get("/emergency/{chem_id}", response_class=HTMLResponse)
+@app.get("/api/msds/qr-view/{chem_id}", response_class=HTMLResponse)
+def api_mobile_msds_view(chem_id: str):
+    """
+    Trang tra cứu khẩn cấp di động siêu tốc (<200ms), 100% Zero-Auth,
+    tối ưu cho smartphone hiển thị 5 khối ứng phó: Dập lửa, Tràn đổ, Sơ cứu 4 bước,
+    Trang bị PPE, và nút gọi khẩn cấp 1 chạm (114, 115, Hotline EHS).
+    Trả về 404 nếu mã hóa chất không tồn tại.
+    """
+    from core.msds_intelligence import MSDSDatabase
+    chem = MSDSDatabase.get_chemical(chem_id)
+    if not chem:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Không tìm thấy dữ liệu ứng phó khẩn cấp cho mã hóa chất '{chem_id}'."
+        )
+    html_content = _render_mobile_emergency_html(chem)
+    return HTMLResponse(content=html_content, status_code=200, media_type="text/html; charset=utf-8")
+
+
+@app.get("/msds-emergency", response_class=HTMLResponse)
+def api_msds_emergency_query(chem_id: Optional[str] = Query(None)):
+    """Trang tra cứu khẩn cấp di động qua tham số URL query ?chem_id=..."""
+    if not chem_id:
+        raise HTTPException(status_code=400, detail="Thiếu tham số bắt buộc 'chem_id'.")
+    return api_mobile_msds_view(chem_id)
 
 
 @app.post("/api/msds/open-storage-folder")

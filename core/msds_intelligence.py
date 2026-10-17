@@ -24,7 +24,7 @@ Tính năng cốt lõi:
    - Xuất Thẻ an toàn khẩn cấp (Emergency Quick Card) hỗ trợ sơ cứu và ứng phó sự cố.
 
 4. CIL Excel Generator (Chemical Inventory List):
-   - Xuất bản tệp Excel (.xlsx) đa sheet chuẩn Nghị định 113/2017/NĐ-CP & tiêu chuẩn GHS/OSHA:
+   - Xuất bản tệp Excel (.xlsx) đa sheet chuẩn Luật Hóa chất số 69/2025/QH15, Nghị định 24/2026/NĐ-CP, Thông tư 02/2026/TT-BCT & tiêu chuẩn GHS:
      + Sheet 00: Dashboard Tổng quan
      + Sheet 01: Sổ Danh mục Hóa chất CIL chính thức
      + Sheet 02: Bảng chi tiết Hoạt chất & Số CAS
@@ -113,15 +113,21 @@ def normalize_str(s: Any) -> str:
 class MSDSDatabase:
     """Quản trị cơ sở dữ liệu SQLite MSDS & Chemical Inventory List."""
 
+    _initialized: bool = False
+
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:
         conn = sqlite3.connect(str(DB_PATH))
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
         return conn
 
     @classmethod
     def init_db(cls) -> None:
         """Khởi tạo cấu trúc các bảng trong SQLite nếu chưa tồn tại."""
+        if cls._initialized:
+            return
         with cls.get_connection() as conn:
             conn.execute("""
             CREATE TABLE IF NOT EXISTS chemicals (
@@ -176,12 +182,12 @@ class MSDSDatabase:
 
             # Tự động phân loại heuristic cho các hóa chất hiện hữu
             try:
-                all_chems = conn.execute(
-                    "SELECT chemical_id, product_name_vi, product_code FROM chemicals"
+                unclassified = conn.execute(
+                    "SELECT chemical_id, product_name_vi, product_code FROM chemicals WHERE item_type IS NULL OR item_type = ''"
                 ).fetchall()
-                if all_chems:
+                if unclassified:
                     from core.legal_engine import LegalCatalogEngine
-                    for uc in all_chems:
+                    for uc in unclassified:
                         cid = uc["chemical_id"]
                         comps = conn.execute("SELECT * FROM compositions WHERE chemical_id = ?", (cid,)).fetchall()
                         comps_list = [dict(c) for c in comps]
@@ -223,6 +229,7 @@ class MSDSDatabase:
             );
             """)
             conn.commit()
+        cls._initialized = True
 
     @classmethod
     def next_chemical_id(cls) -> str:
@@ -467,7 +474,6 @@ class MSDSDatabase:
     @classmethod
     def list_chemicals(cls, query: Optional[str] = None, item_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lấy danh sách hoặc tìm kiếm toàn diện hóa chất có hỗ trợ lọc theo item_type."""
-        cls.init_db()
         with cls.get_connection() as conn:
             where_clauses = []
             params = []
@@ -522,7 +528,6 @@ class MSDSDatabase:
     @classmethod
     def get_chemical(cls, chem_id: str) -> Optional[Dict[str, Any]]:
         """Lấy chi tiết đầy đủ 1 hóa chất bao gồm thành phần và 16 mục GHS."""
-        cls.init_db()
         with cls.get_connection() as conn:
             row = conn.execute("SELECT * FROM chemicals WHERE UPPER(chemical_id) = UPPER(?)", (chem_id,)).fetchone()
             if not row:
@@ -1251,6 +1256,7 @@ class MSDSExtractorEngine:
             "colorless liquid": "Chất lỏng không màu",
             "white liquid": "Chất lỏng màu trắng",
             "milky white liquid": "Chất lỏng màu trắng sữa",
+            "trgs 510": "Bảo quản an toàn theo quy chuẩn lưu trữ hóa chất TRGS 510.",
             "wear a gas mask": "Đeo mặt nạ phòng độc / khẩu trang lọc hơi hữu cơ đạt chuẩn.",
             "wear safety glasses and chemical splash goggles.": "Đeo kính an toàn và kính bảo hộ chống văng bắn hóa chất.",
             "wear safety glasses and chemical splash goggles": "Đeo kính an toàn và kính bảo hộ chống văng bắn hóa chất.",
@@ -2022,7 +2028,7 @@ class CILExcelExporter:
             ("Số hóa chất thuộc nhóm Độc Hại / Nguy Hại Sức Khỏe", toxic_count),
             ("Số hóa chất có Từ Cảnh Báo 'Nguy Hiểm' (Danger)", danger_count),
             ("Thời điểm kết xuất báo cáo", datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
-            ("Quy chuẩn áp dụng", "Nghị định 113/2017/NĐ-CP & Tiêu chuẩn GHS / OSHA")
+            ("Quy chuẩn áp dụng", "Luật Hóa chất số 69/2025/QH15, NĐ 24/2026/NĐ-CP, NĐ 25/2026/NĐ-CP, NĐ 26/2026/NĐ-CP, TT 01/2026/TT-BCT, TT 02/2026/TT-BCT & GHS")
         ]
 
         for idx, (label, val) in enumerate(metrics, start=5):
@@ -2234,6 +2240,18 @@ class CILExcelExporter:
 # 4. BỘ XUẤT THẺ AN TOÀN KHẨN CẤP (EMERGENCY CARD) WORD DOCX
 # ==============================================================================
 
+def to_unaccented_slug(text: Any) -> str:
+    """Chuyển đổi chuỗi tiếng Việt có dấu sang định dạng không dấu chuẩn ASCII an toàn cho tên tệp."""
+    if not text:
+        return ""
+    text_str = str(text).replace("đ", "d").replace("Đ", "D")
+    nfkd = unicodedata.normalize("NFKD", text_str)
+    ascii_text = "".join(c for c in nfkd if not unicodedata.combining(c))
+    clean = re.sub(r"[^\w\-]+", "_", ascii_text, flags=re.ASCII)
+    clean = re.sub(r"_+", "_", clean).strip("_")
+    return clean
+
+
 class MSDSSafetyCardExporter:
     """Xuất thẻ tóm tắt an toàn hóa chất khẩn cấp ra Word (.docx)."""
 
@@ -2251,7 +2269,8 @@ class MSDSSafetyCardExporter:
     }
 
     @classmethod
-    def generate_safety_card_docx(cls, chem_data: Dict[str, Any]) -> Path:
+    def generate_safety_card_docx(cls, chem_data: Dict[str, Any], custom_path: Optional[Path] = None) -> Path:
+        from core.legal_engine import validate_cas
         chem_data = MSDSExtractorEngine.ensure_vietnamese_msds_fields(dict(chem_data))
         doc = docx.Document()
 
@@ -2326,71 +2345,87 @@ class MSDSSafetyCardExporter:
             except Exception:
                 pass
 
-        if compositions:
-            comp_table = doc.add_table(rows=len(compositions) + 1, cols=4)
-            comp_table.style = 'Table Grid'
+        # Đảm bảo bảng Mục 3 GHS luôn có ít nhất 1 dòng thành phần hợp lệ
+        if not compositions:
+            cas_p = str(chem_data.get("cas_primary") or "").strip()
+            name_p = chem_data.get("product_name_vi") or chem_data.get("product_name_original") or "Thành phần theo công bố nhà sản xuất"
+            val_p = validate_cas(cas_p) if cas_p else {"status": "KHÔNG CÓ CAS"}
+            compositions = [{
+                "ingredient_name_vi": name_p,
+                "cas_number": cas_p or "Bí mật thương mại",
+                "concentration_text": "100%" if cas_p else "Xem MSDS",
+                "cas_status": val_p.get("status", "HỢP LỆ")
+            }]
 
-            headers = ["Tên Thành Phần Hoạt Chất", "Số CAS", "Hàm Lượng (%)", "Thẩm Định Checksum"]
-            col_widths = [Inches(2.8), Inches(1.5), Inches(1.4), Inches(1.5)]
+        comp_table = doc.add_table(rows=len(compositions) + 1, cols=4)
+        comp_table.style = 'Table Grid'
 
-            # Tiêu đề bảng
-            hdr_row = comp_table.rows[0]
-            for j, h_text in enumerate(headers):
-                cell = hdr_row.cells[j]
-                cell.text = h_text
-                p = cell.paragraphs[0]
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                if p.runs:
-                    p.runs[0].bold = True
-                    p.runs[0].font.size = Pt(9.5)
-                    p.runs[0].font.color.rgb = RGBColor(27, 54, 93)
-                cell.width = col_widths[j]
-                shd = parse_xml(r'<w:shd {} w:fill="EBF3FB"/>'.format(nsdecls('w')))
-                cell._tc.get_or_add_tcPr().append(shd)
+        headers = ["Tên Thành Phần Hoạt Chất", "Số CAS", "Hàm Lượng (%)", "Thẩm Định Checksum"]
+        col_widths = [Inches(2.8), Inches(1.5), Inches(1.4), Inches(1.5)]
 
-            # Dòng dữ liệu thành phần
-            for i, comp in enumerate(compositions, start=1):
-                row = comp_table.rows[i]
-                c_name = comp.get("ingredient_name_vi") or comp.get("ingredient_name_original") or "Chưa rõ tên"
-                c_cas = comp.get("cas_number") or comp.get("cas_no") or "Bí mật thương mại"
-                c_conc = comp.get("concentration_text") or (
-                    f"{comp.get('concentration_min', 0)} - {comp.get('concentration_max', 0)}%"
-                    if comp.get('concentration_min') is not None else "Xem MSDS"
-                )
-                c_status = comp.get("cas_status") or "HỢP LỆ"
+        # Tiêu đề bảng
+        hdr_row = comp_table.rows[0]
+        for j, h_text in enumerate(headers):
+            cell = hdr_row.cells[j]
+            cell.text = h_text
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if p.runs:
+                p.runs[0].bold = True
+                p.runs[0].font.size = Pt(9.5)
+                p.runs[0].font.color.rgb = RGBColor(27, 54, 93)
+            cell.width = col_widths[j]
+            shd = parse_xml(r'<w:shd {} w:fill="EBF3FB"/>'.format(nsdecls('w')))
+            cell._tc.get_or_add_tcPr().append(shd)
 
-                vals = [c_name, c_cas, c_conc, c_status]
-                aligns = [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER, WD_ALIGN_PARAGRAPH.CENTER, WD_ALIGN_PARAGRAPH.CENTER]
-
-                for j, (val, aln) in enumerate(zip(vals, aligns)):
-                    cell = row.cells[j]
-                    cell.text = str(val)
-                    p = cell.paragraphs[0]
-                    p.alignment = aln
-                    if p.runs:
-                        p.runs[0].font.size = Pt(9.0)
-                        if j == 3 and "CẦN" in str(val).upper():
-                            p.runs[0].font.color.rgb = RGBColor(217, 119, 6)
-                        elif j == 3 and "HỢP" in str(val).upper():
-                            p.runs[0].font.color.rgb = RGBColor(22, 163, 74)
-                    cell.width = col_widths[j]
-
-                    if i % 2 == 0:
-                        shd = parse_xml(r'<w:shd {} w:fill="F8FAFC"/>'.format(nsdecls('w')))
-                        cell._tc.get_or_add_tcPr().append(shd)
-        else:
-            p_empty = doc.add_paragraph()
-            r_emp = p_empty.add_run(
-                f"• Số CAS chính: {chem_data.get('cas_primary', 'Hỗn hợp phức hợp / Bí mật thương mại')} "
-                f"| Thành phần đơn chất / Hợp chất thuần nhất theo công bố của nhà sản xuất."
+        # Dòng dữ liệu thành phần
+        for i, comp in enumerate(compositions, start=1):
+            row = comp_table.rows[i]
+            c_name = comp.get("ingredient_name_vi") or comp.get("ingredient_name_original") or "Chưa rõ tên"
+            c_cas = comp.get("cas_number") or comp.get("cas_no") or "Bí mật thương mại"
+            c_conc = comp.get("concentration_text") or (
+                f"{comp.get('concentration_min', 0)} - {comp.get('concentration_max', 0)}%"
+                if comp.get('concentration_min') is not None else "Xem MSDS"
             )
-            r_emp.font.size = Pt(9.5)
-            r_emp.italic = True
-            r_emp.font.color.rgb = RGBColor(100, 116, 139)
+            c_status = comp.get("cas_status")
+            if not c_status or str(c_status).upper() in ("VALID", "HOP_LE", "HỢP LỆ", "TRUE", "1"):
+                v_res = validate_cas(c_cas)
+                c_status = v_res.get("status", "HỢP LỆ")
+            elif "SAI" in str(c_status).upper() or "INVALID" in str(c_status).upper():
+                c_status = "SAI CHECKSUM"
+            elif "KHÔNG" in str(c_status).upper() or "NONE" in str(c_status).upper():
+                c_status = "KHÔNG CÓ CAS"
 
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        chem_code = chem_data.get('chemical_id', 'CHEM').replace("-", "_")
-        out_path = EXPORTS_DIR / f"Safety_Card_{chem_code}_{timestamp}.docx"
+            vals = [c_name, c_cas, c_conc, c_status]
+            aligns = [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER, WD_ALIGN_PARAGRAPH.CENTER, WD_ALIGN_PARAGRAPH.CENTER]
+
+            for j, (val, aln) in enumerate(zip(vals, aligns)):
+                cell = row.cells[j]
+                cell.text = str(val)
+                p = cell.paragraphs[0]
+                p.alignment = aln
+                if p.runs:
+                    p.runs[0].font.size = Pt(9.0)
+                    if j == 3 and ("CẦN" in str(val).upper() or "SAI" in str(val).upper()):
+                        p.runs[0].font.color.rgb = RGBColor(217, 119, 6)
+                    elif j == 3 and "HỢP" in str(val).upper():
+                        p.runs[0].font.color.rgb = RGBColor(22, 163, 74)
+                    elif j == 3:
+                        p.runs[0].font.color.rgb = RGBColor(100, 116, 139)
+                cell.width = col_widths[j]
+
+                if i % 2 == 0:
+                    shd = parse_xml(r'<w:shd {} w:fill="F8FAFC"/>'.format(nsdecls('w')))
+                    cell._tc.get_or_add_tcPr().append(shd)
+
+        EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        if custom_path:
+            out_path = Path(custom_path)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            chem_code = chem_data.get('chemical_id', 'CHEM').replace("-", "_")
+            out_path = EXPORTS_DIR / f"Safety_Card_{chem_code}_{timestamp}.docx"
         doc.save(str(out_path))
         return out_path
 

@@ -768,14 +768,14 @@ function renderLegalBadgesHtml(badges) {
             badgeClass = "badge-special";
             icon = "⚠️";
             titleDesc = "Hóa chất cần kiểm soát đặc biệt nghiêm ngặt theo NĐ 24/2026/NĐ-CP (Phụ lục III)";
-        } else if (upper.includes("TIỀN CHẤT") || upper.includes("ND28-IV")) {
+        } else if (upper.includes("TIỀN CHẤT") || upper.includes("ND26-IV") || upper.includes("ND28-IV")) {
             badgeClass = "badge-precursor";
             icon = "⚡";
-            titleDesc = "Tiền chất ma túy / công nghiệp theo NĐ 28/2026/NĐ-CP (Cần lập sổ theo dõi & báo cáo)";
-        } else if (upper.includes("HẠN CHẾ") || upper.includes("CẤM") || upper.includes("ND28-I") || upper.includes("ND28-II")) {
+            titleDesc = "Tiền chất ma túy / công nghiệp theo NĐ 26/2026/NĐ-CP (Cần lập sổ theo dõi & báo cáo)";
+        } else if (upper.includes("HẠN CHẾ") || upper.includes("CẤM") || upper.includes("ND26-I") || upper.includes("ND26-II") || upper.includes("ND28-I") || upper.includes("ND28-II")) {
             badgeClass = "badge-restricted";
             icon = "🚫";
-            titleDesc = "Hóa chất cấm hoặc hạn chế sản xuất, kinh doanh";
+            titleDesc = "Hóa chất cấm hoặc hạn chế sản xuất, kinh doanh theo NĐ 24 & NĐ 26";
         } else if (upper.includes("QCVN") || upper.includes("TIẾP XÚC")) {
             badgeClass = "badge-qcvn";
             icon = "🛡️";
@@ -1463,6 +1463,12 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
                         <button type="button" class="msds-btn-view-card" onclick="openMsdsSafetyModal('${safeChemId}')" title="Xem Thẻ An Toàn Hóa Chất Khẩn Cấp">
                             <span>👁️ Thẻ An Toàn</span>
                         </button>
+                        <button type="button" class="msds-btn-qr-row" onclick="openMsdsQrModal('${safeChemId}')" title="Mã QR tra cứu khẩn cấp & in tem">
+                            <span>📱 QR</span>
+                        </button>
+                        <button type="button" class="msds-btn-label-row" onclick="openMsdsLabelModal('${safeChemId}')" title="Tạo & In Nhãn Phụ GHS Chiết Rót (Thông Tư 01/2026/TT-BCT)">
+                            <span>🏷️ In Nhãn GHS</span>
+                        </button>
                         <a href="${exportWordDocxUrl}" download="SafetyCard_${escapeHtml(displayCode)}.docx" class="msds-btn-export-docx" title="Xuất Thẻ An Toàn Word (.docx) chuẩn Mục 3 GHS có Checksum">
                             <span>📄 Xuất Word</span>
                         </a>
@@ -1584,8 +1590,8 @@ async function openMsdsSafetyModal(chemId) {
         if (isRegulated && legal.obligations && legal.obligations.length > 0) {
             let obligationRows = "";
             legal.obligations.forEach((ob, idx) => {
-                const sourceBadge = ob.source_id === "ND28"
-                    ? `<span style="font-size:10.5px; font-weight:800; background:#fff7ed; color:#ea580c; border:1px solid #fed7aa; padding:2px 6px; border-radius:4px;">NĐ 28/2026/NĐ-CP</span>`
+                const sourceBadge = (ob.source_id === "ND26" || ob.source_id === "ND28")
+                    ? `<span style="font-size:10.5px; font-weight:800; background:#fff7ed; color:#ea580c; border:1px solid #fed7aa; padding:2px 6px; border-radius:4px;">NĐ 26/2026/NĐ-CP</span>`
                     : (ob.source_id === "QCVN01"
                         ? `<span style="font-size:10.5px; font-weight:800; background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; padding:2px 6px; border-radius:4px;">QCVN 01:2025/BYT</span>`
                         : `<span style="font-size:10.5px; font-weight:800; background:#f0f9ff; color:#0284c7; border:1px solid #bae6fd; padding:2px 6px; border-radius:4px;">NĐ 24/2026/NĐ-CP</span>`);
@@ -1619,12 +1625,12 @@ async function openMsdsSafetyModal(chemId) {
                 <div style="margin-top:16px; margin-bottom:8px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
                         <div style="font-weight:800; color:#0f172a; font-size:13.5px; display:flex; align-items:center; gap:6px;">
-                            <span>⚖️ BẢNG NGHĨA VỤ PHÁP LÝ & TUÂN THỦ (LUẬT HÓA CHẤT 2026)</span>
+                            <span>⚖️ BẢNG NGHĨA VỤ PHÁP LÝ & TUÂN THỦ (LUẬT HÓA CHẤT SỐ 69/2025/QH15)</span>
                             <span style="font-size:11px; font-weight:800; background:#fef2f2; color:#b91c1c; border:1px solid #fecdd3; padding:2px 7px; border-radius:4px;">
                                 ${legal.total_regulated_components || legal.obligations.length} HOẠT CHẤT ĐƯỢC ĐIỀU CHỈNH
                             </span>
                         </div>
-                        <div style="font-size:11px; color:#64748b;">Căn cứ NĐ 24/2026/NĐ-CP · NĐ 28/2026/NĐ-CP · QCVN 01:2025/BYT</div>
+                        <div style="font-size:11px; color:#64748b;">Căn cứ Luật 69 · NĐ 24/2026/NĐ-CP · NĐ 25/2026/NĐ-CP · NĐ 26/2026/NĐ-CP · TT 01/2026 · TT 02/2026 · QCVN 01</div>
                     </div>
                     <div style="border:1px solid #cbd5e1; border-radius:6px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
                         <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
@@ -1650,7 +1656,7 @@ async function openMsdsSafetyModal(chemId) {
                     <div>
                         <div style="font-weight:700; color:#166534; font-size:13px;">HÓA CHẤT AN TOÀN / KHÔNG THUỘC DANH MỤC KIỂM SOÁT ĐẶC BIỆT</div>
                         <div style="font-size:12px; color:#15803d; margin-top:2px; line-height:1.4;">
-                            Sản phẩm không chứa hoạt chất thuộc diện Cấm, Hạn chế, Tiền chất ma túy (NĐ 28/2026/NĐ-CP) hay Kiểm soát đặc biệt (NĐ 24/2026/NĐ-CP). Doanh nghiệp áp dụng quy trình an toàn lao động và lập sổ lưu trữ hóa chất thông thường.
+                            Sản phẩm không chứa hoạt chất thuộc diện Cấm, Hạn chế, Tiền chất ma túy (NĐ 26/2026/NĐ-CP) hay Kiểm soát đặc biệt (NĐ 24/2026/NĐ-CP). Doanh nghiệp áp dụng quy trình an toàn lao động và lập sổ lưu trữ hóa chất theo Luật Hóa chất 69/2025/QH15.
                         </div>
                     </div>
                 </div>
@@ -1922,6 +1928,94 @@ async function deleteSelectedMsdsBatch() {
 }
 window.deleteSelectedMsdsBatch = deleteSelectedMsdsBatch;
 
+// =============================================================
+// TẢI HÀNG LOẠT FILE GỐC & THẺ AN TOÀN WORD (.ZIP) (MILESTONE M1)
+// =============================================================
+
+async function downloadSelectedMsdsOriginalZip() {
+    const ids = Array.from(SELECTED_MSDS_IDS);
+    if (!ids.length) {
+        alert("Vui lòng chọn ít nhất một hóa chất để tải tệp MSDS gốc.");
+        return;
+    }
+    const btn = document.getElementById("btn-batch-download-original");
+    const origHtml = btn ? btn.innerHTML : "";
+    try {
+        if (btn) { btn.disabled = true; btn.innerHTML = "<span>⏳ Đang nén ZIP...</span>"; }
+        const resp = await fetch("/api/msds/download-batch-original", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: ids })
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || "Lỗi đóng gói tệp ZIP MSDS gốc.");
+        }
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const now = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        a.download = `MSDS_Goc_TongHop_${now}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        alert("Lỗi tải ZIP MSDS gốc: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+    }
+}
+window.downloadSelectedMsdsOriginalZip = downloadSelectedMsdsOriginalZip;
+
+async function exportSelectedMsdsSafetyCardsZip() {
+    const ids = Array.from(SELECTED_MSDS_IDS);
+    if (!ids.length) {
+        alert("Vui lòng chọn ít nhất một hóa chất để xuất Thẻ An Toàn Word.");
+        return;
+    }
+    const btn = document.getElementById("btn-batch-download-cards");
+    const origHtml = btn ? btn.innerHTML : "";
+    try {
+        if (btn) { btn.disabled = true; btn.innerHTML = "<span>⏳ Đang sinh Thẻ Word...</span>"; }
+        const resp = await fetch("/api/msds/export-batch-safety-cards", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: ids })
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || "Lỗi đóng gói Thẻ An Toàn Word.");
+        }
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const now = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        a.download = `The_An_Toan_TongHop_${now}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        alert("Lỗi xuất ZIP Thẻ An Toàn: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+    }
+}
+window.exportSelectedMsdsSafetyCardsZip = exportSelectedMsdsSafetyCardsZip;
+
+function downloadAllMsdsOriginalZip() {
+    window.location.href = "/api/msds/download-batch-original?scope=all";
+}
+window.downloadAllMsdsOriginalZip = downloadAllMsdsOriginalZip;
+
+function exportAllMsdsSafetyCardsZip() {
+    window.location.href = "/api/msds/export-batch-safety-cards?scope=all";
+}
+window.exportAllMsdsSafetyCardsZip = exportAllMsdsSafetyCardsZip;
+
 function openMsdsDeleteAllModal() {
     const modal = document.getElementById("msds-delete-all-modal");
     const pwdInp = document.getElementById("msds-delete-all-pwd");
@@ -2071,3 +2165,874 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+
+/* ============================================================================== */
+/* GHS DECANTING LABEL MAKER & PRINT ENGINE (MILESTONE M2)                        */
+/* Circular 01/2026/TT-BCT Compliance                                             */
+/* ============================================================================== */
+
+let CURRENT_LABEL_SIZE = "A4_4UP";
+let CURRENT_LABEL_CHEM_ID = null;
+let CURRENT_LABEL_DATA = null;
+
+const ALL_GHS_CODES = [
+    { code: "GHS01", name: "Chất nổ" },
+    { code: "GHS02", name: "Dễ cháy" },
+    { code: "GHS03", name: "Oxy hóa" },
+    { code: "GHS04", name: "Khí nén" },
+    { code: "GHS05", name: "Ăn mòn" },
+    { code: "GHS06", name: "Độc cấp tính" },
+    { code: "GHS07", name: "Kích ứng" },
+    { code: "GHS08", name: "Nguy hại sức khỏe" },
+    { code: "GHS09", name: "Môi trường" }
+];
+
+function initGhsSelectorGrid(selectedCodes = []) {
+    const grid = document.getElementById("label-ghs-grid");
+    if (!grid) return;
+    const normSelected = (selectedCodes || []).map(c => String(c).trim().toUpperCase());
+    
+    let html = "";
+    ALL_GHS_CODES.forEach(item => {
+        const isChecked = normSelected.includes(item.code);
+        const tileClass = isChecked ? "ghs-checkbox-tile checked" : "ghs-checkbox-tile";
+        html += `
+            <label class="${tileClass}" id="tile-${item.code}">
+                <input type="checkbox" value="${item.code}" ${isChecked ? "checked" : ""} onchange="onGhsCheckboxChange(this)" style="display:none;" />
+                ${renderGhsDiamondSvg(item.code, 18)}
+                <span>${item.code}</span>
+            </label>
+        `;
+    });
+    grid.innerHTML = html;
+}
+
+function onGhsCheckboxChange(checkbox) {
+    const tile = document.getElementById(`tile-${checkbox.value}`);
+    if (tile) {
+        if (checkbox.checked) {
+            tile.classList.add("checked");
+        } else {
+            tile.classList.remove("checked");
+        }
+    }
+    updateLabelPreview();
+}
+
+function getSelectedGhsCodes() {
+    const grid = document.getElementById("label-ghs-grid");
+    if (!grid) return [];
+    const checked = grid.querySelectorAll("input[type='checkbox']:checked");
+    return Array.from(checked).map(cb => cb.value);
+}
+
+async function openMsdsLabelModal(chemId) {
+    CURRENT_LABEL_CHEM_ID = chemId;
+    CURRENT_LABEL_SIZE = "A4_4UP";
+    setLabelPrintSize("A4_4UP");
+
+    const modal = document.getElementById("msds-label-creator-modal");
+    if (modal) modal.classList.remove("hidden");
+
+    try {
+        const resp = await fetch(`/api/msds/label-data/${encodeURIComponent(chemId)}`);
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: Lỗi tải thông tin nhãn.`);
+        }
+        const data = await resp.json();
+        CURRENT_LABEL_DATA = data;
+
+        // Populate Form Controls
+        const elName = document.getElementById("label-form-name");
+        if (elName) elName.value = data.product_name || "";
+
+        const elCode = document.getElementById("label-form-code");
+        if (elCode) elCode.value = data.product_code || "";
+
+        const elCas = document.getElementById("label-form-cas");
+        if (elCas) elCas.value = data.cas_primary || "";
+
+        const elFacility = document.getElementById("label-form-facility");
+        if (elFacility) elFacility.value = data.facility || "Công ty TNHH Sơn ZhanChen (Việt Nam) - Phân Xưởng Pha Chế";
+
+        const elDate = document.getElementById("label-form-date");
+        if (elDate) elDate.value = data.decanting_date || new Date().toLocaleDateString("vi-VN");
+
+        const elExpiry = document.getElementById("label-form-expiry");
+        if (elExpiry) elExpiry.value = data.expiry_date || "Theo hạn sử dụng lô gốc (12 tháng)";
+
+        const elLot = document.getElementById("label-form-lot");
+        if (elLot) elLot.value = data.lot_number || `LOT-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-01`;
+
+        const elSignal = document.getElementById("label-form-signal");
+        if (elSignal) {
+            const sig = (data.signal_word || "").toUpperCase();
+            if (sig.includes("NGUY HIỂM") || sig.includes("DANGER")) {
+                elSignal.value = "NGUY HIỂM / DANGER";
+            } else if (sig.includes("CẢNH BÁO") || sig.includes("WARNING")) {
+                elSignal.value = "CẢNH BÁO / WARNING";
+            } else {
+                elSignal.value = "NON DG (AN TOÀN)";
+            }
+        }
+
+        // Initialize GHS grid with pre-checked codes
+        initGhsSelectorGrid(data.ghs_codes || []);
+
+        const elH = document.getElementById("label-form-h");
+        if (elH) elH.value = data.hazard_statements || "";
+
+        const elP = document.getElementById("label-form-p");
+        if (elP) elP.value = data.precautionary_statements || "";
+
+        const elHotline = document.getElementById("label-form-hotline");
+        if (elHotline) elHotline.value = data.hotline || "PCCC: 114 | Cấp Cứu: 115 | ZhanChen EHS: 0274.376.8888";
+
+        updateLabelPreview();
+    } catch (err) {
+        console.error("Error loading label data:", err);
+        alert("Không thể tải thông tin nhãn chiết rót: " + err.message);
+    }
+}
+
+function closeMsdsLabelModal() {
+    const modal = document.getElementById("msds-label-creator-modal");
+    if (modal) modal.classList.add("hidden");
+    CURRENT_LABEL_CHEM_ID = null;
+    CURRENT_LABEL_DATA = null;
+}
+
+function setLabelPrintSize(size) {
+    CURRENT_LABEL_SIZE = size;
+    const container = document.getElementById("label-size-buttons");
+    if (container) {
+        const btns = container.querySelectorAll(".msds-btn-size");
+        btns.forEach(btn => {
+            if (btn.getAttribute("data-size") === size) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+    }
+
+    const wrapper = document.getElementById("label-preview-wrapper");
+    if (wrapper) {
+        wrapper.className = `msds-label-preview-canvas-wrap size-${size.toLowerCase()}`;
+    }
+    updateLabelPreview();
+}
+
+function updateLabelPreview() {
+    const previewBox = document.getElementById("label-preview-box");
+    if (!previewBox) return;
+
+    const pName = document.getElementById("label-form-name")?.value || "TÊN HÓA CHẤT CHIẾT RÓT";
+    const pCode = document.getElementById("label-form-code")?.value || "CODE-01";
+    const pCas = document.getElementById("label-form-cas")?.value || "N/A";
+    const facility = document.getElementById("label-form-facility")?.value || "Công ty TNHH Sơn ZhanChen (Việt Nam)";
+    const decantDate = document.getElementById("label-form-date")?.value || "";
+    const expiryDate = document.getElementById("label-form-expiry")?.value || "";
+    const lotNo = document.getElementById("label-form-lot")?.value || "";
+    const signalWord = document.getElementById("label-form-signal")?.value || "NGUY HIỂM / DANGER";
+    const hText = document.getElementById("label-form-h")?.value || "";
+    const pText = document.getElementById("label-form-p")?.value || "";
+    const hotline = document.getElementById("label-form-hotline")?.value || "114 / 115 / 0274.376.8888";
+
+    const ghsCodes = getSelectedGhsCodes();
+
+    // Signal word styling
+    const isDanger = signalWord.includes("NGUY HIỂM") || signalWord.includes("DANGER");
+    const isNonDg = signalWord.includes("NON DG");
+    const sigBg = isDanger ? "#dc2626" : (isNonDg ? "#16a34a" : "#f59e0b");
+
+    // Build SVG diamonds
+    let ghsHtml = "";
+    if (ghsCodes.length > 0) {
+        ghsCodes.forEach(code => {
+            ghsHtml += `<div class="ghs-icon-wrap" style="width:34px; height:34px; display:inline-block;">${renderGhsDiamondSvg(code, 34)}</div>`;
+        });
+    } else {
+        ghsHtml = `<span style="font-size:11px; font-weight:bold; color:#16a34a; border:1px solid #16a34a; border-radius:4px; padding:2px 6px;">NON DG</span>`;
+    }
+
+    const cardMarkup = `
+        <div class="ghs-label-card" style="border: 2px solid #cc0000; border-radius:4px; padding:10px; background:#fff;">
+            <div style="text-align:center; border-bottom:1.5px solid #cc0000; padding-bottom:4px; margin-bottom:6px;">
+                <div style="font-size:9px; font-weight:800; color:#0f172a; text-transform:uppercase;">${escapeHtml(facility)}</div>
+                <div style="font-size:8px; font-weight:700; color:#dc2626; margin-top:1px;">NHÃN PHỤ HÓA CHẤT CHIẾT RÓT (THÔNG TƯ 01/2026/TT-BCT)</div>
+            </div>
+
+            <div style="margin-bottom:6px;">
+                <div style="font-size:14px; font-weight:900; color:#0f172a; text-transform:uppercase; line-height:1.2;">${escapeHtml(pName)}</div>
+                <div style="font-size:9.5px; color:#334155; margin-top:2px;">
+                    <b>Mã SP:</b> ${escapeHtml(pCode)} &nbsp;|&nbsp; 
+                    <b>CAS:</b> ${escapeHtml(pCas)} &nbsp;|&nbsp; 
+                    <b>Lô:</b> ${escapeHtml(lotNo)}
+                </div>
+                <div style="font-size:9px; color:#475569; margin-top:1px;">
+                    <b>Ngày chiết rót:</b> ${escapeHtml(decantDate)} &nbsp;|&nbsp; 
+                    <b>Hạn dùng:</b> ${escapeHtml(expiryDate)}
+                </div>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:5px 0; border-top:1px dashed #cbd5e1; border-bottom:1px dashed #cbd5e1; margin:6px 0;">
+                <div style="background:${sigBg}; color:#fff; font-size:11px; font-weight:900; padding:4px 8px; border-radius:3px; letter-spacing:0.5px;">
+                    ${escapeHtml(signalWord)}
+                </div>
+                <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+                    ${ghsHtml}
+                </div>
+            </div>
+
+            <div style="font-size:9px; color:#1e293b; line-height:1.3; margin:4px 0;">
+                <div style="margin-bottom:3px;">
+                    <b style="color:#991b1b;">⚠️ CẢNH BÁO NGUY CƠ (H):</b>
+                    <span>${escapeHtml(hText)}</span>
+                </div>
+                <div>
+                    <b style="color:#0369a1;">🛡️ BIỆN PHÁP PHÒNG NGỪA &amp; SƠ CỨU (P):</b>
+                    <span>${escapeHtml(pText)}</span>
+                </div>
+            </div>
+
+            <div style="border-top:1px solid #cbd5e1; padding-top:4px; margin-top:6px; text-align:center; font-size:8.5px; font-weight:700; color:#b91c1c;">
+                📞 ỨNG PHÓ SỰ CỐ KHẨN CẤP: ${escapeHtml(hotline)}
+            </div>
+        </div>
+    `;
+
+    previewBox.innerHTML = cardMarkup;
+}
+
+function printGhsLabelSheet() {
+    if (!CURRENT_LABEL_CHEM_ID) {
+        alert("Vui lòng chọn một hóa chất để in nhãn.");
+        return;
+    }
+    const url = `/api/msds/label-print-html/${encodeURIComponent(CURRENT_LABEL_CHEM_ID)}?size=${encodeURIComponent(CURRENT_LABEL_SIZE)}`;
+    const printWin = window.open(url, "_blank");
+    if (printWin) {
+        printWin.focus();
+    } else {
+        alert("Trình duyệt đã chặn popup. Vui lòng cho phép popup để mở trang in nhãn.");
+    }
+}
+
+async function downloadGhsLabelPdf() {
+    if (!CURRENT_LABEL_CHEM_ID) {
+        alert("Vui lòng chọn một hóa chất để tải PDF nhãn.");
+        return;
+    }
+
+    try {
+        const payload = {
+            ids: [CURRENT_LABEL_CHEM_ID],
+            size: CURRENT_LABEL_SIZE
+        };
+        const resp = await fetch("/api/msds/export-ghs-labels-pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: Lỗi xuất tệp PDF nhãn.`);
+        }
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const now = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        a.download = `Nhan_GHS_${CURRENT_LABEL_CHEM_ID}_${CURRENT_LABEL_SIZE}_${now}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error("PDF download error:", err);
+        alert("Lỗi tải PDF nhãn GHS: " + err.message);
+    }
+}
+
+function openBatchLabelModal() {
+    const ids = Array.from(SELECTED_MSDS_IDS || []);
+    if (!ids.length) {
+        alert("Vui lòng chọn ít nhất một hóa chất trong bảng để in nhãn GHS.");
+        return;
+    }
+    // Open modal with the first selected chemical
+    openMsdsLabelModal(ids[0]);
+}
+
+// ==============================================================================
+// MILESTONE M3: STORAGE COMPATIBILITY MATRIX & WAREHOUSE CHECKER (TCVN 5507:2002)
+// ==============================================================================
+
+let STORAGE_MATRIX_DATA = null;
+let STORAGE_CHEMICALS_CACHE = [];
+
+async function loadStorageMatrixData() {
+    if (STORAGE_MATRIX_DATA) return STORAGE_MATRIX_DATA;
+    try {
+        const resp = await fetch("/api/msds/storage-compatibility-matrix");
+        if (resp.ok) {
+            STORAGE_MATRIX_DATA = await resp.json();
+            return STORAGE_MATRIX_DATA;
+        }
+    } catch (e) {
+        console.error("Error loading storage matrix:", e);
+    }
+    return null;
+}
+
+async function openStorageMatrixModal(preselectChemIdA = null, preselectChemIdB = null) {
+    const modal = document.getElementById("msds-storage-matrix-modal");
+    if (!modal) return;
+    modal.classList.remove("hidden");
+
+    // Populate chemical selects from MSDS_CHEMICALS_DATA
+    const selectA = document.getElementById("storage-select-chem-a");
+    const selectB = document.getElementById("storage-select-chem-b");
+
+    if (selectA && selectB) {
+        let list = Array.isArray(MSDS_CHEMICALS_DATA) && MSDS_CHEMICALS_DATA.length > 0 
+            ? MSDS_CHEMICALS_DATA 
+            : [];
+
+        if (!list.length) {
+            try {
+                const resp = await fetch("/api/msds/list");
+                if (resp.ok) {
+                    const data = await resp.json();
+                    list = data.data || [];
+                    MSDS_CHEMICALS_DATA = list;
+                }
+            } catch (err) {
+                console.error("Error fetching chemical list for matrix modal:", err);
+            }
+        }
+
+        STORAGE_CHEMICALS_CACHE = list;
+
+        let optionsHtml = "";
+        list.forEach((c) => {
+            const cid = c.chem_id || c.chemical_id || c.product_code || "";
+            const name = c.product_name || c.product_name_vi || c.product_name_original || cid;
+            optionsHtml += `<option value="${escapeHtml(cid)}">${escapeHtml(cid)} — ${escapeHtml(name)}</option>`;
+        });
+
+        if (!list.length) {
+            optionsHtml = '<option value="">(Không có hóa chất trong CSDL CIL)</option>';
+        }
+
+        selectA.innerHTML = optionsHtml;
+        selectB.innerHTML = optionsHtml;
+
+        if (preselectChemIdA && selectA.querySelector(`option[value="${preselectChemIdA}"]`)) {
+            selectA.value = preselectChemIdA;
+        } else if (list.length > 0) {
+            selectA.selectedIndex = 0;
+        }
+
+        if (preselectChemIdB && selectB.querySelector(`option[value="${preselectChemIdB}"]`)) {
+            selectB.value = preselectChemIdB;
+        } else if (list.length > 1) {
+            selectB.selectedIndex = 1;
+        } else if (list.length > 0) {
+            selectB.selectedIndex = 0;
+        }
+    }
+
+    // Load and render matrix grid
+    await renderStorageMatrixGrid();
+
+    // Trigger initial pairwise evaluation
+    evaluatePairwiseStorage();
+}
+
+function closeStorageMatrixModal() {
+    const modal = document.getElementById("msds-storage-matrix-modal");
+    if (modal) {
+        modal.classList.add("hidden");
+    }
+}
+
+function swapStoragePairwiseChems() {
+    const selectA = document.getElementById("storage-select-chem-a");
+    const selectB = document.getElementById("storage-select-chem-b");
+    if (!selectA || !selectB) return;
+    const valA = selectA.value;
+    selectA.value = selectB.value;
+    selectB.value = valA;
+    evaluatePairwiseStorage();
+}
+
+async function evaluatePairwiseStorage() {
+    const selectA = document.getElementById("storage-select-chem-a");
+    const selectB = document.getElementById("storage-select-chem-b");
+    if (!selectA || !selectB) return;
+
+    const idA = selectA.value;
+    const idB = selectB.value;
+    if (!idA || !idB) return;
+
+    const card = document.getElementById("storage-pairwise-card");
+    const badge = document.getElementById("storage-pairwise-badge");
+    const code = document.getElementById("storage-pairwise-code");
+    const mech = document.getElementById("storage-pairwise-mech");
+    const measures = document.getElementById("storage-pairwise-measures");
+    const tcvn = document.getElementById("storage-pairwise-tcvn");
+    const wrapA = document.getElementById("storage-pairwise-classes-a");
+    const wrapB = document.getElementById("storage-pairwise-classes-b");
+
+    try {
+        const payload = {
+            chem_a: idA,
+            chem_b: idB
+        };
+        const resp = await fetch("/api/msds/storage-compatibility-check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        const pair = data.pairwise || (data.pairs && data.pairs[0]) || data;
+
+        const pCode = pair.code || "C";
+        const pBadge = pair.badge || (pCode === "X" ? "CẤM LƯU TRỮ CHUNG" : (pCode === "S" ? "YÊU CẦU CÁCH LY" : "CHO PHÉP LƯU TRỮ"));
+        const pColor = pair.color || (pCode === "X" ? "#dc2626" : (pCode === "S" ? "#eab308" : "#16a34a"));
+        const pBg = pCode === "X" ? "#fef2f2" : (pCode === "S" ? "#fefce8" : "#f0fdf4");
+        const pBorder = pCode === "X" ? "#f87171" : (pCode === "S" ? "#facc15" : "#86efac");
+
+        if (card) {
+            card.style.background = pBg;
+            card.style.borderColor = pBorder;
+        }
+
+        if (badge) {
+            badge.innerText = pBadge;
+            badge.style.background = pColor;
+        }
+
+        if (code) {
+            code.innerText = `Mã: ${pCode}`;
+            code.style.color = pColor;
+        }
+
+        if (mech) {
+            mech.innerText = pair.danger_mechanism || "Không có xung đột nguy hại.";
+        }
+
+        if (measures) {
+            measures.innerText = pair.safety_measures || pair.recommended_measures || "Lưu kho thông thường.";
+        }
+
+        if (tcvn) {
+            tcvn.innerText = `Căn cứ: ${pair.tcvn_reference || 'TCVN 5507:2002'}`;
+        }
+
+        if (wrapA && pair.chem_a) {
+            const classesA = pair.chem_a.storage_classes || ["NON_DG"];
+            wrapA.innerHTML = classesA.map(c => `<span style="font-size:11px; font-weight:700; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">${escapeHtml(c)}</span>`).join(" ");
+        }
+
+        if (wrapB && pair.chem_b) {
+            const classesB = pair.chem_b.storage_classes || ["NON_DG"];
+            wrapB.innerHTML = classesB.map(c => `<span style="font-size:11px; font-weight:700; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">${escapeHtml(c)}</span>`).join(" ");
+        }
+
+    } catch (err) {
+        console.error("Pairwise evaluate error:", err);
+    }
+}
+
+async function renderStorageMatrixGrid() {
+    const table = document.getElementById("storage-matrix-table");
+    if (!table) return;
+
+    const matrixData = await loadStorageMatrixData();
+    if (!matrixData || !matrixData.classes || !matrixData.matrix) {
+        table.innerHTML = "<tr><td style='padding:20px; color:#ef4444;'>Không thể nạp dữ liệu ma trận lưu kho.</td></tr>";
+        return;
+    }
+
+    const classes = matrixData.classes;
+    const matrix = matrixData.matrix;
+
+    let html = "<thead><tr><th style='padding:8px; background:#1e293b; color:#fff; border:1px solid #475569;'>Nhóm / GHS</th>";
+    classes.forEach(c => {
+        html += `<th style='padding:6px; background:#334155; color:#f8fafc; border:1px solid #475569; font-size:11px; cursor:help;' title='${escapeHtml(c.label_vi)}: ${escapeHtml(c.description)}'>${escapeHtml(c.code)}</th>`;
+    });
+    html += "</tr></thead><tbody>";
+
+    classes.forEach(rowClass => {
+        html += `<tr><td style='padding:6px 10px; font-weight:700; text-align:left; background:#f1f5f9; border:1px solid #cbd5e1; white-space:nowrap;'>`;
+        html += `<span style='margin-right:4px;'>${rowClass.icon || '⚗️'}</span> <b>${escapeHtml(rowClass.code)}</b> <span style='font-size:10.5px; color:#64748b;'>(${escapeHtml(rowClass.label_vi)})</span>`;
+        html += `</td>`;
+
+        classes.forEach(colClass => {
+            const cell = (matrix[rowClass.id] && matrix[rowClass.id][colClass.id]) || { code: "C" };
+            const code = cell.code || "C";
+            let bg = "#dcfce7";
+            let fg = "#15803d";
+            let title = "Cho phép xếp chung";
+
+            if (code === "X") {
+                bg = "#fee2e2";
+                fg = "#b91c1c";
+                title = "NGHIÊM CẤM để chung (Nguy cơ cháy nổ/phản ứng)";
+            } else if (code === "S") {
+                bg = "#fef9c3";
+                fg = "#a16207";
+                title = "YÊU CẦU CÁCH LY (>= 3-5m hoặc có vách ngăn)";
+            }
+
+            html += `<td style='padding:6px; font-weight:800; font-size:12px; cursor:pointer; background:${bg}; color:${fg}; border:1px solid #cbd5e1; transition:all 0.15s;' 
+                        onclick="showStorageCellDetail('${escapeHtml(rowClass.id)}', '${escapeHtml(colClass.id)}')"
+                        title='${escapeHtml(rowClass.code)} + ${escapeHtml(colClass.code)}: ${title}'>
+                        ${code}
+                    </td>`;
+        });
+
+        html += "</tr>";
+    });
+
+    html += "</tbody>";
+    table.innerHTML = html;
+}
+
+function showStorageCellDetail(classAId, classBId) {
+    if (!STORAGE_MATRIX_DATA || !STORAGE_MATRIX_DATA.matrix) return;
+    const rule = (STORAGE_MATRIX_DATA.matrix[classAId] && STORAGE_MATRIX_DATA.matrix[classAId][classBId]) || {};
+    const classA = (STORAGE_MATRIX_DATA.classes || []).find(c => c.id === classAId) || { code: classAId, label_vi: classAId };
+    const classB = (STORAGE_MATRIX_DATA.classes || []).find(c => c.id === classBId) || { code: classBId, label_vi: classBId };
+
+    const popover = document.getElementById("storage-cell-detail-card");
+    const title = document.getElementById("storage-cell-detail-title");
+    const text = document.getElementById("storage-cell-detail-text");
+    if (!popover || !title || !text) return;
+
+    const code = rule.code || "C";
+    const badge = rule.badge || (code === "X" ? "CẤM LƯU TRỮ CHUNG" : (code === "S" ? "YÊU CẦU CÁCH LY" : "CHO PHÉP"));
+    const color = rule.color || (code === "X" ? "#dc2626" : (code === "S" ? "#eab308" : "#16a34a"));
+
+    title.innerHTML = `
+        <span style="display:inline-flex; align-items:center; gap:6px;">
+            <span>${classA.icon || '⚗️'} <b>${escapeHtml(classA.code)}</b> (${escapeHtml(classA.label_vi)})</span>
+            <span>+</span>
+            <span>${classB.icon || '⚗️'} <b>${escapeHtml(classB.code)}</b> (${escapeHtml(classB.label_vi)})</span>
+            <span style="background:${color}; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; margin-left:8px;">${badge} [${code}]</span>
+        </span>
+    `;
+
+    text.innerHTML = `
+        <div style="margin-bottom:6px;"><b>Cơ chế phản ứng &amp; Nguy hại:</b> ${escapeHtml(rule.mechanism || 'Cho phép lưu trữ chung.')}</div>
+        <div style="color:#64748b; font-size:11.5px;"><b>Căn cứ quy chuẩn:</b> ${escapeHtml(rule.tcvn_clause || 'TCVN 5507:2002')}</div>
+    `;
+
+    popover.style.display = "block";
+    popover.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function auditFullWarehouseStorage() {
+    try {
+        const btn = document.querySelector("#msds-storage-matrix-modal button[onclick='auditFullWarehouseStorage()']");
+        if (btn) { btn.disabled = true; btn.innerHTML = "⏳ Đang quét toàn kho..."; }
+
+        const resp = await fetch("/api/msds/storage-compatibility-check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+        });
+
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        const conflicts = data.conflicts || [];
+        const warnings = data.warnings || [];
+        const total = data.total_chemicals || 0;
+
+        let alertMsg = `KẾT QUẢ KIỂM TOÁN TỒN TRỮ KHO HÓA CHẤT (TCVN 5507:2002):\n`;
+        alertMsg += `--------------------------------------------------\n`;
+        alertMsg += `Tổng số hóa chất kiểm tra: ${total} chất (${data.total_pairs || 0} cặp tương tác)\n`;
+        alertMsg += `🔴 Số cặp NGHIÊM CẤM lưu trữ chung (Mã X): ${conflicts.length}\n`;
+        alertMsg += `🟡 Số cặp YÊU CẦU CÁCH LY ≥ 3-5m (Mã S): ${warnings.length}\n`;
+        alertMsg += `🟢 Số cặp CHO PHÉP (Mã C): ${data.compatible_count || 0}\n\n`;
+
+        if (conflicts.length > 0) {
+            alertMsg += `DANH SÁCH XUNG ĐỘT CẤM CẦN XỬ LÝ NGAY:\n`;
+            conflicts.forEach((c, i) => {
+                const nameA = (c.chem_a && c.chem_a.name) || "Chất A";
+                const nameB = (c.chem_b && c.chem_b.name) || "Chất B";
+                alertMsg += `  ${i + 1}. [${nameA}] + [${nameB}]: ${c.danger_mechanism}\n`;
+            });
+        } else if (warnings.length > 0) {
+            alertMsg += `Lưu ý: Không có xung đột cấm (X), nhưng cần duy trì khoảng cách cách ly cho ${warnings.length} cặp hóa chất.\n`;
+        } else {
+            alertMsg += `Tuyệt vời! Toàn bộ kho hóa chất hiện tại đều tương thích lưu trữ an toàn!\n`;
+        }
+
+        alert(alertMsg);
+
+    } catch (err) {
+        console.error("Audit error:", err);
+        alert("Lỗi kiểm toán kho hóa chất: " + err.message);
+    } finally {
+        const btn = document.querySelector("#msds-storage-matrix-modal button[onclick='auditFullWarehouseStorage()']");
+        if (btn) { btn.disabled = false; btn.innerHTML = "🔍 <span>Quét Xung Đột Toàn Kho</span>"; }
+    }
+}
+
+// ==============================================================================
+// MILESTONE M4: ANNUAL CHEMICAL REPORT EXPORT (THÔNG TƯ 02/2026/TT-BCT)
+// ==============================================================================
+
+async function exportAnnualChemicalReport() {
+    const btn = document.getElementById("btn-export-annual-report");
+    const originalText = btn ? btn.innerHTML : "";
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<span>⏳ Đang kết xuất Báo cáo...</span>`;
+        }
+
+        const resp = await fetch("/api/msds/export-annual-chemical-report");
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: Lỗi khi xuất báo cáo hóa chất hàng năm.`);
+        }
+
+        const blob = await resp.blob();
+        const disposition = resp.headers.get("content-disposition") || "";
+        let filename = "Bao_Cao_Tong_Hop_Hoa_Chat_Hang_Nam_2026.xlsx";
+        const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1].replace(/['"]/g, "");
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error("Lỗi xuất Báo Cáo Hóa Chất Hàng Năm:", err);
+        alert("Không thể xuất Báo Cáo Hàng Năm: " + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+}
+
+// ==============================================================================
+// MILESTONE M5: FIELD MOBILE QR CODE & STICKER PRINT MODAL
+// ==============================================================================
+
+let CURRENT_QR_CHEM_ID = null;
+let CURRENT_QR_STICKER_SIZE = 50; // mm
+
+async function openMsdsQrModal(chemId) {
+    CURRENT_QR_CHEM_ID = chemId;
+    const modal = document.getElementById("msds-qr-modal");
+    const codeEl = document.getElementById("msds-qr-chem-code");
+    const nameEl = document.getElementById("msds-qr-chem-name");
+    const casEl = document.getElementById("msds-qr-chem-cas");
+    const previewEl = document.getElementById("msds-qr-preview");
+    const mobileLink = document.getElementById("msds-qr-mobile-link");
+
+    if (!modal) return;
+    modal.classList.remove("hidden");
+
+    if (codeEl) codeEl.textContent = chemId;
+    if (nameEl) nameEl.textContent = "Đang tải...";
+    if (casEl) casEl.textContent = "CAS: ...";
+    if (previewEl) previewEl.innerHTML = `<div class="spinner"></div>`;
+    if (mobileLink) {
+        mobileLink.href = `/mobile-msds/${encodeURIComponent(chemId)}`;
+    }
+
+    try {
+        // Fetch chemical details
+        const detailResp = await fetch(`/api/msds/detail/${encodeURIComponent(chemId)}`);
+        if (detailResp.ok) {
+            const json = await detailResp.json();
+            const chem = (json.data && json.data.chemical) || {};
+            if (codeEl) codeEl.textContent = chem.product_code || chem.chem_id || chemId;
+            if (nameEl) nameEl.textContent = chem.product_name || "Hóa chất";
+            if (casEl) casEl.textContent = `CAS: ${chem.cas_numbers || "Hỗn hợp"}`;
+        }
+
+        // Fetch SVG QR code
+        const qrResp = await fetch(`/api/msds/qr-code/${encodeURIComponent(chemId)}`);
+        if (!qrResp.ok) {
+            throw new Error(`HTTP ${qrResp.status}: Không thể tải mã QR.`);
+        }
+        const svgText = await qrResp.text();
+        if (previewEl) {
+            previewEl.innerHTML = svgText;
+        }
+    } catch (err) {
+        console.error("Lỗi nạp mã QR:", err);
+        if (previewEl) {
+            previewEl.innerHTML = `<div style="color:#ef4444; font-size:12px; padding:10px;">Lỗi tải mã QR: ${err.message}</div>`;
+        }
+    }
+}
+
+function closeMsdsQrModal() {
+    const modal = document.getElementById("msds-qr-modal");
+    if (modal) {
+        modal.classList.add("hidden");
+    }
+    CURRENT_QR_CHEM_ID = null;
+}
+
+function selectQrStickerPreset(sizeMm, btn) {
+    CURRENT_QR_STICKER_SIZE = sizeMm;
+    const buttons = document.querySelectorAll(".msds-btn-qr-size");
+    buttons.forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+
+    const card = document.getElementById("msds-qr-sticker-card");
+    if (card) {
+        card.setAttribute("data-size", sizeMm);
+    }
+}
+
+function downloadQrImage() {
+    if (!CURRENT_QR_CHEM_ID) {
+        alert("Chưa chọn hóa chất để tải mã QR.");
+        return;
+    }
+    const a = document.createElement("a");
+    a.href = `/api/msds/qr-code/${encodeURIComponent(CURRENT_QR_CHEM_ID)}`;
+    a.download = `QR_Emergency_${CURRENT_QR_CHEM_ID}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function printQrSticker() {
+    if (!CURRENT_QR_CHEM_ID) {
+        alert("Chưa chọn hóa chất để in tem QR.");
+        return;
+    }
+
+    const previewSvg = document.getElementById("msds-qr-preview")?.innerHTML || "";
+    const codeText = document.getElementById("msds-qr-chem-code")?.textContent || CURRENT_QR_CHEM_ID;
+    const nameText = document.getElementById("msds-qr-chem-name")?.textContent || "";
+    const casText = document.getElementById("msds-qr-chem-cas")?.textContent || "";
+    const sizeMm = CURRENT_QR_STICKER_SIZE || 50;
+
+    const printWin = window.open("", "_blank", "width=600,height=600");
+    if (!printWin) {
+        alert("Trình duyệt đã chặn cửa sổ in tem. Vui lòng cho phép popup.");
+        return;
+    }
+
+    printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Tem QR Cứu Hộ - \${codeText}</title>
+            <style>
+                @page {
+                    size: \${sizeMm}mm \${sizeMm}mm;
+                    margin: 0;
+                }
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body {
+                    width: \${sizeMm}mm;
+                    height: \${sizeMm}mm;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+                    background: #fff;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 2mm;
+                    text-align: center;
+                    overflow: hidden;
+                }
+                .tag {
+                    font-size: \${sizeMm <= 50 ? '6pt' : '8pt'};
+                    font-weight: 800;
+                    color: #c2410c;
+                    background: #fff7ed;
+                    border: 0.5pt solid #fdba74;
+                    padding: 1pt 3pt;
+                    border-radius: 2pt;
+                    margin-bottom: 1.5mm;
+                    text-transform: uppercase;
+                }
+                .qr-box {
+                    width: \${sizeMm <= 50 ? '24mm' : (sizeMm <= 70 ? '36mm' : '52mm')};
+                    height: \${sizeMm <= 50 ? '24mm' : (sizeMm <= 70 ? '36mm' : '52mm')};
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .qr-box svg {
+                    width: 100% !important;
+                    height: 100% !important;
+                }
+                .code {
+                    font-size: \${sizeMm <= 50 ? '7pt' : '9pt'};
+                    font-weight: 900;
+                    color: #0f172a;
+                    margin-top: 1mm;
+                }
+                .name {
+                    font-size: \${sizeMm <= 50 ? '5.5pt' : '7.5pt'};
+                    color: #334155;
+                    font-weight: 600;
+                    max-width: 95%;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .cas {
+                    font-size: \${sizeMm <= 50 ? '5pt' : '6.5pt'};
+                    color: #64748b;
+                    font-family: monospace;
+                }
+                .call {
+                    font-size: \${sizeMm <= 50 ? '5pt' : '6pt'};
+                    color: #dc2626;
+                    font-weight: 700;
+                    margin-top: 0.5mm;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="tag">⚡ CỨU HỘ KHẨN CẤP</div>
+            <div class="qr-box">\${previewSvg}</div>
+            <div class="code">\${codeText}</div>
+            <div class="name">\${nameText}</div>
+            <div class="cas">\${casText}</div>
+            <div class="call">Cứu hỏa 114 · Y tế 115</div>
+            <script>
+                window.onload = function() {
+                    window.print();
+                    setTimeout(function() { window.close(); }, 500);
+                };
+            <\\/script>
+        </body>
+        </html>
+    `);
+    printWin.document.close();
+}
+
+

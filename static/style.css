@@ -6233,6 +6233,723 @@ body.msds-studio-active {
   width: 38px;
 }
 
+/* ============================================================================== */
+/* BATCH ZIP & WORD SAFETY CARDS BUTTONS (MILESTONE M1)                           */
+/* ============================================================================== */
 
+.msds-btn-batch-zip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border: 1px solid #38bdf8;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+}
+
+.msds-btn-batch-zip:hover {
+  background: linear-gradient(135deg, #0369a1, #075985);
+  transform: translateY(-1px);
+}
+
+.msds-btn-batch-cards {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #4f46e5, #4338ca);
+  border: 1px solid #818cf8;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.msds-btn-batch-cards:hover {
+  background: linear-gradient(135deg, #4338ca, #3730a3);
+  transform: translateY(-1px);
+}
+
+.msds-btn-zip-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border: 1px solid #38bdf8;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+  transition: all 0.15s ease;
+  padding: 8px 10px;
+}
+
+.msds-btn-zip-all:hover {
+  background: linear-gradient(135deg, #0369a1, #075985);
+  transform: translateY(-1px);
+}
+
+.msds-btn-cards-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: 1px solid #a5b4fc;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+  transition: all 0.15s ease;
+  padding: 8px 10px;
+}
+
+.msds-btn-cards-all:hover {
+  background: linear-gradient(135deg, #4f46e5, #4338ca);
+  transform: translateY(-1px);
+}
+
+
+/* ============================================================================== */
+/* GHS DECANTING LABEL MAKER & PRINT ENGINE (MILESTONE M2)                        */
+/* ============================================================================== */
+
+.msds-btn-batch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+  border: 1px solid #fb923c;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35);
+}
+
+.msds-btn-batch-label:hover {
+  background: linear-gradient(135deg, #c2410c, #9a3412);
+  transform: translateY(-1px);
+}
+
+.msds-btn-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msds-btn-label-row:hover {
+  background: #ffedd5;
+  border-color: #fb923c;
+  color: #9a3412;
+}
+
+/* Modal Dialog */
+.msds-label-modal-dialog {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 1150px;
+  width: 95vw;
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+}
+
+.msds-label-modal-header {
+  background: linear-gradient(135deg, #1e3a8a, #0f172a);
+  color: #ffffff;
+  padding: 16px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.msds-label-modal-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.msds-label-form-col {
+  width: 48%;
+  padding: 18px 22px;
+  overflow-y: auto;
+  border-right: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.msds-label-preview-col {
+  width: 52%;
+  padding: 18px 22px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.msds-label-form-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.msds-label-modal-footer {
+  background: #f1f5f9;
+  border-top: 1px solid #e2e8f0;
+  padding: 12px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.msds-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.msds-form-group label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.msds-form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.msds-input, .msds-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.msds-input:focus, .msds-textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.msds-ghs-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: #f8fafc;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.ghs-checkbox-tile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  user-select: none;
+}
+
+.ghs-checkbox-tile.checked {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.msds-label-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.msds-size-switcher {
+  display: inline-flex;
+  background: #e2e8f0;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 3px;
+}
+
+.msds-btn-size {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msds-btn-size.active {
+  background: #ffffff;
+  color: #1e3a8a;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.msds-label-preview-canvas-wrap {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12px;
+  background: #e2e8f0;
+  border-radius: 8px;
+}
+
+.msds-label-preview-card {
+  background: #ffffff;
+  border: 2.5px solid #cc0000;
+  border-radius: 4px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+}
+
+.msds-btn-pdf-export {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  border: 1px solid #38bdf8;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+}
+
+.msds-btn-print-now {
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+  color: #ffffff;
+  border: 1px solid #fb923c;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35);
+}
+
+/* ============================================================================== */
+/* ISOLATED PRINT STYLESHEET FOR GHS DECANTING LABELS (@media print)              */
+/* ============================================================================== */
+@media print {
+  body > * {
+    display: none !important;
+  }
+
+  #ghs-print-isolated-container,
+  #ghs-print-isolated-container * {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  #ghs-print-isolated-container {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  @page {
+    margin: 5mm;
+    size: auto;
+  }
+
+  .print-sheet-a4-4 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: 1fr 1fr !important;
+    gap: 6mm !important;
+    width: 200mm !important;
+    height: 287mm !important;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+
+  .print-sheet-a5-1 {
+    width: 138mm !important;
+    height: 200mm !important;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+
+  .print-sheet-decal-150 {
+    width: 100mm !important;
+    height: 150mm !important;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+
+  .print-sheet-decal-75 {
+    width: 100mm !important;
+    height: 75mm !important;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+}
+
+/* ============================================================================== */
+/* CHEMICAL STORAGE COMPATIBILITY MATRIX & WAREHOUSE CHECKER (MILESTONE M3)       */
+/* ============================================================================== */
+
+.msds-btn-matrix {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(135deg, #059669, #047857);
+  border: 1px solid #6ee7b7;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+  transition: all 0.15s ease;
+  padding: 8px 10px;
+}
+
+.msds-btn-matrix:hover {
+  background: linear-gradient(135deg, #047857, #065f46);
+  transform: translateY(-1px);
+}
+
+.storage-matrix-grid-table th,
+.storage-matrix-grid-table td {
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.storage-matrix-grid-table td:hover {
+  filter: brightness(0.92);
+  transform: scale(1.05);
+  z-index: 2;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.storage-modal-scrollable-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.storage-modal-scrollable-body::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.storage-modal-scrollable-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.storage-modal-scrollable-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ============================================================================== */
+/* MILESTONE M4: ANNUAL CHEMICAL REPORT EXPORT BUTTON                             */
+/* ============================================================================== */
+
+.msds-btn-report-annual {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  border: 1px solid #93c5fd;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.35);
+  transition: all 0.15s ease;
+  padding: 8px 10px;
+}
+
+.msds-btn-report-annual:hover {
+  background: linear-gradient(135deg, #1e40af, #172554);
+  transform: translateY(-1px);
+}
+
+.msds-btn-report-annual:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================================================================== */
+/* MILESTONE M5: FIELD MOBILE QR CODE & STICKER PRINT MODAL                       */
+/* ============================================================================== */
+
+.msds-btn-qr-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msds-btn-qr-row:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+  color: #1e40af;
+}
+
+.msds-qr-modal-dialog {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 540px;
+  width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+  animation: modalSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.msds-qr-modal-header {
+  background: linear-gradient(135deg, #4338ca, #312e81);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.msds-qr-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  background: #f8fafc;
+}
+
+.msds-qr-size-selector {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.msds-qr-preset-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.msds-btn-qr-size {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msds-btn-qr-size:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.msds-btn-qr-size.active {
+  background: #4338ca;
+  color: #ffffff;
+  border-color: #4338ca;
+  box-shadow: 0 2px 6px rgba(67, 56, 202, 0.3);
+}
+
+.msds-qr-preview-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background: #e2e8f0;
+  border-radius: 12px;
+  width: 100%;
+}
+
+.msds-qr-sticker-card {
+  background: #ffffff;
+  border: 2px dashed #94a3b8;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  width: 260px;
+  transition: all 0.2s ease;
+}
+
+.msds-qr-sticker-card[data-size="70"] {
+  width: 320px;
+}
+
+.msds-qr-sticker-card[data-size="100"] {
+  width: 380px;
+}
+
+.msds-qr-sticker-header {
+  margin-bottom: 8px;
+}
+
+.msds-qr-brand-badge {
+  font-size: 9px;
+  font-weight: 800;
+  color: #c2410c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+.msds-qr-code-box {
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  margin: 6px 0;
+}
+
+.msds-qr-code-box svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.msds-qr-sticker-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+}
+
+.msds-qr-chem-code {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.msds-qr-chem-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  max-width: 90%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msds-qr-chem-cas {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.msds-qr-emergency-hint {
+  font-size: 10px;
+  font-weight: 700;
+  color: #dc2626;
+  margin-top: 4px;
+}
+
+.msds-qr-modal-footer {
+  background: #ffffff;
+  padding: 12px 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.msds-qr-btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #4338ca;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.msds-qr-btn-link:hover {
+  text-decoration: underline;
+}
 
 

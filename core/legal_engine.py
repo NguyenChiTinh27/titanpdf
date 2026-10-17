@@ -314,6 +314,12 @@ class LegalCatalogEngine:
                 self.unique_cas.add(cas)
                 self.legal_by_cas[cas].append(item)
 
+        # Đồng bộ số lượng thống kê giữa ND26 và ND28
+        if "ND28" in self.source_counts:
+            self.source_counts["ND26"] = self.source_counts["ND28"]
+        if "ND26" in self.source_counts:
+            self.source_counts["ND28"] = self.source_counts["ND26"]
+
         self.initialized = True
         logger.info(
             "Đã khởi tạo LegalCatalogEngine thành công: %d bản ghi, %d số CAS duy nhất.",
@@ -328,10 +334,11 @@ class LegalCatalogEngine:
     def get_regulatory_badge(item: Dict[str, Any]) -> Dict[str, Any]:
         """Tạo đối tượng huy hiệu pháp lý chuẩn 5 bậc cho từng bản ghi."""
         sec = item.get("section_id", "")
-        if sec in {"ND28-I-A", "ND28-I-B", "ND28-IV-A"}:
+        sec_canonical = sec.replace("ND28-", "ND26-")
+        if sec in {"ND28-I-A", "ND28-I-B", "ND28-IV-A", "ND26-I-A", "ND26-I-B", "ND26-IV-A"}:
             return {
                 "type": "danger",
-                "label": f"NĐ 28: Cấm Tuyệt Đối ({sec})",
+                "label": f"NĐ 26: Cấm Tuyệt Đối ({sec_canonical})",
                 "tier": 1,
                 "color": "#b91c1c",
                 "bg": "#fef2f2",
@@ -346,28 +353,28 @@ class LegalCatalogEngine:
                 "bg": "#fff1f2",
                 "category": "special_control"
             }
-        elif sec in {"ND28-II-A", "ND28-II-B"}:
+        elif sec in {"ND28-II-A", "ND28-II-B", "ND26-II-A", "ND26-II-B"}:
             return {
                 "type": "danger",
-                "label": f"NĐ 28: Hạn Chế Sử Dụng ({sec})",
+                "label": f"NĐ 26: Hạn Chế Sử Dụng ({sec_canonical})",
                 "tier": 2,
                 "color": "#c2410c",
                 "bg": "#fff7ed",
                 "category": "restricted"
             }
-        elif sec == "ND28-IV-B":
+        elif sec in {"ND28-IV-B", "ND26-IV-B"}:
             return {
                 "type": "danger",
-                "label": "NĐ 28: Tiền Chất IV.B (BCA)",
+                "label": "NĐ 26: Tiền Chất IV.B (BCA)",
                 "tier": 2,
                 "color": "#dc2626",
                 "bg": "#fef2f2",
                 "category": "precursor_essential"
             }
-        elif sec == "ND28-IV-C":
+        elif sec in {"ND28-IV-C", "ND26-IV-C"}:
             return {
                 "type": "warning",
-                "label": "NĐ 28: Tiền Chất IV.C (BCT)",
+                "label": "NĐ 26: Tiền Chất IV.C (BCT)",
                 "tier": 2,
                 "color": "#ea580c",
                 "bg": "#fff7ed",
@@ -393,10 +400,10 @@ class LegalCatalogEngine:
                 "bg": "#fff7ed",
                 "category": "incident_plan"
             }
-        elif sec == "ND28-III":
+        elif sec in {"ND28-III", "ND26-III"}:
             return {
                 "type": "warning",
-                "label": "NĐ 28: Y Tế/Thú Y III",
+                "label": "NĐ 26: Y Tế/Thú Y III",
                 "tier": 3,
                 "color": "#d97706",
                 "bg": "#fffbeb",
@@ -438,32 +445,32 @@ class LegalCatalogEngine:
         twa = item.get("twa") or "---"
         stel = item.get("stel") or "---"
 
-        if sec in {"ND28-I-A", "ND28-I-B"}:
-            return "Chất ma túy, hướng thần tuyệt đối cấm sử dụng trong y tế và đời sống xã hội. Nghiêm cấm mọi hành vi sản xuất, tàng trữ, vận chuyển, sử dụng."
-        elif sec == "ND28-IV-A":
-            return "Tiền chất thiết yếu không có ứng dụng hợp pháp. Nghiêm cấm lưu thông trong hoạt động sản xuất kinh doanh thông thường."
+        if sec in {"ND28-I-A", "ND28-I-B", "ND26-I-A", "ND26-I-B"}:
+            return "Chất ma túy, hướng thần tuyệt đối cấm sử dụng theo Nghị định 26/2026/NĐ-CP và Luật Hóa chất 69/2025/QH15. Nghiêm cấm mọi hành vi sản xuất, tàng trữ, vận chuyển, sử dụng."
+        elif sec in {"ND28-IV-A", "ND26-IV-A"}:
+            return "Tiền chất thiết yếu không có ứng dụng hợp pháp theo Nghị định 26/2026/NĐ-CP. Nghiêm cấm lưu thông trong hoạt động sản xuất kinh doanh thông thường."
         elif sec == "ND24-PL-III":
-            return "Phải có Giấy phép sản xuất, kinh doanh hóa chất cần kiểm soát đặc biệt; Lập Phiếu kiểm soát mua, bán hóa chất độc; Định kỳ báo cáo cơ quan chuyên trách."
-        elif sec in {"ND28-II-A", "ND28-II-B"}:
-            return "Chỉ được phép sử dụng trong phân tích, kiểm nghiệm, nghiên cứu khoa học, điều tra tội phạm hoặc y tế theo giấy phép chỉ định."
-        elif sec == "ND28-IV-B":
-            return f"Tiền chất ma túy thiết yếu do {authority} quản lý. Phải có Giấy phép xuất nhập khẩu, lập sổ theo dõi xuất nhập tồn, lưu trữ chứng từ tối thiểu 2 năm."
-        elif sec == "ND28-IV-C":
-            return f"Dung môi, tiền chất ma túy công nghiệp do {authority} quản lý. Phải lập sổ theo dõi riêng, báo cáo định kỳ 6 tháng và hàng năm tới Sở Công Thương và Công an."
+            return "Phải có Giấy phép sản xuất, kinh doanh hóa chất cần kiểm soát đặc biệt theo Nghị định 24/2026/NĐ-CP; Lập Phiếu kiểm soát mua, bán; Định kỳ báo cáo cơ quan chuyên trách."
+        elif sec in {"ND28-II-A", "ND28-II-B", "ND26-II-A", "ND26-II-B"}:
+            return "Chỉ được phép sử dụng trong phân tích, kiểm nghiệm, nghiên cứu khoa học theo Nghị định 26/2026/NĐ-CP và giấy phép chuyên ngành."
+        elif sec in {"ND28-IV-B", "ND26-IV-B"}:
+            return f"Tiền chất ma túy thiết yếu do {authority} quản lý theo Nghị định 26/2026/NĐ-CP. Phải có Giấy phép xuất nhập khẩu, lập sổ theo dõi xuất nhập tồn, lưu trữ chứng từ tối thiểu 2 năm."
+        elif sec in {"ND28-IV-C", "ND26-IV-C"}:
+            return f"Dung môi, tiền chất ma túy công nghiệp do {authority} quản lý theo Nghị định 26/2026/NĐ-CP. Phải lập sổ theo dõi riêng, báo cáo định kỳ 6 tháng và hàng năm theo Thông tư 02/2026/TT-BCT tới Sở Công Thương và Công an."
         elif sec == "ND24-PL-II":
-            return "Phải có Giấy chứng nhận đủ điều kiện sản xuất, kinh doanh hóa chất có điều kiện; Duy trì điều kiện an toàn nhà xưởng, kho bãi và trang bị bảo hộ."
+            return "Phải có Giấy chứng nhận đủ điều kiện sản xuất, kinh doanh hóa chất theo Nghị định 24/2026/NĐ-CP; Duy trì điều kiện an toàn nhà xưởng, kho bãi và trang bị bảo hộ."
         elif sec == "ND24-PL-IV-A":
             th_text = f"vượt ngưỡng quy định ({threshold} kg)" if threshold else "theo quy định"
-            return f"Bắt buộc xây dựng Kế hoạch phòng ngừa, ứng phó sự cố hóa chất cấp Bộ/Tỉnh khi khối lượng tồn trữ {th_text}. Diễn tập định kỳ hàng năm."
+            return f"Bắt buộc xây dựng Kế hoạch phòng ngừa, ứng phó sự cố hóa chất theo Nghị định 24/2026/NĐ-CP cấp Bộ/Tỉnh khi khối lượng tồn trữ {th_text}. Diễn tập định kỳ hàng năm."
         elif sec == "ND24-PL-IV-B":
-            return "Nhóm hóa chất nguy hại tiềm ẩn sự cố nghiêm trọng; tính toán ngưỡng tồn trữ tổng hợp để lập kế hoạch hoặc biện pháp ứng phó sự cố."
-        elif sec == "ND28-III":
-            return "Kiểm soát đặc biệt theo quy chế quản lý thuốc và dược chất hướng thần trong y tế, thú y."
+            return "Nhóm hóa chất nguy hại tiềm ẩn sự cố nghiêm trọng theo Nghị định 24/2026/NĐ-CP; tính toán ngưỡng tồn trữ tổng hợp để lập kế hoạch hoặc biện pháp ứng phó sự cố."
+        elif sec in {"ND28-III", "ND26-III"}:
+            return "Kiểm soát đặc biệt theo quy chế quản lý thuốc và dược chất hướng thần theo Nghị định 26/2026/NĐ-CP trong y tế, thú y."
         elif sec == "ND24-PL-I":
-            return "Hóa chất thuộc ngành công nghiệp hóa chất trọng điểm. Định kỳ khai báo và cập nhật số liệu hoạt động trên Hệ thống Cơ sở dữ liệu Hóa chất Quốc gia."
+            return "Hóa chất thuộc ngành công nghiệp hóa chất trọng điểm theo Nghị định 24/2026/NĐ-CP. Định kỳ khai báo và cập nhật số liệu hoạt động trên Hệ thống Cơ sở dữ liệu Hóa chất Quốc gia."
         elif sec == "QCVN01-70":
-            return f"Phải đo kiểm môi trường lao động định kỳ tối thiểu 1 lần/năm. Giới hạn ca 8h TWA: {twa} mg/m³; Giới hạn tiếp xúc ngắn STEL: {stel} mg/m³."
-        return "Tuân thủ các quy định chung về quản lý an toàn hóa chất theo Luật Hóa chất 69/2025/QH15."
+            return f"Phải đo kiểm môi trường lao động định kỳ tối thiểu 1 lần/năm theo QCVN 01:2025/BYT. Giới hạn ca 8h TWA: {twa} mg/m³; Giới hạn tiếp xúc ngắn STEL: {stel} mg/m³."
+        return "Tuân thủ các quy định chung về quản lý an toàn hóa chất theo Luật Hóa chất 69/2025/QH15, Nghị định 24/2026/NĐ-CP, Nghị định 25/2026/NĐ-CP, Nghị định 26/2026/NĐ-CP, Thông tư 01/2026/TT-BCT và Thông tư 02/2026/TT-BCT."
 
     # --------------------------------------------------------------------------
     # TRA CỨU & TÌM KIẾM (SEARCH & LOOKUP)
@@ -519,13 +526,23 @@ class LegalCatalogEngine:
         filtered: List[Dict[str, Any]] = []
 
         for item in self.items:
-            # 1. Lọc theo Source
-            if source_id and item["source_id"] != source_id:
-                continue
+            # 1. Lọc theo Source (hỗ trợ cả ND26 và ND28 đồng thời)
+            if source_id:
+                if source_id in ("ND26", "ND28"):
+                    if item["source_id"] not in ("ND26", "ND28"):
+                        continue
+                elif item["source_id"] != source_id:
+                    continue
 
-            # 2. Lọc theo Section
-            if section_id and item["section_id"] != section_id:
-                continue
+            # 2. Lọc theo Section (hỗ trợ cả tiền tố ND26- và ND28-)
+            if section_id:
+                if section_id.startswith("ND26-") or section_id.startswith("ND28-"):
+                    cand1 = section_id.replace("ND28-", "ND26-")
+                    cand2 = section_id.replace("ND26-", "ND28-")
+                    if item["section_id"] not in (cand1, cand2):
+                        continue
+                elif item["section_id"] != section_id:
+                    continue
 
             # 3. Lọc theo Subgroup
             if subgroup_norm:

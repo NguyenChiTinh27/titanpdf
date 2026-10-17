@@ -1996,6 +1996,22 @@
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             <span>Xuất Excel (.xlsx)</span>
                         </button>
+                        <button type="button" id="btn-download-all-original" class="msds-btn-zip-all" onclick="downloadAllMsdsOriginalZip()" title="Tải toàn bộ tệp MSDS gốc trong kho thành tệp ZIP">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span>📦 Tải toàn bộ MSDS (.zip)</span>
+                        </button>
+                        <button type="button" id="btn-download-all-cards" class="msds-btn-cards-all" onclick="exportAllMsdsSafetyCardsZip()" title="Tải toàn bộ Thẻ An Toàn Word (.docx) của tất cả hóa chất thành tệp ZIP">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            <span>🗂️ Toàn bộ Thẻ Word (.zip)</span>
+                        </button>
+                        <!-- R3: Ma Trận Tương Thích Lưu Kho Hóa Chất TCVN 5507 -->
+                        <button type="button" id="btn-open-storage-matrix" class="msds-btn-matrix" onclick="openStorageMatrixModal()" title="Mở ma trận tương thích tồn trữ kho theo TCVN 5507:2002 & GHS">
+                            <span>🧭 Ma Trận Lưu Kho</span>
+                        </button>
+                        <!-- R4: Báo Cáo Hóa Chất Hàng Năm (Thông tư 02/2026/TT-BCT) -->
+                        <button type="button" id="btn-export-annual-report" class="msds-btn-report-annual" onclick="exportAnnualChemicalReport()" title="Xuất Báo Cáo Hóa Chất Hàng Năm nộp Sở Công Thương (Thông tư 02/2026/TT-BCT)">
+                            <span>📊 Báo Cáo Sở Công Thương</span>
+                        </button>
                         <button type="button" id="btn-msds-gdrive-sync" class="msds-btn-gdrive" onclick="syncMsdsToGoogleDrive()" title="Đồng bộ Sổ CIL và file MSDS lên Google Drive">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
                             <span id="txt-msds-gdrive-sync">☁️ Lưu Drive</span>
@@ -2076,6 +2092,18 @@
                     <button type="button" class="msds-btn-batch-select-all" onclick="toggleSelectAllFiltered(true)">Chọn toàn bộ mục đang lọc</button>
                 </div>
                 <div class="msds-batch-right">
+                    <button type="button" id="btn-batch-download-original" class="msds-btn-batch-zip" onclick="downloadSelectedMsdsOriginalZip()" title="Tải toàn bộ tệp MSDS gốc của các hóa chất đã chọn (.zip)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span>📥 Tải MSDS gốc (ZIP)</span>
+                    </button>
+                    <button type="button" id="btn-batch-download-cards" class="msds-btn-batch-cards" onclick="exportSelectedMsdsSafetyCardsZip()" title="Tải toàn bộ Thẻ An Toàn Word (.docx) của các hóa chất đã chọn (.zip)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        <span>📄 Tải Thẻ an toàn (ZIP)</span>
+                    </button>
+                    <button type="button" id="btn-batch-print-labels" class="msds-btn-batch-label" onclick="openBatchLabelModal()" title="In nhãn phụ GHS chiết rót cho các hóa chất đã chọn (Thông tư 01/2026/TT-BCT)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="3" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                        <span>🏷️ In Nhãn GHS</span>
+                    </button>
                     <button type="button" class="msds-btn-batch-delete" onclick="deleteSelectedMsdsBatch()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                         <span>Xóa <span id="msds-batch-del-num">0</span> mục đã chọn</span>
@@ -2128,6 +2156,136 @@
             </div>
         </section>
     </main>
+
+    <!-- MODAL TRÌNH TẠO & IN NHÃN PHỤ GHS CHIẾT RÓT (THÔNG TƯ 01/2026/TT-BCT) -->
+    <div id="msds-label-creator-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.72); backdrop-filter:blur(4px); z-index:99998; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div class="msds-label-modal-dialog">
+            <!-- Modal Header -->
+            <div class="msds-label-modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:24px;">🏷️</span>
+                    <div>
+                        <h3 style="margin:0; font-size:17px; font-weight:800; letter-spacing:0.3px;">
+                            TRÌNH TẠO &amp; IN NHÃN PHỤ GHS CHIẾT RÓT
+                        </h3>
+                        <div style="font-size:12px; color:#cbd5e1; margin-top:2px;">
+                            Quy chuẩn Thông tư 01/2026/TT-BCT &amp; TCVN GHS | Đơn vị: Công ty TNHH Sơn ZhanChen (Việt Nam) - Phân Xưởng Pha Chế
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-modal" onclick="closeMsdsLabelModal()" style="border:none; background:transparent; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+            </div>
+
+            <!-- Modal Body: 2-Column Layout -->
+            <div class="msds-label-modal-body">
+                <!-- Left Column: Form Controls (2-Way Data Binding) -->
+                <div class="msds-label-form-col">
+                    <div class="msds-label-form-section-title">📝 THÔNG TIN NHÃN CHIẾT RÓT</div>
+                    
+                    <div class="msds-form-group">
+                        <label for="label-form-name">Tên hóa chất / sản phẩm thương mại:</label>
+                        <input type="text" id="label-form-name" class="msds-input" oninput="updateLabelPreview()" placeholder="Tên hóa chất thương mại..." />
+                    </div>
+
+                    <div class="msds-form-row">
+                        <div class="msds-form-group" style="flex:1;">
+                            <label for="label-form-code">Mã SP nội bộ:</label>
+                            <input type="text" id="label-form-code" class="msds-input" oninput="updateLabelPreview()" placeholder="Mã sản phẩm..." />
+                        </div>
+                        <div class="msds-form-group" style="flex:1;">
+                            <label for="label-form-cas">Số CAS chính:</label>
+                            <input type="text" id="label-form-cas" class="msds-input" oninput="updateLabelPreview()" placeholder="CAS..." />
+                        </div>
+                    </div>
+
+                    <div class="msds-form-group">
+                        <label for="label-form-facility">Đơn vị / Cơ sở chiết rót:</label>
+                        <input type="text" id="label-form-facility" class="msds-input" oninput="updateLabelPreview()" />
+                    </div>
+
+                    <div class="msds-form-row">
+                        <div class="msds-form-group" style="flex:1;">
+                            <label for="label-form-date">Ngày chiết rót:</label>
+                            <input type="text" id="label-form-date" class="msds-input" oninput="updateLabelPreview()" />
+                        </div>
+                        <div class="msds-form-group" style="flex:1;">
+                            <label for="label-form-expiry">Hạn sử dụng:</label>
+                            <input type="text" id="label-form-expiry" class="msds-input" oninput="updateLabelPreview()" />
+                        </div>
+                        <div class="msds-form-group" style="flex:1;">
+                            <label for="label-form-lot">Số lô:</label>
+                            <input type="text" id="label-form-lot" class="msds-input" oninput="updateLabelPreview()" />
+                        </div>
+                    </div>
+
+                    <div class="msds-form-group">
+                        <label for="label-form-signal">Từ cảnh báo (Signal Word):</label>
+                        <select id="label-form-signal" class="msds-input" onchange="updateLabelPreview()">
+                            <option value="NGUY HIỂM / DANGER">🔴 NGUY HIỂM / DANGER</option>
+                            <option value="CẢNH BÁO / WARNING">🟠 CẢNH BÁO / WARNING</option>
+                            <option value="NON DG (AN TOÀN)">🟢 NON DG (AN TOÀN)</option>
+                        </select>
+                    </div>
+
+                    <div class="msds-form-group">
+                        <label>Hình đồ cảnh báo mối nguy GHS:</label>
+                        <div id="label-ghs-grid" class="msds-ghs-selector-grid">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <div class="msds-form-group">
+                        <label for="label-form-h">Cảnh báo nguy cơ chính (H-codes):</label>
+                        <textarea id="label-form-h" class="msds-textarea" rows="2" oninput="updateLabelPreview()"></textarea>
+                    </div>
+
+                    <div class="msds-form-group">
+                        <label for="label-form-p">Biện pháp phòng ngừa &amp; sơ cứu (P-codes):</label>
+                        <textarea id="label-form-p" class="msds-textarea" rows="3" oninput="updateLabelPreview()"></textarea>
+                    </div>
+
+                    <div class="msds-form-group">
+                        <label for="label-form-hotline">Hotline ứng phó sự cố khẩn cấp:</label>
+                        <input type="text" id="label-form-hotline" class="msds-input" oninput="updateLabelPreview()" />
+                    </div>
+                </div>
+
+                <!-- Right Column: Interactive Size Selector & Live Preview -->
+                <div class="msds-label-preview-col">
+                    <div class="msds-label-preview-header">
+                        <div class="msds-label-form-section-title">👁️ XEM TRƯỚC BẢN IN TRỰC TIẾP</div>
+                        <!-- Size Selector Buttons -->
+                        <div id="label-size-buttons" class="msds-size-switcher">
+                            <button type="button" class="msds-btn-size active" data-size="A4_4UP" onclick="setLabelPrintSize('A4_4UP')">A4 (4 nhãn)</button>
+                            <button type="button" class="msds-btn-size" data-size="A5" onclick="setLabelPrintSize('A5')">A5 (1 nhãn)</button>
+                            <button type="button" class="msds-btn-size" data-size="DECAL_150" onclick="setLabelPrintSize('DECAL_150')">Decal 100×150mm</button>
+                            <button type="button" class="msds-btn-size" data-size="DECAL_75" onclick="setLabelPrintSize('DECAL_75')">Decal 100×75mm</button>
+                        </div>
+                    </div>
+
+                    <!-- Preview Canvas Area -->
+                    <div id="label-preview-wrapper" class="msds-label-preview-canvas-wrap size-a4_4up">
+                        <div id="label-preview-box" class="msds-label-preview-card">
+                            <!-- Dynamically rendered live preview -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="msds-label-modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeMsdsLabelModal()">✕ Đóng</button>
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="msds-btn-pdf-export" onclick="downloadGhsLabelPdf()">
+                        💾 Tải PDF Nhãn
+                    </button>
+                    <button type="button" class="msds-btn-print-now" onclick="printGhsLabelSheet()">
+                        🖨️ In Nhãn Ngay
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 7. MODAL THẺ AN TOÀN KHẨN CẤP MSDS -->
     <div id="msds-safety-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.6); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px;">
@@ -2264,6 +2422,233 @@
                     </button>
                     <button type="button" id="btn-confirm-delete-all" class="btn-primary" onclick="executeDeleteAllMsds()" style="background:linear-gradient(135deg, #ef4444, #dc2626); border-color:#dc2626; padding:9px 18px; font-size:13px; font-weight:700; box-shadow:0 4px 12px rgba(239,68,68,0.35);">
                         🗑️ Xác Nhận Xóa Sạch CSDL
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9B. MODAL MA TRẬN TƯƠNG THÍCH LƯU KHO HÓA CHẤT (TCVN 5507:2002 & GHS) -->
+    <div id="msds-storage-matrix-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.7); backdrop-filter:blur(4px); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fff; border-radius:16px; max-width:1150px; width:100%; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(15,23,42,0.35); border:1px solid #cbd5e1; overflow:hidden;">
+            <!-- Modal Header -->
+            <div style="background:linear-gradient(135deg, #065f46, #047857, #0f172a); color:#fff; padding:16px 22px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:40px; height:40px; background:rgba(255,255,255,0.18); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px;">
+                        🧭
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:17px; font-weight:800; letter-spacing:0.3px;">MA TRẬN TƯƠNG THÍCH LƯU KHO HÓA CHẤT (TCVN 5507:2002 &amp; OSHA/GHS)</h3>
+                        <div style="font-size:12px; color:#a7f3d0; margin-top:2px;">
+                            Quy phạm an toàn tồn trữ kho · Đánh giá tương khắc song song · Kiểm tra khoảng cách cách ly an toàn
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button type="button" class="btn-primary" onclick="auditFullWarehouseStorage()" style="background:#059669; border-color:#34d399; font-size:12.5px; padding:6px 14px; font-weight:700; display:flex; align-items:center; gap:6px;">
+                        🔍 <span>Quét Xung Đột Toàn Kho</span>
+                    </button>
+                    <button type="button" onclick="closeStorageMatrixModal()" style="border:none; background:transparent; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+                </div>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div class="storage-modal-scrollable-body" style="padding:20px; overflow-y:auto; flex:1; background:#f8fafc;">
+                
+                <!-- TOP SECTION: WAREHOUSE PAIRWISE COMPATIBILITY CHECKER -->
+                <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
+                        <div style="font-weight:800; font-size:14.5px; color:#0f172a; display:flex; align-items:center; gap:8px;">
+                            <span>⚡ KIỂM TRA TƯƠNG THÍCH 2 HÓA CHẤT TRONG KHO (PAIRWISE CHECKER)</span>
+                        </div>
+                        <span style="font-size:11.5px; font-weight:600; color:#059669; background:#ecfdf5; padding:3px 10px; border-radius:12px; border:1px solid #a7f3d0;">
+                            TCVN 5507:2002 Điều 5.3 &amp; 5.6
+                        </span>
+                    </div>
+
+                    <!-- Dropdown Row -->
+                    <div style="display:grid; grid-template-columns: 1fr auto 1fr; gap:12px; align-items:center; margin-bottom:14px;">
+                        <div>
+                            <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:5px;">Hóa chất A (Chọn từ kho CIL):</label>
+                            <select id="storage-select-chem-a" class="msds-input" onchange="evaluatePairwiseStorage()" style="width:100%; font-weight:600; font-size:13px;"></select>
+                        </div>
+                        <div style="display:flex; justify-content:center; align-items:flex-end; padding-top:18px;">
+                            <button type="button" onclick="swapStoragePairwiseChems()" title="Đổi chỗ 2 hóa chất" style="width:36px; height:36px; border-radius:50%; border:1px solid #cbd5e1; background:#f1f5f9; cursor:pointer; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center; color:#334155; transition:all 0.2s;">
+                                ⇄
+                            </button>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:5px;">Hóa chất B (Chọn từ kho CIL):</label>
+                            <select id="storage-select-chem-b" class="msds-input" onchange="evaluatePairwiseStorage()" style="width:100%; font-weight:600; font-size:13px;"></select>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Pairwise Result Card -->
+                    <div id="storage-pairwise-card" style="border-radius:10px; border:2px solid #e2e8f0; background:#f8fafc; padding:16px; transition:all 0.3s;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span id="storage-pairwise-badge" style="padding:5px 14px; border-radius:8px; font-weight:800; font-size:13px; color:#fff; background:#16a34a; letter-spacing:0.5px;">
+                                    CHO PHÉP LƯU TRỮ
+                                </span>
+                                <span id="storage-pairwise-code" style="font-size:13px; font-weight:700; color:#475569;">
+                                    Mã: C
+                                </span>
+                            </div>
+                            <span id="storage-pairwise-tcvn" style="font-size:12px; font-weight:600; color:#64748b;">
+                                Căn cứ: TCVN 5507:2002
+                            </span>
+                        </div>
+
+                        <!-- Chemical Hazard Tags Comparison -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; background:#fff; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0;">
+                            <div>
+                                <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Phân nhóm Hóa chất A:</div>
+                                <div id="storage-pairwise-classes-a" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                                    <span style="font-size:11px; font-weight:700; background:#eff6ff; color:#1d4ed8; padding:2px 8px; border-radius:4px; border:1px solid #bfdbfe;">NON_DG</span>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Phân nhóm Hóa chất B:</div>
+                                <div id="storage-pairwise-classes-b" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                                    <span style="font-size:11px; font-weight:700; background:#eff6ff; color:#1d4ed8; padding:2px 8px; border-radius:4px; border:1px solid #bfdbfe;">NON_DG</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mechanism & Safe Measures -->
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <div style="font-size:13px; color:#1e293b; line-height:1.5;">
+                                <b style="color:#0f172a;">Cơ chế phản ứng &amp; Nguy hại:</b> <span id="storage-pairwise-mech">Hai hóa chất này không có phản ứng tương khắc nguy hiểm; cho phép lưu trữ chung trong kho tiêu chuẩn.</span>
+                            </div>
+                            <div style="font-size:13px; color:#1e293b; line-height:1.5;">
+                                <b style="color:#0f172a;">Biện pháp an toàn kho bắt buộc:</b> <span id="storage-pairwise-measures">Đảm bảo khoảng cách bảo quản hàng hóa thông thường, lối đi thông thoáng và thông gió tự nhiên.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM SECTION: INTERACTIVE 2D COLOR-CODED MATRIX GRID -->
+                <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px; box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <div style="font-weight:800; font-size:14.5px; color:#0f172a;">
+                                📊 BẢNG TRA MA TRẬN TƯƠNG THÍCH 11 NHÓM NGUY HẠI (TCVN 5507:2002)
+                            </div>
+                            <div style="font-size:12px; color:#64748b; margin-top:2px;">
+                                Nhấp chuột vào bất kỳ ô giao thoa nào để xem chi tiết cơ chế tương thích và căn cứ điều khoản.
+                            </div>
+                        </div>
+                        
+                        <!-- Legend Bar -->
+                        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; font-size:12px; font-weight:700;">
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <span style="display:inline-block; width:16px; height:16px; background:#16a34a; border-radius:3px; color:#fff; text-align:center; line-height:16px; font-size:10px;">C</span>
+                                <span style="color:#16a34a;">Cho phép (Compatible)</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <span style="display:inline-block; width:16px; height:16px; background:#eab308; border-radius:3px; color:#fff; text-align:center; line-height:16px; font-size:10px;">S</span>
+                                <span style="color:#ca8a04;">Cách ly ≥ 3-5m (Segregate)</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <span style="display:inline-block; width:16px; height:16px; background:#dc2626; border-radius:3px; color:#fff; text-align:center; line-height:16px; font-size:10px;">X</span>
+                                <span style="color:#dc2626;">Cấm để chung (Forbidden)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Cell Popover Card -->
+                    <div id="storage-cell-detail-card" style="display:none; margin-bottom:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 16px; transition:all 0.2s;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div id="storage-cell-detail-title" style="font-weight:800; font-size:13.5px; color:#166534;">
+                                Chi tiết cặp phân loại
+                            </div>
+                            <button type="button" onclick="document.getElementById('storage-cell-detail-card').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:14px; color:#166534;">✕ Đóng</button>
+                        </div>
+                        <div id="storage-cell-detail-text" style="font-size:12.5px; color:#1e293b; line-height:1.5;"></div>
+                    </div>
+
+                    <!-- Scrollable Table Wrap -->
+                    <div class="storage-matrix-table-wrap" style="overflow-x:auto; border:1px solid #cbd5e1; border-radius:8px;">
+                        <table id="storage-matrix-table" class="storage-matrix-grid-table" style="width:100%; border-collapse:collapse; min-width:850px; text-align:center; font-size:11.5px;">
+                            <!-- Populated dynamically via renderStorageMatrixGrid() -->
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div style="background:#f8fafc; padding:12px 22px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div style="font-size:12px; color:#64748b;">
+                    Hệ thống tự động đồng bộ theo <b>TCVN 5507:2002</b> &amp; <b>Thông tư 01/2026/TT-BCT</b>
+                </div>
+                <button type="button" class="btn-secondary" onclick="closeStorageMatrixModal()">✕ Đóng Cửa Sổ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9b. MODAL TRA CỨU QR & IN TEM QR KHẨN CẤP HIỆN TRƯỜNG (MILESTONE M5) -->
+    <div id="msds-qr-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.68); backdrop-filter:blur(4px); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div class="msds-qr-modal-dialog">
+            <!-- Modal Header -->
+            <div class="msds-qr-modal-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; background:rgba(255,255,255,0.2); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+                        📱
+                    </div>
+                    <div>
+                        <h3 id="msds-qr-modal-title" style="margin:0; font-size:16px; font-weight:700; color:#ffffff;">MÃ QR TRA CỨU KHẨN CẤP &amp; IN TEM</h3>
+                        <div id="msds-qr-modal-subtitle" style="font-size:12px; color:#e0e7ff; margin-top:2px;">Tra cứu tức thì trên thiết bị di động · Nhãn dán can / phuy hóa chất</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-modal" onclick="closeMsdsQrModal()" style="border:none; background:rgba(255,255,255,0.15); width:32px; height:32px; border-radius:8px; color:#fff; cursor:pointer; font-size:16px;">✕</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="msds-qr-modal-body">
+                <!-- Size Selector Presets -->
+                <div class="msds-qr-size-selector">
+                    <span style="font-size:12.5px; font-weight:700; color:#334155;">Kích thước tem nhãn:</span>
+                    <div class="msds-qr-preset-buttons">
+                        <button type="button" class="msds-btn-qr-size active" data-size="50" onclick="selectQrStickerPreset(50, this)">50mm × 50mm</button>
+                        <button type="button" class="msds-btn-qr-size" data-size="70" onclick="selectQrStickerPreset(70, this)">70mm × 70mm</button>
+                        <button type="button" class="msds-btn-qr-size" data-size="100" onclick="selectQrStickerPreset(100, this)">100mm × 100mm</button>
+                    </div>
+                </div>
+
+                <!-- Preview Area -->
+                <div class="msds-qr-preview-wrapper" id="msds-qr-sticker-area">
+                    <div class="msds-qr-sticker-card" id="msds-qr-sticker-card">
+                        <div class="msds-qr-sticker-header">
+                            <span class="msds-qr-brand-badge">⚡ TITAN EHS · TRA CỨU KHẨN CẤP</span>
+                        </div>
+                        <div class="msds-qr-code-box" id="msds-qr-preview">
+                            <div class="spinner"></div>
+                        </div>
+                        <div class="msds-qr-sticker-info">
+                            <div class="msds-qr-chem-code" id="msds-qr-chem-code">MÃ HÓA CHẤT</div>
+                            <div class="msds-qr-chem-name" id="msds-qr-chem-name">Tên hóa chất</div>
+                            <div class="msds-qr-chem-cas" id="msds-qr-chem-cas">CAS: N/A</div>
+                            <div class="msds-qr-emergency-hint">Quét mã mở Thẻ Ứng Phó Khẩn Cấp Mobile</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="msds-qr-modal-footer">
+                <a id="msds-qr-mobile-link" href="#" target="_blank" class="msds-qr-btn-link" title="Mở trang cứu hộ di động trực tiếp trên trình duyệt">
+                    🔗 Mở Web Cứu Hộ
+                </a>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn-secondary" onclick="downloadQrImage()">
+                        📥 Tải Mã QR (SVG)
+                    </button>
+                    <button type="button" class="btn-primary" onclick="printQrSticker()">
+                        🖨️ In Tem QR
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="closeMsdsQrModal()">
+                        ✕ Đóng
                     </button>
                 </div>
             </div>
@@ -2556,7 +2941,7 @@
         </h1>
         <p>
           Hệ thống đối soát nghĩa vụ tuân thủ hóa chất theo Luật Hóa chất 69/2025/QH15, 
-          Nghị định 24/2026/NĐ-CP, Nghị định 28/2026/NĐ-CP và QCVN 01:2025/BYT.
+          Nghị định 24/2026/NĐ-CP, Nghị định 25/2026/NĐ-CP, Nghị định 26/2026/NĐ-CP, Thông tư 01/2026/TT-BCT, Thông tư 02/2026/TT-BCT và QCVN 01:2025/BYT.
         </p>
       </div>
     </div>
@@ -2627,7 +3012,7 @@
     <div class="legal-field">
       <label for="legalSourceFilter">Văn bản Quy phạm</label>
       <select id="legalSourceFilter">
-        <option value="">Tất cả văn bản (NĐ 24, NĐ 28, QCVN 01)</option>
+        <option value="">Tất cả văn bản (NĐ 24, NĐ 25, NĐ 26, TT 01, TT 02, QCVN 01)</option>
       </select>
     </div>
 

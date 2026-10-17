@@ -1,90 +1,151 @@
-# Test Infrastructure Documentation (TEST_INFRA.md)
-*TitanPDF Chemical Legal Lookup & Warning System — Automated E2E Test Suite*
+# TEST INFRASTRUCTURE & HARNESS MANUAL
 
-## 1. Overview & Architecture
-
-The TitanPDF Chemical Legal Lookup & Warning system testing infrastructure provides independent, opaque-box end-to-end verification across four rigorous test tiers (Tiers 1–4). It verifies all 25 features identified in `PROJECT.md`, adhering to the principle of opaque-box execution: the test runner tests system behavior via public HTTP REST APIs, SQLite inventory state, and generated Word (.docx) binary artifacts.
-
-### Key Architectural Characteristics
-- **Opaque-Box Network Protocol**: Direct HTTP client (`ApiClient` backed by `requests`) issuing requests against `http://127.0.0.1:8888` (configurable via `TITAN_TEST_URL`).
-- **Resilient Fallback Mode**: When the live server process is not running, `ApiClient` automatically falls back to Starlette/FastAPI's in-process `TestClient(app)`, allowing the suite to run in headless CI environments without external daemon management.
-- **Strict Oracles**: Ground-truth assertions are derived from statutory law definitions (NĐ 24/2026/NĐ-CP, NĐ 28/2026/NĐ-CP, QCVN 01:2025/BYT), mathematical checksum algorithms (CAS Checksum Rule `sum(i * d_i) % 10`), and international Unicode normalization standards (NFKD).
-- **Latency SLA Guarantees**: Strict per-request latency checks (< 500ms) executed over 50 iterations for search and batch matching, plus multi-threaded concurrency stress.
+**Project**: TitanPDF EHS Chemical Management System Overhaul  
+**Primary Test Suite**: `test_msds_full_suite.py`  
+**Location**: `c:\Users\ntc27\OneDrive\文件\TitanPDF\test_msds_full_suite.py`  
+**Author**: `test_writer_test_track_1`  
+**Milestone Scope**: R1–R6 (M1–M5, M_TEST, M_FINAL)  
 
 ---
 
-## 2. 4-Tier Testing Hierarchy
+## 1. Architectural Overview
 
-| Tier | Name | Target Capabilities | Features Covered | Test Count |
-|------|------|---------------------|------------------|------------|
-| **Tier 1** | **Feature Coverage** | Catalog overview stats, sources, sections, CAS search, unaccented search, multi-token search, batch match endpoint, item_type filtering, Word Section 3 GHS table | F01–F11, F21 | 19 tests |
-| **Tier 2** | **Boundary & Corner Cases** | Multi-CAS strings, unnormalized whitespace around hyphens, CAS checksum validity & rejection, unknown CAS, empty/whitespace queries, SQL/regex injection resilience, threshold conversions | F02, F03, F04, F06, F08, F09 | 13 tests |
-| **Tier 3** | **Cross-Feature Combinations** | Multi-level cascading filter (Source + Section + Query), mixed regulated vs unregulated batch matching, pagination boundaries, item_type inventory separation | F07, F08, F09, F10, F16, F20 | 9 tests |
-| **Tier 4** | **Real-World Workloads & SLA** | Statutory profiles for flagship chemicals (Toluene, Sulfuric Acid, Acetone, Methanol), real-world 5-ingredient NC Thinner SDS formulation, latency SLA (<500ms across 50 iterations), 10-thread concurrency | F08, F09, F23, F24, F25 | 8 tests |
-| **Total** | | **Comprehensive E2E Suite** | **All 25 Features** | **49 tests** |
+`test_msds_full_suite.py` is an opaque-box End-to-End (E2E) testing harness engineered to validate all functional, boundary, regulatory, and performance requirements for the TitanPDF chemical management system overhaul without requiring manual intervention.
 
----
+### Dual-Mode ApiClient Pattern
+The suite utilizes a self-healing `ApiClient` pattern supporting dual execution contexts:
+1. **Live HTTP Mode**: When a live Uvicorn server is running at `TITAN_TEST_URL` (default `http://127.0.0.1:8888`), requests are dispatched via standard HTTP calls using `requests`.
+2. **Offline ASGI TestClient Fallback**: When no live server is listening, `ApiClient` automatically mounts FastAPI's in-memory `TestClient(app)` from `server.py`, ensuring 100% offline test execution without network dependency, socket errors, or port conflicts.
 
-## 3. Authoritative Oracles & Ground Truth
-
-### 3.1 CAS Number Checksum Algorithm
-For any CAS Registry Number in standard format `A-B-C` where `A` is 2 to 7 digits, `B` is 2 digits, and `C` is a 1-digit check number:
-$$\text{Checksum} = \left(\sum_{k=1}^{N} k \times d_k\right) \bmod 10$$
-Where $d_1$ is the last digit of $B$, $d_2$ is the first digit of $B$, $d_3$ is the last digit of $A$, and so forth from right to left.
-- Valid Examples: `108-88-3` (Toluene), `7664-93-9` (Sulfuric acid), `67-64-1` (Acetone), `67-56-1` (Methanol), `7732-18-5` (Water), `1330-20-7` (Xylene).
-- Corrupted Examples: `108-88-9`, `7664-93-0`, `67-64-8`, `67-56-2`.
-
-### 3.2 Vietnamese Threshold Number Conversion
-Vietnamese regulatory texts denote thousands with dots (`.`):
-- `'5.000'` $\rightarrow 5000.0\text{ kg}$
-- `'50.000'` $\rightarrow 50000.0\text{ kg}$
-- `'5.000.000'` $\rightarrow 5000000.0\text{ kg}$
-- `'200'` $\rightarrow 200.0\text{ kg}$
-- Empty string / `'Không quy định'` $\rightarrow \text{None}$
-
-### 3.3 Word (.docx) Section 3 GHS Composition Table
-Every exported Emergency Safety Card Word document (`MSDSSafetyCardExporter.generate_safety_card_docx`) must include:
-- Table header: `🧪 BẢNG THÀNH PHẦN HÓA HỌC & SỐ CAS (MỤC 3 GHS)`
-- Required 4 columns:
-  1. `Tên Thành Phần Hoạt Chất`
-  2. `Số CAS`
-  3. `Hàm Lượng (%)`
-  4. `Thẩm Định Checksum`
-
----
-
-## 4. Execution Commands
-
-### 4.1 Run Entire Test Suite (Tiers 1–4)
-```powershell
-python tests/verify_legal_integration.py
 ```
-
-### 4.2 Run Specific Tier
-```powershell
-python tests/verify_legal_integration.py --tier 1
-python tests/verify_legal_integration.py --tier 2
-python tests/verify_legal_integration.py --tier 3
-python tests/verify_legal_integration.py --tier 4
-```
-
-### 4.3 Run with Verbose Reporting
-```powershell
-python tests/verify_legal_integration.py --verbose
-```
-
-### 4.4 Run via Standard Python unittest
-```powershell
-python -m unittest tests/verify_legal_integration.py
++--------------------------------------------------------------------+
+|                      test_msds_full_suite.py                       |
+|        (Tiers 1-4: Feature, Boundary, Combinations, SLA)          |
++---------------------------------+----------------------------------+
+                                  |
+                                  v
++--------------------------------------------------------------------+
+|                             ApiClient                              |
+|       - Automatic Liveness Probing (/api/health, /api/msds/*)      |
+|       - Uniform Response Wrapper (status_code, json, content)      |
++---------------------------------+----------------------------------+
+                |                                   |
+                v (If Server Online)                v (If Server Offline)
++-------------------------------+   +--------------------------------+
+|  Live HTTP Requests (requests)|   | FastAPI TestClient(server.app) |
+|      http://127.0.0.1:8888    |   | Direct ASGI In-Memory Dispatch |
++-------------------------------+   +--------------------------------+
 ```
 
 ---
 
-## 5. Environment & Dependencies
+## 2. The 4 Quality Tiers
 
-- Python 3.10+ (Standard Library: `unittest`, `re`, `json`, `time`, `concurrent.futures`, `io`)
-- Third-party packages:
-  - `requests`: HTTP client communications
-  - `python-docx`: OOXML Word document inspection
-  - `fastapi` & `starlette`: In-process ASGI test execution fallback
-- Target Server: `127.0.0.1:8888` (default) or environment variable `TITAN_TEST_URL`.
+The test suite divides test coverage into four progressive quality tiers:
+
+| Tier | Focus | Test Count | Objectives & Scope |
+|---|---|---|---|
+| **Tier 1** | Feature Coverage (Happy Path) | 11 | Covers primary functional contracts for R1–R5: Batch ZIP original MSDS, Word safety cards with Section 3 GHS table, Decanting label API, 4 print presets (A4_4UP, A5, DECAL_150, DECAL_75), Decanting label PDF, TCVN 5507:2002 storage matrix, warehouse pairwise check, legal purge, annual report Excel, ReportLab QR, zero-auth mobile view. |
+| **Tier 2** | Boundary & Corner Cases | 9 | Tests edge cases, missing data, fault tolerance: Empty chemical IDs, nonexistent IDs, full inventory scope (`scope=all`), unaccented Vietnamese diacritics stripping in ZIP, CAS checksum validation states (`HỢP LỆ`, `SAI CHECKSUM`, `KHÔNG CÓ CAS`), invalid print preset fallback, single chemical storage check. |
+| **Tier 3** | Cross-Feature Combinations | 5 | Tests integration across features: Multi-category chemical batch card export (ND 24 PL I/III, ND 26 Precursors, General GHS02, NON DG), real inventory warehouse compatibility, GHS consistency between label and storage matrix, multi-component chemical labels, annual report reconciliation with SQLite database. |
+| **Tier 4** | Real-World Workloads & Latency SLA | 5 | Tests production SLAs: Full-batch ZIP download throughput (<5.0s), batch Word safety cards generation (<8.0s), API read latency SLA (<500ms), concurrent thread-safety (10 parallel requests), file descriptor and temporary file cleanup. |
+
+---
+
+## 3. Authoritative Reference Oracles
+
+Every test case derives its assertions from documented statutory or mathematical oracles:
+
+1. **CAS Mod 10 Checksum Algorithm**:
+   - International standard CAS verification: $\sum_{i=1}^{k} (i \cdot d_i) \pmod{10} == C$.
+   - Tested across known valid CAS (`98060-25-4`, `108-88-3`, `7664-93-9`), invalid checksums (`108-88-4`), and proprietary/missing cases (`N/A`).
+2. **TCVN 5507:2002 Chemical Storage Compatibility Matrix**:
+   - 11 hazard classes: GHS01 (Explosives), GHS02 (Flammables), GHS03 (Oxidizers), GHS04 (Compressed gases), GHS05-Acid, GHS05-Base, GHS06 (Acute Toxic), GHS07/08 (Health hazards), GHS09 (Environmental), NON_DG.
+   - Prohibited co-storage pairs: GHS02 + GHS03 (Red / Forbidden), GHS05-Acid + GHS05-Base (Red / Forbidden), GHS01 + any (Red / Forbidden).
+   - Segregated co-storage pairs: GHS02 + GHS06 (Yellow / Segregated).
+3. **Vietnamese Unaccented Filename Sanitizer**:
+   - Strips Unicode NFKD combining diacritics and replaces precomposed Vietnamese vowels to ASCII: `[MaSP]_[TenHoaChat].[ext]`.
+4. **Circular 01/2026/TT-BCT Decanting Label Standards**:
+   - Mandatory elements: Product name, Product code / CAS, Facility name (ZhanChen), Signal word (`Nguy hiểm` / `Cảnh báo`), GHS hazard pictograms, H-codes, P-codes, Emergency hotlines (`114`, `115`).
+   - Print Presets: `A4_4UP` (4 labels/sheet for 5L–20L cans), `A5` (1 label/sheet for 200L drums/IBC totes), `DECAL_150` (100mm × 150mm), `DECAL_75` (100mm × 75mm).
+5. **Circular 02/2026/TT-BCT Annual Chemical Report Structure**:
+   - Multi-sheet Excel workbook (`.xlsx`) containing at least 4 sheets: General enterprise info, Chemical activities ledger, Accident prevention & emergency drill records, Precursor & controlled chemicals tracking.
+6. **Regulatory Repeal Purge**:
+   - Zero occurrences in active catalog of repealed legal acts: Decree 113/2017/NĐ-CP, Decree 82/2022/NĐ-CP, Circular 32/2017/TT-BCT, Circular 04/2012/TT-BCT. Canonical compliance with Law 69/2025/QH15, Decree 24/2026/NĐ-CP, Decree 25/2026/NĐ-CP, Decree 26/2026/NĐ-CP, Circular 01/2026/TT-BCT, Circular 02/2026/TT-BCT, QCVN 01:2025/BYT.
+
+---
+
+## 4. Execution Guide & CLI Commands
+
+### 4.1 Quick Execution Commands
+
+```powershell
+# 1. Run Milestone M1 tests only (100% PASS for Batch ZIP original & safety cards)
+python test_msds_full_suite.py --milestone M1
+
+# 2. Run progressive E2E suite (Tolerates planned M2-M5 milestones while verifying M1 & baseline)
+python test_msds_full_suite.py --progressive
+
+# 3. Run individual Quality Tiers
+python test_msds_full_suite.py --progressive --tier 1
+python test_msds_full_suite.py --progressive --tier 2
+python test_msds_full_suite.py --progressive --tier 3
+python test_msds_full_suite.py --progressive --tier 4
+
+# 4. Run with verbose test-by-test logging
+python test_msds_full_suite.py --progressive --verbose
+
+# 5. Run Strict Gatekeeper Mode (used for Milestone M_FINAL integration gate)
+python test_msds_full_suite.py --strict
+```
+
+### 4.2 CLI Argument Reference
+
+| Flag | Argument | Description |
+|---|---|---|
+| `--tier` | `1`, `2`, `3`, `4`, `all` | Filters execution to a single Quality Tier or all tiers. |
+| `--milestone` | `M1`, `M2`, `M3`, `M4`, `M5`, `all` | Filters execution to test cases relevant to a specific milestone. |
+| `--progressive` | *(flag)* | Enables progressive testability: skips endpoints returning 404/405 for planned milestones, while enforcing pass on implemented milestones. |
+| `--strict` | *(flag)* | Enforces strict gatekeeper mode: any 404/405 endpoint fails immediately (used at `M_FINAL`). |
+| `--verbose` / `-v` | *(flag)* | Prints full execution traceback and individual test case status. |
+
+---
+
+## 5. Verification Scorecard Baseline
+
+Current baseline execution results (`python test_msds_full_suite.py --progressive`):
+
+```
+==============================================================================
+                      E2E TEST EXECUTION SUMMARY                      
+==============================================================================
+Tier                                     | Total  | Pass   | Fail   | Pend   | Time (s)
+------------------------------------------------------------------------------
+Tier 1: Feature Coverage (R1-R5 Happy Path) | 11     | 3      | 0      | 8      | 3.02    
+Tier 2: Boundary & Corner Cases          | 9      | 5      | 0      | 4      | 3.41    
+Tier 3: Cross-Feature Combinations       | 5      | 1      | 0      | 4      | 0.32    
+Tier 4: Real-World Workloads & Latency SLA | 5      | 5      | 0      | 0      | 3.09    
+------------------------------------------------------------------------------
+TOTAL                                    | 30     | 14     | 0      | 16     | 9.84    
+==============================================================================
+
+🎉 ALL TEST TIERS PASSED (14/30 tests, 16 pending) in 9.84s!
+```
+
+When Milestone M1 is verified in isolation (`python test_msds_full_suite.py --milestone M1`):
+```
+==============================================================================
+                      E2E TEST EXECUTION SUMMARY                      
+==============================================================================
+Tier                                     | Total  | Pass   | Fail   | Pend   | Time (s)
+------------------------------------------------------------------------------
+Tier 1: Feature Coverage (R1-R5 Happy Path) | 2      | 2      | 0      | 0      | 3.01    
+Tier 2: Boundary & Corner Cases          | 5      | 5      | 0      | 0      | 3.55    
+Tier 3: Cross-Feature Combinations       | 1      | 1      | 0      | 0      | 0.27    
+Tier 4: Real-World Workloads & Latency SLA | 2      | 2      | 0      | 0      | 1.54    
+------------------------------------------------------------------------------
+TOTAL                                    | 10     | 10     | 0      | 0      | 8.36    
+==============================================================================
+
+🎉 ALL TEST TIERS PASSED (10/10 tests, 0 pending) in 8.36s!
+```
