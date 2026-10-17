@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="hse_style.css">
     <link rel="stylesheet" href="legal_style.css">
+    <link rel="stylesheet" href="monthly_inventory.css">
     <!-- Local Offline PDF.js -->
     <script src="libs/pdf.min.js"></script>
     <!-- Google Identity Services (Sign In With Google) -->
@@ -1065,6 +1066,16 @@
                     </svg>
                     <span class="tab-label">Pháp Lý</span>
                     <span class="nav-tab-pill-badge badge-legal"><span class="pulse-dot"></span>MỚI</span>
+                </button>
+                <button id="nav-tab-monthly-inventory" class="main-nav-tab nav-tab-monthly-inventory" onclick="switchMainTab('monthly-inventory')" title="Báo Cáo Hóa Chất Tháng & Quản Lý Nhập - Xuất - Tồn (NXT)" role="tab" aria-selected="false">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                        <line x1="3" y1="20" x2="21" y2="20"></line>
+                    </svg>
+                    <span class="tab-label">Báo Cáo Tháng</span>
+                    <span class="nav-tab-pill-badge badge-nxt" id="nav-monthly-count-badge">NXT</span>
                 </button>
             </div>
 
@@ -3100,6 +3111,277 @@
   </footer>
 </main>
 
+<!-- ========================================================================== -->
+<!-- 4E. BÁO CÁO HÓA CHẤT THÁNG & QUẢN LÝ NHẬP - XUẤT - TỒN (NXT)               -->
+<!-- ========================================================================== -->
+<main id="monthly-inventory-view" class="monthly-inventory-container hidden" role="region" aria-label="Báo cáo hóa chất tháng và Quản lý Nhập Xuất Tồn">
+  <!-- Header Card with Period Navigator & Actions -->
+  <header class="nxt-header-card">
+    <div class="nxt-header-left">
+      <div class="nxt-title-row">
+        <span class="nxt-title-icon">📊</span>
+        <h2 class="nxt-main-title">BÁO CÁO HÓA CHẤT THÁNG & NHẬP - XUẤT - TỒN (NXT)</h2>
+        <span id="nxt-period-status-badge" class="nxt-period-badge">🔓 Đang Mở Ghi Nhận</span>
+      </div>
+      <p class="nxt-subtitle">Theo dõi cân đối Tồn Đầu - Nhập - Xuất - Tồn Cuối & Giám sát ngưỡng an toàn Phụ lục IV NĐ 24/2026/NĐ-CP</p>
+    </div>
+
+    <!-- Period Selection -->
+    <div class="nxt-period-controls">
+      <button id="nxt-btn-period-prev" class="nxt-btn-icon" title="Kỳ tháng trước">◀</button>
+      <select id="nxt-period-select" class="nxt-period-select" title="Chọn kỳ báo cáo tháng/năm"></select>
+      <button id="nxt-btn-period-next" class="nxt-btn-icon" title="Kỳ tháng sau">▶</button>
+      <button id="nxt-btn-create-period" class="nxt-btn nxt-btn-outline" title="Tạo kỳ báo cáo mới">+ Tạo Kỳ Mới</button>
+    </div>
+
+    <!-- Main Action Buttons -->
+    <div class="nxt-action-bar">
+      <button id="nxt-btn-add-chemicals-cil" class="nxt-btn nxt-btn-primary" title="Thêm hóa chất từ CSDL Sổ CIL vào kỳ này">
+        ➕ Thêm Từ CIL
+      </button>
+      <button id="nxt-btn-record-transaction" class="nxt-btn nxt-btn-info" title="Lập phiếu nhập kho hoặc xuất sử dụng">
+        📝 Phiếu Nhập / Xuất
+      </button>
+      <button id="nxt-btn-export-excel" class="nxt-btn nxt-btn-success" title="Xuất báo cáo sử dụng hóa chất tháng ra Excel chuẩn EHS">
+        📊 Xuất Excel (.xlsx)
+      </button>
+      <button id="nxt-btn-print-report" class="nxt-btn nxt-btn-secondary" title="In trực tiếp hoặc xem bản in A4">
+        🖨️ In Báo Cáo
+      </button>
+      <button id="nxt-btn-roll-forward" class="nxt-btn nxt-btn-secondary" title="Chuyển số dư Tồn cuối kỳ này sang Tồn đầu kỳ tiếp theo">
+        🔄 Chuyển Kỳ Sau
+      </button>
+      <button id="nxt-btn-lock-toggle" class="nxt-btn nxt-btn-secondary" title="Khóa sổ hoặc mở lại kỳ">
+        🔒 Khóa Sổ
+      </button>
+    </div>
+  </header>
+
+  <!-- 4 KPI Metrics Cards -->
+  <section class="nxt-kpi-grid">
+    <div class="nxt-kpi-card">
+      <div class="nxt-kpi-icon-box nxt-kpi-icon-chemicals">📦</div>
+      <div class="nxt-kpi-content">
+        <span class="nxt-kpi-label">Tổng Hóa Chất Theo Dõi</span>
+        <span class="nxt-kpi-value" id="nxt-kpi-total-chem">0</span>
+        <span class="nxt-kpi-hint">Đã đăng ký trong kỳ</span>
+      </div>
+    </div>
+    <div class="nxt-kpi-card">
+      <div class="nxt-kpi-icon-box nxt-kpi-icon-import">📥</div>
+      <div class="nxt-kpi-content">
+        <span class="nxt-kpi-label">Tổng Lượng Nhập Kho</span>
+        <span class="nxt-kpi-value" id="nxt-kpi-total-import">0 kg/L</span>
+        <span class="nxt-kpi-hint">Toàn bộ hóa đơn / PO trong tháng</span>
+      </div>
+    </div>
+    <div class="nxt-kpi-card">
+      <div class="nxt-kpi-icon-box nxt-kpi-icon-export">📤</div>
+      <div class="nxt-kpi-content">
+        <span class="nxt-kpi-label">Tổng Lượng Xuất Dùng</span>
+        <span class="nxt-kpi-value" id="nxt-kpi-total-export">0 kg/L</span>
+        <span class="nxt-kpi-hint">Cung cấp cho các xưởng/chuyền</span>
+      </div>
+    </div>
+    <div class="nxt-kpi-card">
+      <div class="nxt-kpi-icon-box nxt-kpi-icon-balance">📊</div>
+      <div class="nxt-kpi-content">
+        <span class="nxt-kpi-label">Tồn Cuối Kỳ & Định Mức</span>
+        <span class="nxt-kpi-value" id="nxt-kpi-ending-balance">0 kg/L</span>
+        <div id="nxt-kpi-alert-status">
+          <span class="nxt-status-pill nxt-status-safe">🟢 Đạt định mức an toàn</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Toolbar: View Mode Switch & Search/Filter -->
+  <section class="nxt-toolbar">
+    <div class="nxt-toolbar-left">
+      <!-- Mode Toggle -->
+      <div class="nxt-mode-switch">
+        <button id="nxt-mode-summary-btn" class="nxt-mode-btn active" type="button">
+          📊 Bảng Tổng Hợp (NXT)
+        </button>
+        <button id="nxt-mode-trans-btn" class="nxt-mode-btn" type="button">
+          📋 Nhật Ký Giao Dịch Chi Tiết
+        </button>
+      </div>
+
+      <!-- Quick Search -->
+      <div class="nxt-search-box">
+        <span class="nxt-search-icon">🔍</span>
+        <input 
+          id="nxt-search-input" 
+          type="search" 
+          class="nxt-search-input" 
+          placeholder="Tìm tên hóa chất, mã SP, số CAS, vị trí..." 
+          autocomplete="off" 
+          spellcheck="false" 
+        />
+        <button id="nxt-search-clear" class="nxt-search-clear" style="display:none;" title="Xóa tìm kiếm">✕</button>
+      </div>
+
+      <!-- Status Filter Dropdown -->
+      <select id="nxt-filter-select" class="nxt-filter-select">
+        <option value="all">Tất cả hóa chất</option>
+        <option value="warning">⚠️ Chỉ chất có cảnh báo / Vượt ngưỡng</option>
+        <option value="negative">🚨 Chỉ chất có tồn kho âm</option>
+        <option value="decree24">🛡️ Chỉ chất Phụ lục NĐ 24 / NĐ 26</option>
+      </select>
+    </div>
+
+    <div class="nxt-toolbar-right">
+      <span style="font-size:0.75rem; color:var(--nxt-text-muted);">
+        💡 Nhập trực tiếp vào các ô Tồn Đầu, Nhập, Xuất để tự động tính Tồn Cuối
+      </span>
+    </div>
+  </section>
+
+  <!-- Interactive Data Grid Container -->
+  <section class="nxt-table-card" id="nxt-table-container">
+    <div class="nxt-state-box">
+      <div class="nxt-spinner">⏳</div>
+      <strong>Đang nạp dữ liệu Báo Cáo Hóa Chất...</strong>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL 1: ADD CHEMICALS FROM CIL REGISTRY -->
+<div id="nxt-modal-add-cil" class="nxt-modal-backdrop hidden" aria-hidden="true">
+  <div class="nxt-modal-card nxt-modal-card-lg">
+    <div class="nxt-modal-header">
+      <h3 class="nxt-modal-title">➕ Thêm Hóa Chất Từ Sổ Hóa Chất CIL Vào Kỳ Báo Cáo</h3>
+      <button class="nxt-modal-close" onclick="window.closeMonthlyAddCilModal()">✕</button>
+    </div>
+    <div class="nxt-modal-body">
+      <p style="font-size:0.85rem; color:var(--nxt-text-secondary); margin:0;">
+        Chọn các hóa chất từ CSDL Sổ Hóa Chất CIL hiện có để đưa vào theo dõi cân đối Nhập - Xuất - Tồn trong kỳ này.
+      </p>
+      <input 
+        id="nxt-cil-search-input" 
+        type="search" 
+        class="nxt-form-input" 
+        placeholder="Tìm kiếm hóa chất theo mã SP, tên hoặc số CAS..." 
+        autocomplete="off" 
+      />
+      <div id="nxt-cil-modal-list" class="nxt-cil-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+    <div class="nxt-modal-footer">
+      <button class="nxt-btn nxt-btn-secondary" onclick="window.closeMonthlyAddCilModal()">Đóng</button>
+      <button class="nxt-btn nxt-btn-primary" onclick="window.submitMonthlyAddCil()">➕ Thêm Vào Kỳ Báo Cáo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 2: DETAILED IMPORT / EXPORT TRANSACTION -->
+<div id="nxt-modal-transaction" class="nxt-modal-backdrop hidden" aria-hidden="true">
+  <div class="nxt-modal-card">
+    <div class="nxt-modal-header">
+      <h3 class="nxt-modal-title">📝 Ghi Nhận Phiếu Nhập / Xuất Hóa Chất</h3>
+      <button class="nxt-modal-close" onclick="window.closeMonthlyTransactionModal()">✕</button>
+    </div>
+    <div class="nxt-modal-body">
+      <!-- Transaction Type -->
+      <div class="nxt-form-group">
+        <label class="nxt-form-label">Loại Phiếu Giao Dịch *</label>
+        <div class="nxt-radio-group">
+          <label class="nxt-radio-label">
+            <input type="radio" name="nxt-trans-type" id="nxt-trans-type-import" value="IMPORT">
+            <span style="color:#0284c7;">📥 Nhập Kho (IMPORT)</span>
+          </label>
+          <label class="nxt-radio-label">
+            <input type="radio" name="nxt-trans-type" id="nxt-trans-type-export" value="EXPORT" checked>
+            <span style="color:#d97706;">📤 Xuất Sử Dụng (EXPORT)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Chemical Select -->
+      <div class="nxt-form-group">
+        <label class="nxt-form-label" for="nxt-trans-chemical-select">Hóa Chất *</label>
+        <select id="nxt-trans-chemical-select" class="nxt-form-select">
+          <option value="">-- Chọn Hóa Chất --</option>
+        </select>
+      </div>
+
+      <!-- Quantity & Date -->
+      <div class="nxt-form-row">
+        <div class="nxt-form-group">
+          <label class="nxt-form-label" for="nxt-trans-qty">Số Lượng *</label>
+          <input type="number" step="any" min="0.001" id="nxt-trans-qty" class="nxt-form-input" placeholder="Ví dụ: 25.5">
+        </div>
+        <div class="nxt-form-group">
+          <label class="nxt-form-label" for="nxt-trans-date">Ngày Giao Dịch *</label>
+          <input type="date" id="nxt-trans-date" class="nxt-form-input">
+        </div>
+      </div>
+
+      <!-- Doc Ref & Department -->
+      <div class="nxt-form-row">
+        <div class="nxt-form-group">
+          <label class="nxt-form-label" for="nxt-trans-doc">Số Chứng Từ / Hóa Đơn / PO</label>
+          <input type="text" id="nxt-trans-doc" class="nxt-form-input" placeholder="Ví dụ: PO-2026-089, PXK-042...">
+        </div>
+        <div class="nxt-form-group">
+          <label class="nxt-form-label" for="nxt-trans-dept">Phân Xưởng / Đối Tác Giao Nhận</label>
+          <input type="text" id="nxt-trans-dept" class="nxt-form-input" placeholder="Ví dụ: Xưởng Hàn SMT, Kho Tổng...">
+        </div>
+      </div>
+
+      <!-- Purpose of use -->
+      <div class="nxt-form-group">
+        <label class="nxt-form-label" for="nxt-trans-purpose">Mục Đích Sử Dụng</label>
+        <input type="text" id="nxt-trans-purpose" class="nxt-form-input" placeholder="Ví dụ: Tẩy rửa bản mạch in, Xử lý nước thải...">
+      </div>
+
+      <!-- Notes -->
+      <div class="nxt-form-group">
+        <label class="nxt-form-label" for="nxt-trans-notes">Ghi Chú</label>
+        <textarea id="nxt-trans-notes" class="nxt-form-textarea" rows="2" placeholder="Ghi chú thêm về điều kiện vận chuyển, an toàn..."></textarea>
+      </div>
+    </div>
+    <div class="nxt-modal-footer">
+      <button class="nxt-btn nxt-btn-secondary" onclick="window.closeMonthlyTransactionModal()">Hủy</button>
+      <button class="nxt-btn nxt-btn-primary" onclick="window.submitMonthlyTransaction()">💾 Lưu Phiếu Giao Dịch</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 3: CREATE NEW PERIOD -->
+<div id="nxt-modal-new-period" class="nxt-modal-backdrop hidden" aria-hidden="true">
+  <div class="nxt-modal-card">
+    <div class="nxt-modal-header">
+      <h3 class="nxt-modal-title">✨ Tạo Kỳ Báo Cáo Hóa Chất Mới</h3>
+      <button class="nxt-modal-close" onclick="window.closeNewPeriodModal()">✕</button>
+    </div>
+    <div class="nxt-modal-body">
+      <div class="nxt-form-row">
+        <div class="nxt-form-group">
+          <label class="nxt-form-label" for="nxt-new-period-month">Tháng Báo Cáo (1 - 12)</label>
+          <input type="number" min="1" max="12" id="nxt-new-period-month" class="nxt-form-input" value="10">
+        </div>
+        <div class="nxt-form-group">
+          <label class="nxt-form-label" for="nxt-new-period-year">Năm Báo Cáo</label>
+          <input type="number" min="2000" max="2100" id="nxt-new-period-year" class="nxt-form-input" value="2026">
+        </div>
+      </div>
+      <div class="nxt-form-group" style="margin-top:10px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; font-weight:600; cursor:pointer;">
+          <input type="checkbox" id="nxt-new-period-copy" checked disabled>
+          <span>🔄 Tự động kế thừa danh mục hóa chất & chuyển số dư Tồn cuối tháng trước sang Tồn đầu kỳ này</span>
+        </label>
+      </div>
+    </div>
+    <div class="nxt-modal-footer">
+      <button class="nxt-btn nxt-btn-secondary" onclick="window.closeNewPeriodModal()">Hủy</button>
+      <button class="nxt-btn nxt-btn-primary" onclick="window.createMonthlyPeriodFromModal()">✨ Khởi Tạo Kỳ Mới</button>
+    </div>
+  </div>
+</div>
+
     <!-- 5. MINIMALIST FOOTER -->
     <footer class="footer">
         <div class="footer-container">
@@ -3144,5 +3426,6 @@
     <script src="ai_studio.js"></script>
     <script src="hse_studio.js"></script>
     <script src="legal_lookup.js"></script>
+    <script src="monthly_inventory.js"></script>
 </body>
 </html>

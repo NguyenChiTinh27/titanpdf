@@ -2871,6 +2871,16 @@ app.include_router(legal_router, prefix="/api/legal", tags=["Legal Intelligence"
 app.include_router(legal_router, prefix="/api", tags=["Legal Intelligence Alias"])
 app.include_router(legal_router, prefix="/api/legal-catalog", tags=["Legal Catalog Compatibility Alias"])
 
+# ============================================================
+# MONTHLY CHEMICAL INVENTORY & USAGE TRACKING (NXT) SUB-ROUTER
+# ============================================================
+from core.monthly_inventory_router import monthly_inventory_router
+from core.monthly_inventory_engine import MonthlyInventoryEngine
+
+MonthlyInventoryEngine.init_db()
+app.include_router(monthly_inventory_router, prefix="/api/monthly-inventory", tags=["Monthly Chemical Inventory"])
+app.include_router(monthly_inventory_router, prefix="/api/msds/monthly-report", tags=["Monthly Chemical Inventory Report Alias"])
+
 
 # SERVE FRONTEND
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

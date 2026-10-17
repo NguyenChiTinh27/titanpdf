@@ -49,12 +49,14 @@ function switchMainTab(tab, subTab = null) {
     const msdsView = document.getElementById("msds-studio-view");
     const hseView = document.getElementById("hse-studio-view");
     const legalView = document.getElementById("legal-lookup-view");
+    const monthlyView = document.getElementById("monthly-inventory-view");
     const navTools = document.getElementById("nav-tab-tools");
     const navEditor = document.getElementById("nav-tab-editor");
     const navAi = document.getElementById("nav-tab-ai");
     const navMsds = document.getElementById("nav-tab-msds");
     const navHse = document.getElementById("nav-tab-hse");
     const navLegal = document.getElementById("nav-tab-legal");
+    const navMonthly = document.getElementById("nav-tab-monthly-inventory");
     const footer = document.querySelector(".footer");
 
     // Reset active nav states
@@ -64,6 +66,7 @@ function switchMainTab(tab, subTab = null) {
     if (navMsds) navMsds.classList.remove("active");
     if (navHse) navHse.classList.remove("active");
     if (navLegal) navLegal.classList.remove("active");
+    if (navMonthly) navMonthly.classList.remove("active");
 
     if (tab === 'editor') {
         if (homeView) homeView.classList.add("hidden");
@@ -72,6 +75,7 @@ function switchMainTab(tab, subTab = null) {
         if (msdsView) msdsView.classList.add("hidden");
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
         if (editorView) editorView.classList.remove("hidden");
         if (footer) footer.classList.add("hidden");
         document.body.classList.add("vip-editor-active");
@@ -90,6 +94,7 @@ function switchMainTab(tab, subTab = null) {
         if (aiView) aiView.classList.add("hidden");
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
         if (msdsView) msdsView.classList.remove("hidden");
         if (footer) footer.classList.add("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -100,6 +105,24 @@ function switchMainTab(tab, subTab = null) {
         if (typeof loadMsdsChemicalsList === 'function') {
             loadMsdsChemicalsList();
         }
+    } else if (tab === 'monthly-inventory') {
+        if (homeView) homeView.classList.add("hidden");
+        if (wsView) wsView.classList.add("hidden");
+        if (editorView) editorView.classList.add("hidden");
+        if (aiView) aiView.classList.add("hidden");
+        if (msdsView) msdsView.classList.add("hidden");
+        if (hseView) hseView.classList.add("hidden");
+        if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.remove("hidden");
+        if (footer) footer.classList.remove("hidden");
+        document.body.classList.remove("vip-editor-active");
+        document.body.classList.remove("msds-studio-active");
+
+        if (navMonthly) navMonthly.classList.add("active");
+
+        if (typeof window.initMonthlyInventory === 'function') {
+            window.initMonthlyInventory();
+        }
     } else if (tab === 'ai') {
         if (homeView) homeView.classList.add("hidden");
         if (wsView) wsView.classList.add("hidden");
@@ -107,6 +130,7 @@ function switchMainTab(tab, subTab = null) {
         if (msdsView) msdsView.classList.add("hidden");
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
         if (aiView) aiView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -124,6 +148,7 @@ function switchMainTab(tab, subTab = null) {
         if (aiView) aiView.classList.add("hidden");
         if (msdsView) msdsView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
         if (hseView) hseView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -141,6 +166,7 @@ function switchMainTab(tab, subTab = null) {
         if (aiView) aiView.classList.add("hidden");
         if (msdsView) msdsView.classList.add("hidden");
         if (hseView) hseView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
         if (legalView) legalView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -157,6 +183,7 @@ function switchMainTab(tab, subTab = null) {
         if (msdsView) msdsView.classList.add("hidden");
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
         if (homeView) homeView.classList.remove("hidden");
         if (wsView) wsView.classList.add("hidden");
         if (footer) footer.classList.remove("hidden");

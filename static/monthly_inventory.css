@@ -1,0 +1,959 @@
+/* ==========================================================================
+   TitanPDF — Monthly Chemical Inventory & Usage Reporting System (NXT)
+   Stylesheet: static/monthly_inventory.css
+   100% Scoped within #monthly-inventory-view / .monthly-inventory-container
+   Dual-Theme Support: Clean Enterprise EHS (Light) & Vibrant Cyber Pop (Dark)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. SCOPED THEME DESIGN TOKENS
+   -------------------------------------------------------------------------- */
+
+.monthly-inventory-container,
+#monthly-inventory-view {
+  --nxt-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", Arial, sans-serif;
+  --nxt-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* Surfaces & Backgrounds */
+  --nxt-bg-canvas: #f8fafc;
+  --nxt-bg-surface: #ffffff;
+  --nxt-bg-subtle: #f1f5f9;
+  --nxt-bg-hover: #f8fafc;
+  --nxt-bg-active: #e2e8f0;
+  --nxt-header-bg: #ffffff;
+
+  /* Borders & Dividers */
+  --nxt-border: #e2e8f0;
+  --nxt-border-strong: #cbd5e1;
+  --nxt-border-focus: #059669;
+
+  /* Typography */
+  --nxt-text-primary: #0f172a;
+  --nxt-text-secondary: #475569;
+  --nxt-text-muted: #94a3b8;
+  --nxt-text-inverse: #ffffff;
+
+  /* Primary EHS Emerald */
+  --nxt-primary-bg: #059669;
+  --nxt-primary-hover: #047857;
+  --nxt-primary-active: #065f46;
+  --nxt-primary-text: #ffffff;
+  --nxt-primary-ring: rgba(5, 150, 105, 0.2);
+
+  /* Elevation & Shadows */
+  --nxt-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  --nxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --nxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+
+  /* Radii */
+  --nxt-radius-sm: 6px;
+  --nxt-radius-md: 10px;
+  --nxt-radius-lg: 14px;
+  --nxt-radius-full: 9999px;
+
+  /* Transitions */
+  --nxt-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Status Colors */
+  --nxt-status-safe-bg: #ecfdf5;
+  --nxt-status-safe-text: #047857;
+  --nxt-status-safe-border: #a7f3d0;
+
+  --nxt-status-warn-bg: #fffbeb;
+  --nxt-status-warn-text: #b45309;
+  --nxt-status-warn-border: #fde68a;
+
+  --nxt-status-danger-bg: #fef2f2;
+  --nxt-status-danger-text: #b91c1c;
+  --nxt-status-danger-border: #fecaca;
+
+  --nxt-status-info-bg: #eff6ff;
+  --nxt-status-info-text: #1d4ed8;
+  --nxt-status-info-border: #bfdbfe;
+}
+
+/* Vibrant Cyber Theme Override */
+[data-theme="vibrant"] .monthly-inventory-container,
+[data-theme="vibrant"] #monthly-inventory-view {
+  --nxt-bg-canvas: #090d16;
+  --nxt-bg-surface: #111827;
+  --nxt-bg-subtle: #1f2937;
+  --nxt-bg-hover: #1e293b;
+  --nxt-bg-active: #334155;
+  --nxt-header-bg: #111827;
+
+  --nxt-border: #1f2937;
+  --nxt-border-strong: #374151;
+  --nxt-border-focus: #10b981;
+
+  --nxt-text-primary: #f9fafb;
+  --nxt-text-secondary: #9ca3af;
+  --nxt-text-muted: #6b7280;
+  --nxt-text-inverse: #090d16;
+
+  --nxt-primary-bg: #10b981;
+  --nxt-primary-hover: #059669;
+  --nxt-primary-active: #047857;
+  --nxt-primary-text: #ffffff;
+  --nxt-primary-ring: rgba(16, 185, 129, 0.3);
+
+  --nxt-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  --nxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --nxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+
+  --nxt-status-safe-bg: rgba(16, 185, 129, 0.15);
+  --nxt-status-safe-text: #34d399;
+  --nxt-status-safe-border: rgba(16, 185, 129, 0.3);
+
+  --nxt-status-warn-bg: rgba(245, 158, 11, 0.15);
+  --nxt-status-warn-text: #fbbf24;
+  --nxt-status-warn-border: rgba(245, 158, 11, 0.3);
+
+  --nxt-status-danger-bg: rgba(239, 68, 68, 0.15);
+  --nxt-status-danger-text: #f87171;
+  --nxt-status-danger-border: rgba(239, 68, 68, 0.3);
+
+  --nxt-status-info-bg: rgba(59, 130, 246, 0.15);
+  --nxt-status-info-text: #60a5fa;
+  --nxt-status-info-border: rgba(59, 130, 246, 0.3);
+}
+
+/* --------------------------------------------------------------------------
+   2. MAIN CONTAINER LAYOUT
+   -------------------------------------------------------------------------- */
+
+.monthly-inventory-container {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 1.5rem 1.75rem 3rem;
+  font-family: var(--nxt-font-sans);
+  color: var(--nxt-text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: nxtFadeIn 240ms ease-out;
+}
+
+@keyframes nxtFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --------------------------------------------------------------------------
+   3. HEADER & HERO SECTION
+   -------------------------------------------------------------------------- */
+
+.nxt-header-card {
+  background: var(--nxt-bg-surface);
+  border: 1px solid var(--nxt-border);
+  border-radius: var(--nxt-radius-lg);
+  padding: 1.25rem 1.75rem;
+  box-shadow: var(--nxt-shadow-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.nxt-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.nxt-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nxt-title-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.nxt-main-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--nxt-text-primary);
+}
+
+.nxt-period-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--nxt-radius-full);
+  background: var(--nxt-status-safe-bg);
+  color: var(--nxt-status-safe-text);
+  border: 1px solid var(--nxt-status-safe-border);
+}
+
+.nxt-period-badge.locked {
+  background: var(--nxt-status-warn-bg);
+  color: var(--nxt-status-warn-text);
+  border-color: var(--nxt-status-warn-border);
+}
+
+.nxt-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--nxt-text-secondary);
+}
+
+/* Period Controls */
+.nxt-period-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--nxt-bg-subtle);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--nxt-radius-md);
+  border: 1px solid var(--nxt-border);
+}
+
+.nxt-period-select {
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--nxt-radius-sm);
+  border: 1px solid var(--nxt-border-strong);
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--nxt-transition);
+}
+
+.nxt-period-select:focus {
+  border-color: var(--nxt-border-focus);
+}
+
+.nxt-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--nxt-radius-sm);
+  border: 1px solid var(--nxt-border);
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all var(--nxt-transition);
+}
+
+.nxt-btn-icon:hover:not(:disabled) {
+  background: var(--nxt-bg-hover);
+  color: var(--nxt-text-primary);
+  border-color: var(--nxt-border-strong);
+}
+
+.nxt-btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Action Buttons Bar */
+.nxt-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nxt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  border-radius: var(--nxt-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--nxt-transition);
+  white-space: nowrap;
+}
+
+.nxt-btn:focus-visible {
+  outline: 2px solid var(--nxt-primary-ring);
+  outline-offset: 1px;
+}
+
+.nxt-btn-primary {
+  background: var(--nxt-primary-bg);
+  color: var(--nxt-primary-text);
+}
+.nxt-btn-primary:hover {
+  background: var(--nxt-primary-hover);
+  box-shadow: var(--nxt-shadow-sm);
+}
+
+.nxt-btn-success {
+  background: #0284c7;
+  color: #ffffff;
+}
+.nxt-btn-success:hover {
+  background: #0369a1;
+  box-shadow: var(--nxt-shadow-sm);
+}
+
+.nxt-btn-info {
+  background: #4f46e5;
+  color: #ffffff;
+}
+.nxt-btn-info:hover {
+  background: #4338ca;
+}
+
+.nxt-btn-secondary {
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-secondary);
+  border: 1px solid var(--nxt-border-strong);
+}
+.nxt-btn-secondary:hover {
+  background: var(--nxt-bg-hover);
+  color: var(--nxt-text-primary);
+}
+
+.nxt-btn-outline {
+  background: transparent;
+  color: var(--nxt-text-secondary);
+  border: 1px dashed var(--nxt-border-strong);
+}
+.nxt-btn-outline:hover {
+  border-color: var(--nxt-primary-bg);
+  color: var(--nxt-primary-bg);
+  background: var(--nxt-bg-surface);
+}
+
+/* --------------------------------------------------------------------------
+   4. KPI METRICS CARDS ROW
+   -------------------------------------------------------------------------- */
+
+.nxt-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.nxt-kpi-card {
+  background: var(--nxt-bg-surface);
+  border: 1px solid var(--nxt-border);
+  border-radius: var(--nxt-radius-md);
+  padding: 1.15rem 1.25rem;
+  box-shadow: var(--nxt-shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: transform var(--nxt-transition), box-shadow var(--nxt-transition);
+}
+
+.nxt-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--nxt-shadow-md);
+}
+
+.nxt-kpi-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--nxt-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.nxt-kpi-icon-chemicals {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+.nxt-kpi-icon-import {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+.nxt-kpi-icon-export {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+.nxt-kpi-icon-balance {
+  background: rgba(139, 92, 246, 0.12);
+  color: #7c3aed;
+}
+
+.nxt-kpi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.nxt-kpi-label {
+  font-size: 0.775rem;
+  font-weight: 600;
+  color: var(--nxt-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.nxt-kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--nxt-text-primary);
+  line-height: 1.2;
+}
+
+.nxt-kpi-hint {
+  font-size: 0.75rem;
+  color: var(--nxt-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   5. CONTROLS TOOLBAR & VIEW MODE SWITCH
+   -------------------------------------------------------------------------- */
+
+.nxt-toolbar {
+  background: var(--nxt-bg-surface);
+  border: 1px solid var(--nxt-border);
+  border-radius: var(--nxt-radius-md);
+  padding: 0.85rem 1.25rem;
+  box-shadow: var(--nxt-shadow-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.nxt-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+  min-width: 280px;
+}
+
+.nxt-mode-switch {
+  display: inline-flex;
+  background: var(--nxt-bg-subtle);
+  padding: 0.25rem;
+  border-radius: var(--nxt-radius-md);
+  border: 1px solid var(--nxt-border);
+}
+
+.nxt-mode-btn {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: var(--nxt-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--nxt-text-secondary);
+  cursor: pointer;
+  transition: all var(--nxt-transition);
+}
+
+.nxt-mode-btn.active {
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-primary);
+  box-shadow: var(--nxt-shadow-sm);
+}
+
+.nxt-search-box {
+  position: relative;
+  flex: 1;
+  max-width: 360px;
+}
+
+.nxt-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--nxt-text-muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.nxt-search-input {
+  width: 100%;
+  padding: 0.45rem 2rem 0.45rem 2.25rem;
+  font-size: 0.825rem;
+  border-radius: var(--nxt-radius-md);
+  border: 1px solid var(--nxt-border-strong);
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-primary);
+  outline: none;
+  transition: border-color var(--nxt-transition);
+}
+
+.nxt-search-input:focus {
+  border-color: var(--nxt-border-focus);
+}
+
+.nxt-search-clear {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--nxt-text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.2rem;
+}
+
+.nxt-filter-select {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.825rem;
+  border-radius: var(--nxt-radius-md);
+  border: 1px solid var(--nxt-border-strong);
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-primary);
+  cursor: pointer;
+  outline: none;
+}
+
+.nxt-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   6. INTERACTIVE DATA GRID TABLE
+   -------------------------------------------------------------------------- */
+
+.nxt-table-card {
+  background: var(--nxt-bg-surface);
+  border: 1px solid var(--nxt-border);
+  border-radius: var(--nxt-radius-lg);
+  box-shadow: var(--nxt-shadow-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.nxt-table-wrapper {
+  overflow-x: auto;
+  max-height: 680px;
+}
+
+.nxt-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.825rem;
+  text-align: left;
+}
+
+.nxt-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--nxt-bg-subtle);
+  color: var(--nxt-text-secondary);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 2px solid var(--nxt-border-strong);
+  white-space: nowrap;
+}
+
+.nxt-table tbody tr {
+  transition: background-color var(--nxt-transition);
+}
+
+.nxt-table tbody tr:hover {
+  background-color: var(--nxt-bg-hover);
+}
+
+.nxt-table tbody td {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--nxt-border);
+  vertical-align: middle;
+}
+
+.nxt-col-num {
+  font-family: var(--nxt-font-mono);
+  font-size: 0.825rem;
+  color: var(--nxt-text-secondary);
+}
+
+.nxt-chem-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nxt-chem-name {
+  font-weight: 600;
+  color: var(--nxt-text-primary);
+}
+
+.nxt-chem-code-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--nxt-text-muted);
+}
+
+.nxt-cas-badge {
+  font-family: var(--nxt-font-mono);
+  font-size: 0.725rem;
+  background: var(--nxt-bg-subtle);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--nxt-radius-sm);
+  border: 1px solid var(--nxt-border);
+}
+
+/* Inline Edit Numeric Inputs */
+.nxt-num-input {
+  width: 95px;
+  padding: 0.35rem 0.5rem;
+  font-family: var(--nxt-font-mono);
+  font-size: 0.825rem;
+  font-weight: 600;
+  text-align: right;
+  border-radius: var(--nxt-radius-sm);
+  border: 1px solid var(--nxt-border);
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-primary);
+  outline: none;
+  transition: all var(--nxt-transition);
+}
+
+.nxt-num-input:focus {
+  border-color: var(--nxt-border-focus);
+  box-shadow: 0 0 0 2px var(--nxt-primary-ring);
+}
+
+.nxt-num-input.changed {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.nxt-balance-cell {
+  font-family: var(--nxt-font-mono);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.nxt-balance-cell.safe {
+  color: #059669;
+}
+.nxt-balance-cell.warning {
+  color: #d97706;
+}
+.nxt-balance-cell.danger {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
+  border-radius: var(--nxt-radius-sm);
+}
+
+/* Status Badges */
+.nxt-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.725rem;
+  font-weight: 600;
+  border-radius: var(--nxt-radius-full);
+  white-space: nowrap;
+}
+
+.nxt-status-safe {
+  background: var(--nxt-status-safe-bg);
+  color: var(--nxt-status-safe-text);
+  border: 1px solid var(--nxt-status-safe-border);
+}
+.nxt-status-warn {
+  background: var(--nxt-status-warn-bg);
+  color: var(--nxt-status-warn-text);
+  border: 1px solid var(--nxt-status-warn-border);
+}
+.nxt-status-danger {
+  background: var(--nxt-status-danger-bg);
+  color: var(--nxt-status-danger-text);
+  border: 1px solid var(--nxt-status-danger-border);
+}
+
+/* Action Cell Buttons */
+.nxt-action-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.nxt-btn-mini {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.725rem;
+  font-weight: 600;
+  border-radius: var(--nxt-radius-sm);
+  border: 1px solid var(--nxt-border);
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-secondary);
+  cursor: pointer;
+  transition: all var(--nxt-transition);
+}
+
+.nxt-btn-mini:hover {
+  background: var(--nxt-bg-hover);
+  color: var(--nxt-text-primary);
+  border-color: var(--nxt-border-strong);
+}
+
+.nxt-btn-mini-save {
+  background: var(--nxt-primary-bg);
+  color: #ffffff;
+  border-color: var(--nxt-primary-bg);
+}
+.nxt-btn-mini-save:hover {
+  background: var(--nxt-primary-hover);
+}
+
+.nxt-btn-mini-danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+/* Empty State / Loading */
+.nxt-state-box {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--nxt-text-secondary);
+}
+
+.nxt-state-icon {
+  font-size: 2.5rem;
+  opacity: 0.7;
+}
+
+/* --------------------------------------------------------------------------
+   7. MODAL OVERLAYS & FORMS
+   -------------------------------------------------------------------------- */
+
+.nxt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: nxtModalFadeIn 160ms ease-out;
+}
+
+@keyframes nxtModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.nxt-modal-card {
+  background: var(--nxt-bg-surface);
+  border: 1px solid var(--nxt-border);
+  border-radius: var(--nxt-radius-lg);
+  box-shadow: var(--nxt-shadow-lg);
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: nxtModalZoomIn 180ms ease-out;
+}
+
+.nxt-modal-card-lg {
+  max-width: 880px;
+}
+
+@keyframes nxtModalZoomIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.nxt-modal-header {
+  padding: 1.15rem 1.5rem;
+  border-bottom: 1px solid var(--nxt-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nxt-modal-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--nxt-text-primary);
+}
+
+.nxt-modal-close {
+  border: none;
+  background: transparent;
+  color: var(--nxt-text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--nxt-radius-sm);
+  transition: color var(--nxt-transition);
+}
+
+.nxt-modal-close:hover {
+  color: var(--nxt-text-primary);
+}
+
+.nxt-modal-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.nxt-modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--nxt-border);
+  background: var(--nxt-bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* Form Groups */
+.nxt-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.nxt-form-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--nxt-text-secondary);
+}
+
+.nxt-form-input,
+.nxt-form-select,
+.nxt-form-textarea {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  border-radius: var(--nxt-radius-md);
+  border: 1px solid var(--nxt-border-strong);
+  background: var(--nxt-bg-surface);
+  color: var(--nxt-text-primary);
+  outline: none;
+  transition: border-color var(--nxt-transition);
+}
+
+.nxt-form-input:focus,
+.nxt-form-select:focus,
+.nxt-form-textarea:focus {
+  border-color: var(--nxt-border-focus);
+}
+
+.nxt-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.nxt-radio-group {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0.25rem 0;
+}
+
+.nxt-radio-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* CIL Selection List in Modal */
+.nxt-cil-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--nxt-border);
+  border-radius: var(--nxt-radius-md);
+}
+
+.nxt-cil-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--nxt-border);
+  transition: background var(--nxt-transition);
+}
+
+.nxt-cil-item:last-child {
+  border-bottom: none;
+}
+
+.nxt-cil-item:hover {
+  background: var(--nxt-bg-hover);
+}
+
+.nxt-cil-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.nxt-cil-badges {
+  display: flex;
+  gap: 0.35rem;
+}
+
+/* Print Styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #monthly-inventory-view,
+  #monthly-inventory-view * {
+    visibility: visible;
+  }
+  #monthly-inventory-view {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .nxt-toolbar,
+  .nxt-action-bar,
+  .nxt-btn,
+  .nxt-modal-backdrop {
+    display: none !important;
+  }
+}
