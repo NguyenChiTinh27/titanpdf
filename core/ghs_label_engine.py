@@ -467,6 +467,7 @@ def generate_label_html(
     Embeds isolated @media print rules for 100% clean browser printing.
     """
     preset = normalize_preset_size(size)
+    cfg = PRESET_CONFIG.get(preset) or PRESET_CONFIG["A4_4UP"]
 
     # Prepare list of label items
     if isinstance(chem_data, list):
@@ -752,10 +753,11 @@ def generate_label_html(
         /* ISOLATED PRINT STYLESHEET (WINDOW.PRINT / CTR+P)             */
         /* ============================================================ */
         @media print {{
-            body {{
+            html, body {{
                 background: #ffffff !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                width: 100% !important;
             }}
             .no-print-toolbar {{
                 display: none !important;
@@ -768,13 +770,27 @@ def generate_label_html(
             }}
             @page {{
                 margin: 0;
-                size: auto;
+                size: {cfg['w_mm']}mm {cfg['h_mm']}mm;
             }}
             .print-sheet-a4-4,
             .print-sheet-a5-1,
             .print-sheet-decal-150,
             .print-sheet-decal-75 {{
                 page-break-after: always;
+                page-break-inside: avoid;
+                margin: 0 auto !important;
+            }}
+            .print-sheet-decal-150 {{
+                width: 100mm !important;
+                height: 150mm !important;
+                max-height: 150mm !important;
+                padding: 4mm !important;
+            }}
+            .print-sheet-decal-75 {{
+                width: 100mm !important;
+                height: 75mm !important;
+                max-height: 75mm !important;
+                padding: 3mm !important;
             }}
         }}
     </style>
@@ -804,7 +820,37 @@ def generate_label_html(
 
 
 def _find_windows_font(bold: bool = False) -> Optional[str]:
-    """Find a system TrueType font supporting Vietnamese Unicode."""
+    """Find a system TrueType font supporting Vietnamese Unicode on Windows and Linux (Render)."""
+    # 1. Bundled TrueType font in project data/fonts/ (Guaranteed cross-platform on Windows and Render Linux)
+    base_dir = Path(__file__).resolve().parent.parent
+    bundled_name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    bundled_candidates = [
+        base_dir / "data" / "fonts" / bundled_name,
+        base_dir / "dist" / "LUV-PDF" / "_internal" / "matplotlib" / "mpl-data" / "fonts" / "ttf" / bundled_name,
+    ]
+    for bf in bundled_candidates:
+        if bf.exists():
+            return str(bf)
+
+    # 2. Linux system fonts (Ubuntu, Debian, Docker, Render)
+    linux_candidates = (
+        [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        ]
+        if bold
+        else [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]
+    )
+    for lp in linux_candidates:
+        if os.path.exists(lp):
+            return lp
+
+    # 3. Windows system fonts
     candidates = (
         ["C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/segoeuib.ttf", "C:/Windows/Fonts/timesbd.ttf"]
         if bold

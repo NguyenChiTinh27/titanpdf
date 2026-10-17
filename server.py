@@ -2377,13 +2377,50 @@ def api_msds_export_annual_chemical_report(year: Optional[int] = Query(None)):
 # Zero-auth Field Emergency Tra Cứu Khẩn Cấp & QR Code Generator
 # ==============================================================================
 
+def generate_qr_card_svg(chem: Dict[str, Any], mobile_url: str, size: int = 200) -> str:
+    """Generate a clean Emergency QR Sticker Card SVG with label header, QR code, metadata and hotlines."""
+    import html
+    raw_qr = generate_qr_svg(mobile_url, size=size)
+    if "<svg" in raw_qr:
+        start = raw_qr.find("<svg")
+        raw_qr = raw_qr[start:]
+
+    cid = html.escape(str(chem.get("chemical_id") or chem.get("product_code") or "CHEM"))
+    pname = html.escape(str(chem.get("product_name_vi") or chem.get("product_name_original") or cid))
+    cas = html.escape(str(chem.get("cas_primary") or "N/A"))
+
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="360" height="460" viewBox="0 0 360 460">
+  <rect width="360" height="460" rx="14" fill="#ffffff" stroke="#ea580c" stroke-width="3"/>
+  <rect x="14" y="14" width="332" height="36" rx="6" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="180" y="38" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="13" font-weight="bold" fill="#c2410c">⚡ CỨU HỘ KHẨN CẤP (GHS / EHS)</text>
+  
+  <g transform="translate(80, 60)">
+    {raw_qr}
+  </g>
+  
+  <text x="180" y="295" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="16" font-weight="bold" fill="#0f172a">{cid}</text>
+  <text x="180" y="320" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12" font-weight="600" fill="#334155">{pname[:35]}</text>
+  <text x="180" y="342" text-anchor="middle" font-family="monospace" font-size="11.5" fill="#64748b">CAS: {cas}</text>
+  
+  <rect x="14" y="365" width="332" height="75" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+  <text x="180" y="392" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="12.5" font-weight="bold" fill="#dc2626">Cứu Hỏa: 114  |  Cấp Cứu: 115</text>
+  <text x="180" y="415" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="10.5" fill="#991b1b">Quét camera điện thoại để tra cứu Thẻ An Toàn</text>
+</svg>'''
+
+
 @app.get("/api/msds/qr-code/{chem_id}")
 @app.get("/api/msds/qr/{chem_id}")
-def api_msds_qr_code(chem_id: str, request: Request, size: int = Query(220)):
+def api_msds_qr_code(
+    chem_id: str,
+    request: Request,
+    size: int = Query(220),
+    format: str = Query("svg"),
+    card: Optional[str] = Query(None)
+):
     """
-    Tạo mã QR Code vector SVG bằng ReportLab native, nhúng URL dẫn trực tiếp
-    vào trang ứng phó khẩn cấp di động /mobile-msds/{chem_id}.
-    Không phụ thuộc thư viện mạng bên ngoài.
+    Tạo mã QR Code vector SVG hoặc ảnh raster PNG độ nét cao (300 DPI),
+    nhúng URL dẫn trực tiếp vào trang ứng phó khẩn cấp di động /mobile-msds/{chem_id}.
+    Hỗ trợ xuất ảnh QR đơn lẻ hoặc Tem Cứu Hộ hoàn chỉnh (card=1).
     """
     from core.msds_intelligence import MSDSDatabase
     chem = MSDSDatabase.get_chemical(chem_id)
@@ -2393,7 +2430,31 @@ def api_msds_qr_code(chem_id: str, request: Request, size: int = Query(220)):
     # Resolve server host or domain
     base_url = get_titan_base_url(request)
     mobile_url = f"{base_url}/mobile-msds/{chem_id}"
-    svg_qr = generate_qr_svg(mobile_url, size=size)
+
+    use_card = (card is not None and str(card).lower() in ("1", "true", "yes"))
+    if use_card:
+        svg_qr = generate_qr_card_svg(chem, mobile_url, size=200)
+    else:
+        svg_qr = generate_qr_svg(mobile_url, size=size)
+
+    # Export PNG format if requested
+    if format.lower() == "png":
+        try:
+            import fitz
+            doc = fitz.open(stream=svg_qr.encode("utf-8"), filetype="svg")
+            pix = doc[0].get_pixmap(dpi=300)
+            png_bytes = pix.tobytes("png")
+            filename = f"QR_Emergency_{chem_id}.png"
+            return Response(
+                content=png_bytes,
+                media_type="image/png",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Cache-Control": "public, max-age=3600"
+                }
+            )
+        except Exception as e:
+            logger.warning("Không thể chuyển đổi QR SVG sang PNG: %s", e)
 
     return Response(
         content=svg_qr.encode("utf-8"),

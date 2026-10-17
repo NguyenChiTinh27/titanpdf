@@ -2640,11 +2640,14 @@
                 <a id="msds-qr-mobile-link" href="#" target="_blank" class="msds-qr-btn-link" title="Mở trang cứu hộ di động trực tiếp trên trình duyệt">
                     🔗 Mở Web Cứu Hộ
                 </a>
-                <div style="display:flex; gap:8px;">
-                    <button type="button" class="btn-secondary" onclick="downloadQrImage()">
-                        📥 Tải Mã QR (SVG)
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" class="btn-secondary" onclick="downloadQrImage('png', 1)" title="Tải tem cứu hộ dạng ảnh PNG (độ nét cao 300 DPI dán Word/Excel/Zalo)">
+                        📥 Tải ảnh PNG
                     </button>
-                    <button type="button" class="btn-primary" onclick="printQrSticker()">
+                    <button type="button" class="btn-secondary" onclick="downloadQrImage('svg', 1)" title="Tải tem cứu hộ vector SVG chuẩn in ấn">
+                        📥 Tải Tem SVG
+                    </button>
+                    <button type="button" class="btn-primary" onclick="printQrSticker()" style="background:#ea580c; border-color:#c2410c;">
                         🖨️ In Tem QR
                     </button>
                     <button type="button" class="btn-secondary" onclick="closeMsdsQrModal()">

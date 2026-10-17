@@ -2932,14 +2932,15 @@ function selectQrStickerPreset(sizeMm, btn) {
     }
 }
 
-function downloadQrImage() {
+function downloadQrImage(format = "png", card = 1) {
     if (!CURRENT_QR_CHEM_ID) {
         alert("Chưa chọn hóa chất để tải mã QR.");
         return;
     }
+    const ext = format === "png" ? "png" : "svg";
     const a = document.createElement("a");
-    a.href = `/api/msds/qr-code/${encodeURIComponent(CURRENT_QR_CHEM_ID)}`;
-    a.download = `QR_Emergency_${CURRENT_QR_CHEM_ID}.svg`;
+    a.href = `/api/msds/qr-code/${encodeURIComponent(CURRENT_QR_CHEM_ID)}?format=${ext}&card=${card ? 1 : 0}`;
+    a.download = `QR_Emergency_${CURRENT_QR_CHEM_ID}.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2963,96 +2964,98 @@ function printQrSticker() {
         return;
     }
 
-    printWin.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Tem QR Cứu Hộ - \${codeText}</title>
-            <style>
-                @page {
-                    size: \${sizeMm}mm \${sizeMm}mm;
-                    margin: 0;
-                }
-                * { box-sizing: border-box; margin: 0; padding: 0; }
-                body {
-                    width: \${sizeMm}mm;
-                    height: \${sizeMm}mm;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-                    background: #fff;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 2mm;
-                    text-align: center;
-                    overflow: hidden;
-                }
-                .tag {
-                    font-size: \${sizeMm <= 50 ? '6pt' : '8pt'};
-                    font-weight: 800;
-                    color: #c2410c;
-                    background: #fff7ed;
-                    border: 0.5pt solid #fdba74;
-                    padding: 1pt 3pt;
-                    border-radius: 2pt;
-                    margin-bottom: 1.5mm;
-                    text-transform: uppercase;
-                }
-                .qr-box {
-                    width: \${sizeMm <= 50 ? '24mm' : (sizeMm <= 70 ? '36mm' : '52mm')};
-                    height: \${sizeMm <= 50 ? '24mm' : (sizeMm <= 70 ? '36mm' : '52mm')};
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .qr-box svg {
-                    width: 100% !important;
-                    height: 100% !important;
-                }
-                .code {
-                    font-size: \${sizeMm <= 50 ? '7pt' : '9pt'};
-                    font-weight: 900;
-                    color: #0f172a;
-                    margin-top: 1mm;
-                }
-                .name {
-                    font-size: \${sizeMm <= 50 ? '5.5pt' : '7.5pt'};
-                    color: #334155;
-                    font-weight: 600;
-                    max-width: 95%;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                .cas {
-                    font-size: \${sizeMm <= 50 ? '5pt' : '6.5pt'};
-                    color: #64748b;
-                    font-family: monospace;
-                }
-                .call {
-                    font-size: \${sizeMm <= 50 ? '5pt' : '6pt'};
-                    color: #dc2626;
-                    font-weight: 700;
-                    margin-top: 0.5mm;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="tag">⚡ CỨU HỘ KHẨN CẤP</div>
-            <div class="qr-box">\${previewSvg}</div>
-            <div class="code">\${codeText}</div>
-            <div class="name">\${nameText}</div>
-            <div class="cas">\${casText}</div>
-            <div class="call">Cứu hỏa 114 · Y tế 115</div>
-            <script>
-                window.onload = function() {
-                    window.print();
-                    setTimeout(function() { window.close(); }, 500);
-                };
-            <\\/script>
-        </body>
-        </html>
-    `);
+    const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Tem QR Cứu Hộ - ${escapeHtml(codeText)}</title>
+    <style>
+        @page {
+            size: ${sizeMm}mm ${sizeMm}mm;
+            margin: 0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            width: ${sizeMm}mm;
+            height: ${sizeMm}mm;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2mm;
+            text-align: center;
+            overflow: hidden;
+        }
+        .tag {
+            font-size: ${sizeMm <= 50 ? '6pt' : '8pt'};
+            font-weight: 800;
+            color: #c2410c;
+            background: #fff7ed;
+            border: 0.5pt solid #fdba74;
+            padding: 1pt 3pt;
+            border-radius: 2pt;
+            margin-bottom: 1.5mm;
+            text-transform: uppercase;
+        }
+        .qr-box {
+            width: ${sizeMm <= 50 ? '24mm' : (sizeMm <= 70 ? '36mm' : '52mm')};
+            height: ${sizeMm <= 50 ? '24mm' : (sizeMm <= 70 ? '36mm' : '52mm')};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .qr-box svg {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        .code {
+            font-size: ${sizeMm <= 50 ? '7pt' : '9pt'};
+            font-weight: 900;
+            color: #0f172a;
+            margin-top: 1mm;
+        }
+        .name {
+            font-size: ${sizeMm <= 50 ? '5.5pt' : '7.5pt'};
+            color: #334155;
+            font-weight: 600;
+            max-width: 95%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cas {
+            font-size: ${sizeMm <= 50 ? '5pt' : '6.5pt'};
+            color: #64748b;
+            font-family: monospace;
+        }
+        .call {
+            font-size: ${sizeMm <= 50 ? '5pt' : '6pt'};
+            color: #dc2626;
+            font-weight: 700;
+            margin-top: 0.5mm;
+        }
+    </style>
+</head>
+<body>
+    <div class="tag">⚡ CỨU HỘ KHẨN CẤP</div>
+    <div class="qr-box">${previewSvg}</div>
+    <div class="code">${escapeHtml(codeText)}</div>
+    <div class="name">${escapeHtml(nameText)}</div>
+    <div class="cas">${escapeHtml(casText)}</div>
+    <div class="call">Cứu hỏa 114 · Y tế 115</div>
+    <script>
+        window.onload = function() {
+            window.print();
+            setTimeout(function() { window.close(); }, 600);
+        };
+    </` + `script>
+</body>
+</html>`;
+
+    printWin.document.open();
+    printWin.document.write(htmlContent);
     printWin.document.close();
 }
 
