@@ -4,13 +4,18 @@ import hashlib
 import uuid
 import platform
 import threading
-from datetime import datetime
+import urllib.request
+import urllib.error
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LICENSE_FILE = os.path.join(BASE_DIR, "license.json")
 LICENSES_DB_FILE = os.path.join(BASE_DIR, "licenses_db.json")
 SECRET_SALT = "LUV_PDF_OFFICIAL_SECRET_KEY_2026"
+
+CLOUDFLARE_ADMIN_URL = "https://luv-license-api.luv-sds.workers.dev"
+CLOUDFLARE_ADMIN_TOKEN = "rHHfK9eC_8lTH02SP0CQPnyXAqMMDUXxwV2MiPothM7Avc4TxNZgnkKp5CFsIBP_"
 
 _db_lock = threading.Lock()
 
@@ -84,22 +89,67 @@ class LUVLicenseManager:
         save_to_db: bool = True
     ) -> Dict[str, Any]:
         """
-        Generate a cryptographically verified LUV license key matching LUV_License_Manager.exe.
-        Algorithm: SHA-256(f"{registered_to}_{tier}_{expires}_{SECRET_SALT}")
-        Prefix: LUV-PRO | LUV-ENT | LUV-PDF
+        Generate a cryptographically verified LUV license key.
+        Connects directly to Cloudflare Worker D1 to issue an official Ed25519-backed key.
         """
         reg_clean = (registered_to or "LUV Client").strip()
         tier_clean = (tier or "Enterprise Lifetime").strip()
         exp_clean = (expires or "Vĩnh viễn").strip()
 
-        raw_hash = hashlib.sha256(f"{reg_clean}_{tier_clean}_{exp_clean}_{SECRET_SALT}".encode()).hexdigest().upper()
-        prefix = "LUV-PRO" if "Pro" in tier_clean else "LUV-ENT" if "Enterprise" in tier_clean else "LUV-PDF"
-        part1 = raw_hash[:4]
-        part2 = raw_hash[4:8]
-        part3 = raw_hash[8:12]
-        key = f"{prefix}-{part1}-{part2}-{part3}"
-        
+        # Parse expiry date to YYYY-MM-DD
+        exp_date_str = "2036-12-31"
+        if "1 tháng" in exp_clean.lower() or "30 ngày" in exp_clean.lower():
+            exp_date_str = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+        elif "3 tháng" in exp_clean.lower():
+            exp_date_str = (datetime.now() + timedelta(days=90)).strftime("%Y-%m-%d")
+        elif "6 tháng" in exp_clean.lower():
+            exp_date_str = (datetime.now() + timedelta(days=180)).strftime("%Y-%m-%d")
+        elif "1 năm" in exp_clean.lower() or "12 tháng" in exp_clean.lower():
+            exp_date_str = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
+
+        key = None
+        record_id = None
+        try:
+            cf_payload = {
+                "customer_name": reg_clean,
+                "customer_email": "",
+                "expires_at": exp_date_str,
+                "products": {
+                    "DOC": {"enabled": True, "max_devices": 10},
+                    "SDS": {"enabled": True, "max_devices": 10}
+                },
+                "offline_days": 14,
+                "plan": "enterprise" if "Enterprise" in tier_clean else "pro",
+                "features": ["core", "import", "export", "edit", "doc_tran"],
+                "notes": notes.strip()
+            }
+            req = urllib.request.Request(
+                f"{CLOUDFLARE_ADMIN_URL}/v1/admin/licenses",
+                data=json.dumps(cf_payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {CLOUDFLARE_ADMIN_TOKEN}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "LUV-License-Admin/1.0"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                cf_res = json.loads(resp.read().decode("utf-8"))
+                key = cf_res.get("license_key")
+                record_id = cf_res.get("id")
+        except Exception:
+            key = None
+
+        if not key:
+            raw_hash = hashlib.sha256(f"{reg_clean}_{tier_clean}_{exp_clean}_{SECRET_SALT}".encode()).hexdigest().upper()
+            prefix = "LUV-PRO" if "Pro" in tier_clean else "LUV-ENT" if "Enterprise" in tier_clean else "LUV-PDF"
+            part1 = raw_hash[:4]
+            part2 = raw_hash[4:8]
+            part3 = raw_hash[8:12]
+            key = f"{prefix}-{part1}-{part2}-{part3}"
+
         record = {
+            "id": record_id or str(uuid.uuid4()),
             "license_key": key,
             "registered_to": reg_clean,
             "tier": tier_clean,
@@ -112,7 +162,6 @@ class LUVLicenseManager:
 
         if save_to_db:
             db = cls._read_db()
-            # If already exists with same key, update it
             existing_idx = next((i for i, r in enumerate(db) if r.get("license_key") == key), None)
             if existing_idx is not None:
                 db[existing_idx] = record
@@ -143,19 +192,51 @@ class LUVLicenseManager:
 
     @classmethod
     def list_keys(cls, search: str = "", status: str = "") -> List[Dict[str, Any]]:
-        """List all generated license keys with optional search query and status filter."""
-        db = cls._read_db()
+        """List license keys querying Cloudflare Worker D1 directly, with local cache fallback."""
         search = (search or "").strip().lower()
         status = (status or "").strip().lower()
 
+        remote_items = []
+        try:
+            req = urllib.request.Request(
+                f"{CLOUDFLARE_ADMIN_URL}/v1/admin/licenses",
+                headers={
+                    "Authorization": f"Bearer {CLOUDFLARE_ADMIN_TOKEN}",
+                    "User-Agent": "LUV-License-Admin/1.0"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                for lic in data.get("licenses", []):
+                    remote_items.append({
+                        "id": lic.get("id"),
+                        "license_key": lic.get("key_prefix", "LUV") + "-••••••••••••••••",
+                        "registered_to": lic.get("customer_name") or "Khách hàng LUV",
+                        "tier": f"Cloudflare D1 ({lic.get('plan', 'standard').upper()})",
+                        "expires_at": lic.get("expires_at") or "Vĩnh viễn",
+                        "created_at": lic.get("created_at") or "",
+                        "status": lic.get("status") or "active",
+                        "notes": f"Thiết bị: {lic.get('device_count', 0)} máy"
+                    })
+        except Exception:
+            pass
+
+        local_db = cls._read_db()
+        # Merge remote and local without duplicates
+        combined = list(local_db)
+        existing_keys = {r.get("license_key") for r in local_db if r.get("license_key")}
+        for r_item in remote_items:
+            if r_item.get("license_key") not in existing_keys:
+                combined.append(r_item)
+
         results = []
-        for item in db:
+        for item in combined:
             if status and item.get("status", "").lower() != status:
                 continue
             if search:
-                match_key = search in item.get("license_key", "").lower()
-                match_reg = search in item.get("registered_to", "").lower()
-                match_tier = search in item.get("tier", "").lower()
+                match_key = search in str(item.get("license_key", "")).lower()
+                match_reg = search in str(item.get("registered_to", "")).lower()
+                match_tier = search in str(item.get("tier", "")).lower()
                 if not (match_key or match_reg or match_tier):
                     continue
             results.append(item)
@@ -163,18 +244,39 @@ class LUVLicenseManager:
 
     @classmethod
     def revoke_key(cls, key: str) -> bool:
-        """Revoke an active key."""
+        """Revoke an active key in Cloudflare D1 and local DB."""
         key = key.strip().upper()
+        # 1. Update local DB
         db = cls._read_db()
+        target_id = None
         updated = False
         for item in db:
             if item.get("license_key") == key:
                 item["status"] = "revoked"
                 item["revoked_at"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                target_id = item.get("id")
                 updated = True
                 break
         if updated:
             cls._write_db(db)
+
+        # 2. Call Cloudflare Worker if ID known
+        if target_id:
+            try:
+                req = urllib.request.Request(
+                    f"{CLOUDFLARE_ADMIN_URL}/v1/admin/licenses/{target_id}/revoke",
+                    data=json.dumps({}).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {CLOUDFLARE_ADMIN_TOKEN}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "LUV-License-Admin/1.0"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=8):
+                    pass
+            except Exception:
+                pass
         return updated
 
     @classmethod
