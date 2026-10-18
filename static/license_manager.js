@@ -91,7 +91,12 @@ window.LicenseManager = {
             const isActive = item.status === 'active';
             const badgeClass = isActive ? 'license-badge-active' : 'license-badge-revoked';
             const badgeText = isActive ? '✓ Hoạt Động' : '✕ Đã Thu Hồi';
-            const deviceText = item.devices || (item.active_devices !== undefined ? `${item.active_devices}/${item.max_devices} máy` : (item.notes && item.notes.includes('máy') ? item.notes : ''));
+            const activeDev = item.active_devices !== undefined ? item.active_devices : 0;
+            const maxDev = item.max_devices !== undefined ? item.max_devices : 1;
+            const isFull = maxDev > 0 && activeDev >= maxDev;
+            const devTagClass = isFull ? 'license-device-tag tag-full' : 'license-device-tag';
+            const devTagStyle = isFull ? 'color:#ef4444; font-weight:700; background:rgba(239,68,68,0.12); padding:2px 6px; border-radius:4px; display:inline-block; margin-top:4px;' : 'color:#38bdf8; font-size:11px; margin-top:4px;';
+            const deviceText = `${activeDev}/${maxDev} máy${isFull ? ' (ĐÃ ĐẦY - TỪ CHỐI THÊM)' : ''}`;
             const itemId = item.id || '';
             const itemKey = item.license_key || '';
             const fullKey = item.full_key || '';
@@ -101,7 +106,7 @@ window.LicenseManager = {
                     <td style="text-align:center; color:#64748b;">${idx + 1}</td>
                     <td>
                         <span class="license-table-key">${this.escapeHtml(itemKey)}</span>
-                        ${deviceText ? `<div class="license-device-tag">📱 ${this.escapeHtml(deviceText)}</div>` : ''}
+                        <div class="${devTagClass}" style="${devTagStyle}">📱 ${this.escapeHtml(deviceText)}</div>
                     </td>
                     <td><strong>${this.escapeHtml(item.registered_to || 'Khách hàng')}</strong></td>
                     <td><span style="color:#e2e8f0;">${this.escapeHtml(item.tier || 'Enterprise')}</span></td>
@@ -125,6 +130,7 @@ window.LicenseManager = {
         const regInput = document.getElementById('license-ent-reg');
         const tierSelect = document.getElementById('license-ent-tier');
         const expSelect = document.getElementById('license-ent-exp');
+        const maxDevInput = document.getElementById('license-ent-max-devices');
         const notesInput = document.getElementById('license-ent-notes');
 
         const reg = regInput?.value.trim();
@@ -136,12 +142,14 @@ window.LicenseManager = {
 
         const tier = tierSelect?.value || 'Enterprise Lifetime (Vĩnh viễn)';
         const exp = expSelect?.value || 'Vĩnh viễn (Lifetime)';
+        const maxDev = parseInt(maxDevInput?.value) || 1;
         const notes = notesInput?.value.trim() || '';
 
         const formData = new FormData();
         formData.append('registered_to', reg);
         formData.append('tier', tier);
         formData.append('expires', exp);
+        formData.append('max_devices', maxDev);
         formData.append('notes', notes);
 
         try {

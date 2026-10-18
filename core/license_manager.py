@@ -86,15 +86,17 @@ class LUVLicenseManager:
         tier: str = "Enterprise Lifetime", 
         expires: str = "Vĩnh viễn",
         notes: str = "",
-        save_to_db: bool = True
+        save_to_db: bool = True,
+        max_devices: int = 1
     ) -> Dict[str, Any]:
         """
         Generate a cryptographically verified LUV license key.
-        Connects directly to Cloudflare Worker D1 to issue an official Ed25519-backed key.
+        Connects directly to Cloudflare Worker D1 to issue an official Ed25519-backed key with device quota.
         """
         reg_clean = (registered_to or "LUV Client").strip()
         tier_clean = (tier or "Enterprise Lifetime").strip()
         exp_clean = (expires or "Vĩnh viễn").strip()
+        device_limit = max(1, int(max_devices or 1))
 
         # Parse expiry date to YYYY-MM-DD
         exp_date_str = "2036-12-31"
@@ -115,8 +117,8 @@ class LUVLicenseManager:
                 "customer_email": "",
                 "expires_at": exp_date_str,
                 "products": {
-                    "DOC": {"enabled": True, "max_devices": 10},
-                    "SDS": {"enabled": True, "max_devices": 10}
+                    "DOC": {"enabled": True, "max_devices": device_limit},
+                    "SDS": {"enabled": True, "max_devices": device_limit}
                 },
                 "offline_days": 14,
                 "plan": "enterprise" if "Enterprise" in tier_clean else "pro",
@@ -158,10 +160,13 @@ class LUVLicenseManager:
             "registered_to": reg_clean,
             "tier": tier_clean,
             "expires_at": exp_clean,
+            "max_devices": device_limit,
+            "active_devices": 0,
+            "devices": f"0/{device_limit} máy",
             "created_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "status": "active",
             "notes": notes.strip(),
-            "handover_message": cls.format_handover_message(key, reg_clean, tier_clean, exp_clean)
+            "handover_message": cls.format_handover_message(key, reg_clean, tier_clean, exp_clean, device_limit)
         }
 
         if save_to_db:
@@ -176,20 +181,21 @@ class LUVLicenseManager:
         return record
 
     @staticmethod
-    def format_handover_message(key: str, registered_to: str, tier: str, expires: str) -> str:
+    def format_handover_message(key: str, registered_to: str, tier: str, expires: str, max_devices: int = 1) -> str:
         """Format a polite, professional handover message for clients."""
         return (
             f"🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 Khách hàng / Doanh nghiệp : {registered_to}\n"
+            f"👤 Khách hàng / Đơn vị       : {registered_to}\n"
             f"📦 Gói bản quyền             : {tier}\n"
             f"⏳ Thời hạn sử dụng          : {expires}\n"
+            f"📱 Giới hạn thiết bị         : {max_devices} máy (Quá số lượng sẽ bị từ chối)\n"
             f"🔑 MÃ BẢN QUYỀN (LICENSE KEY): {key}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n"
             f"1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n"
-            f"2. Bấm vào nút '🔑 Kích Hoạt Bản Quyền' ở góc trên bên phải màn hình.\n"
-            f"3. Dán chính xác Mã Bản Quyền ở trên và bấm 'Kích Hoạt Ngay'.\n"
+            f"2. Bấm vào nút 'Key Kích Hoạt' ở góc trên bên phải màn hình.\n"
+            f"3. Dán chính xác Mã Key ở trên và bấm 'XÁC NHẬN KEY KÍCH HOẠT'.\n"
             f"4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n"
             f"✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!"
         )
@@ -431,6 +437,19 @@ class LUVLicenseManager:
         for item in db:
             if item.get("license_key") == clean_key:
                 is_active = item.get("status") == "active"
+                if not is_active:
+                    return {"valid": False, "status": "revoked", "reason": "Mã khóa đã bị thu hồi hoặc vô hiệu hóa."}
+
+                active_dev = item.get("active_devices", 0)
+                max_dev = item.get("max_devices", 0)
+                if max_dev > 0 and active_dev >= max_dev:
+                    return {
+                        "valid": False,
+                        "status": "device_limit",
+                        "reason": f"Mã Key đã đạt giới hạn tối đa số thiết bị cho phép ({active_dev}/{max_dev} máy). Thiết bị mới bị từ chối truy cập.",
+                        "license_key": clean_key
+                    }
+
                 return {
                     "valid": is_active,
                     "status": item.get("status"),
@@ -438,6 +457,8 @@ class LUVLicenseManager:
                     "registered_to": item.get("registered_to"),
                     "tier": item.get("tier"),
                     "expires_at": item.get("expires_at"),
+                    "max_devices": max_dev,
+                    "active_devices": active_dev,
                     "created_at": item.get("created_at"),
                     "source": "registry"
                 }

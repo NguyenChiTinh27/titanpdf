@@ -1108,11 +1108,12 @@ def create_admin_license(
     registered_to: str = Form(...),
     tier: str = Form("Enterprise Lifetime (Vĩnh viễn)"),
     expires: str = Form("Vĩnh viễn (Lifetime)"),
-    notes: str = Form("")
+    notes: str = Form(""),
+    max_devices: int = Form(1)
 ):
-    """Create and record a new LUV license key online."""
+    """Create and record a new LUV license key online with device quota controls."""
     try:
-        res = LUVLicenseManager.generate_key(registered_to, tier, expires, notes=notes, save_to_db=True)
+        res = LUVLicenseManager.generate_key(registered_to, tier, expires, notes=notes, save_to_db=True, max_devices=max_devices)
         return {"success": True, "data": res}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi tạo bản quyền: {str(e)}")
