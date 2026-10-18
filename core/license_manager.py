@@ -137,16 +137,20 @@ class LUVLicenseManager:
                 cf_res = json.loads(resp.read().decode("utf-8"))
                 key = cf_res.get("license_key")
                 record_id = cf_res.get("id")
-        except Exception:
-            key = None
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8")
+                err_json = json.loads(err_body)
+                err_msg = err_json.get("message") or err_json.get("error") or str(e)
+            except Exception:
+                err_msg = str(e)
+            raise RuntimeError(f"Lỗi máy chủ Cloudflare Worker ({e.code}): {err_msg}")
+        except Exception as e:
+            raise RuntimeError(f"Lỗi kết nối máy chủ Cloudflare Worker: {str(e)}")
 
         if not key:
-            raw_hash = hashlib.sha256(f"{reg_clean}_{tier_clean}_{exp_clean}_{SECRET_SALT}".encode()).hexdigest().upper()
-            prefix = "LUV-PRO" if "Pro" in tier_clean else "LUV-ENT" if "Enterprise" in tier_clean else "LUV-PDF"
-            part1 = raw_hash[:4]
-            part2 = raw_hash[4:8]
-            part3 = raw_hash[8:12]
-            key = f"{prefix}-{part1}-{part2}-{part3}"
+            raise RuntimeError("Máy chủ Cloudflare Worker không trả về mã bản quyền hợp lệ.")
 
         record = {
             "id": record_id or str(uuid.uuid4()),
@@ -191,7 +195,7 @@ class LUVLicenseManager:
         )
 
     @classmethod
-    def list_keys(cls, search: str = "", status: str = "") -> List[Dict[str, Any]]:
+    def list_licenses(cls, search: str = "", status: str = "") -> List[Dict[str, Any]]:
         """List license keys querying Cloudflare Worker D1 directly, with local cache fallback."""
         search = (search or "").strip().lower()
         status = (status or "").strip().lower()
@@ -205,29 +209,51 @@ class LUVLicenseManager:
                     "User-Agent": "LUV-License-Admin/1.0"
                 }
             )
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 for lic in data.get("licenses", []):
+                    prefix = lic.get("license_key_prefix") or lic.get("key_prefix") or "LUV"
+                    active_dev = lic.get("active_devices", 0)
+                    max_dev = lic.get("max_devices", 1)
+                    device_str = f"{active_dev}/{max_dev} máy"
+                    masked_key = f"{prefix}-••••••••••••••••"
+                    
                     remote_items.append({
                         "id": lic.get("id"),
-                        "license_key": lic.get("key_prefix", "LUV") + "-••••••••••••••••",
+                        "license_key": masked_key,
+                        "license_key_prefix": prefix,
                         "registered_to": lic.get("customer_name") or "Khách hàng LUV",
-                        "tier": f"Cloudflare D1 ({lic.get('plan', 'standard').upper()})",
+                        "tier": f"Cloudflare D1 ({str(lic.get('plan', 'standard')).upper()})",
                         "expires_at": lic.get("expires_at") or "Vĩnh viễn",
                         "created_at": lic.get("created_at") or "",
                         "status": lic.get("status") or "active",
-                        "notes": f"Thiết bị: {lic.get('device_count', 0)} máy"
+                        "notes": f"Thiết bị: {device_str}",
+                        "devices": device_str,
+                        "active_devices": active_dev,
+                        "max_devices": max_dev
                     })
         except Exception:
             pass
 
         local_db = cls._read_db()
-        # Merge remote and local without duplicates
-        combined = list(local_db)
-        existing_keys = {r.get("license_key") for r in local_db if r.get("license_key")}
+        combined = []
+        seen_ids = set()
+        local_by_id = {item.get("id"): item for item in local_db if item.get("id")}
+        
         for r_item in remote_items:
-            if r_item.get("license_key") not in existing_keys:
-                combined.append(r_item)
+            rid = r_item.get("id")
+            if rid:
+                seen_ids.add(rid)
+                loc = local_by_id.get(rid)
+                if loc and loc.get("license_key") and not loc.get("license_key").endswith("••••"):
+                    r_item["full_key"] = loc.get("license_key")
+                    r_item["handover_message"] = loc.get("handover_message")
+            combined.append(r_item)
+
+        for loc in local_db:
+            lid = loc.get("id")
+            if lid and lid not in seen_ids:
+                combined.append(loc)
 
         results = []
         for item in combined:
@@ -237,30 +263,94 @@ class LUVLicenseManager:
                 match_key = search in str(item.get("license_key", "")).lower()
                 match_reg = search in str(item.get("registered_to", "")).lower()
                 match_tier = search in str(item.get("tier", "")).lower()
-                if not (match_key or match_reg or match_tier):
+                match_notes = search in str(item.get("notes", "")).lower()
+                if not (match_key or match_reg or match_tier or match_notes):
                     continue
             results.append(item)
         return results
 
+    # Alias list_keys to list_licenses
+    list_keys = list_licenses
+
     @classmethod
-    def revoke_key(cls, key: str) -> bool:
+    def reset_devices(cls, license_id: str) -> Dict[str, Any]:
+        """
+        Reset active device bindings for a license in Cloudflare D1.
+        Calls POST /v1/admin/licenses/{license_id}/reset-devices
+        """
+        if not license_id or not isinstance(license_id, str):
+            return {"success": False, "ok": False, "message": "Mã ID giấy phép không hợp lệ."}
+        
+        target_id = license_id.strip()
+        # If passed a license_key, try to find ID from local DB
+        if not ("-" in target_id and len(target_id) == 36):
+            db = cls._read_db()
+            for item in db:
+                if item.get("license_key") == target_id:
+                    target_id = item.get("id")
+                    break
+
+        try:
+            req = urllib.request.Request(
+                f"{CLOUDFLARE_ADMIN_URL}/v1/admin/licenses/{target_id}/reset-devices",
+                data=json.dumps({}).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {CLOUDFLARE_ADMIN_TOKEN}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "LUV-License-Admin/1.0"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return {
+                    "success": True,
+                    "ok": True,
+                    "id": target_id,
+                    "action": data.get("action", "reset-devices"),
+                    "message": "Đã đặt lại liên kết thiết bị thành công."
+                }
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8")
+                err_json = json.loads(err_body)
+                err_msg = err_json.get("message") or err_json.get("error") or str(e)
+            except Exception:
+                err_msg = str(e)
+            return {"success": False, "ok": False, "message": f"Lỗi Cloudflare API ({e.code}): {err_msg}"}
+        except Exception as e:
+            return {"success": False, "ok": False, "message": f"Lỗi kết nối máy chủ Cloudflare: {str(e)}"}
+
+    @classmethod
+    def revoke_key(cls, key_or_id: str) -> bool:
         """Revoke an active key in Cloudflare D1 and local DB."""
-        key = key.strip().upper()
-        # 1. Update local DB
-        db = cls._read_db()
+        if not key_or_id or not isinstance(key_or_id, str):
+            return False
+        identifier = key_or_id.strip()
+        
         target_id = None
-        updated = False
+        try:
+            target_id = str(uuid.UUID(identifier))
+        except ValueError:
+            pass
+
+        # 1. Update local DB if present
+        db = cls._read_db()
+        updated_local = False
         for item in db:
-            if item.get("license_key") == key:
+            if (target_id and item.get("id") == target_id) or item.get("license_key") == identifier or (item.get("id") == identifier):
                 item["status"] = "revoked"
                 item["revoked_at"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-                target_id = item.get("id")
-                updated = True
+                if not target_id:
+                    target_id = item.get("id")
+                updated_local = True
                 break
-        if updated:
+        if updated_local:
             cls._write_db(db)
 
         # 2. Call Cloudflare Worker if ID known
+        cf_success = False
         if target_id:
             try:
                 req = urllib.request.Request(
@@ -273,29 +363,63 @@ class LUVLicenseManager:
                     },
                     method="POST"
                 )
-                with urllib.request.urlopen(req, timeout=8):
-                    pass
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status in (200, 201):
+                        cf_success = True
             except Exception:
                 pass
-        return updated
+        return updated_local or cf_success
 
     @classmethod
-    def delete_key(cls, key: str) -> bool:
-        """Permanently delete a key from registry."""
-        key = key.strip().upper()
+    def delete_key(cls, key_or_id: str) -> bool:
+        """Permanently delete a key from registry and Cloudflare D1."""
+        if not key_or_id or not isinstance(key_or_id, str):
+            return False
+        identifier = key_or_id.strip()
+        target_id = None
+        try:
+            target_id = str(uuid.UUID(identifier))
+        except ValueError:
+            pass
+
         db = cls._read_db()
-        new_db = [item for item in db if item.get("license_key") != key]
-        if len(new_db) != len(db):
+        new_db = []
+        deleted_local = False
+        for item in db:
+            if (target_id and item.get("id") == target_id) or item.get("license_key") == identifier or (item.get("id") == identifier):
+                if not target_id:
+                    target_id = item.get("id")
+                deleted_local = True
+            else:
+                new_db.append(item)
+        if deleted_local:
             cls._write_db(new_db)
-            return True
-        return False
+
+        cf_deleted = False
+        if target_id:
+            try:
+                req = urllib.request.Request(
+                    f"{CLOUDFLARE_ADMIN_URL}/v1/admin/licenses/{target_id}/delete",
+                    data=json.dumps({"confirm": True}).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {CLOUDFLARE_ADMIN_TOKEN}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "LUV-License-Admin/1.0"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status in (200, 201):
+                        cf_deleted = True
+            except Exception:
+                pass
+        return deleted_local or cf_deleted
 
     @classmethod
     def verify_key_online(cls, key: str) -> Dict[str, Any]:
         """
         Verify license key online against the registry.
         If in DB: returns DB status and details.
-        If not in DB: checks cryptographic validity (fallback for offline issued keys).
         """
         if not key or not isinstance(key, str):
             return {"valid": False, "reason": "Mã khóa trống"}
@@ -318,8 +442,8 @@ class LUVLicenseManager:
                     "source": "registry"
                 }
 
-        # 2. Master Demo keys
-        if clean_key in ["LUV-PDF-2026-PRO-VN99", "LUV-2026-ENTERPRISE", "LUV-MASTER-KEY"]:
+        # 2. Master Demo keys / Owner key
+        if clean_key in ["LUV-PDF-2026-PRO-VN99", "LUV-2026-ENTERPRISE", "LUV-MASTER-KEY", "LUV-EGKRH-HZCWD-7PBLS-ZG5G8"]:
             return {
                 "valid": True,
                 "status": "active",
@@ -330,38 +454,15 @@ class LUVLicenseManager:
                 "source": "master"
             }
 
-        # 3. Offline format validation
-        if cls.validate_key(clean_key):
-            tier = "Doanh nghiệp Vĩnh viễn (Enterprise Lifetime)"
-            if "PRO" in clean_key:
-                tier = "Chuyên nghiệp (Professional Suite)"
-            elif "STANDARD" in clean_key:
-                tier = "Cá nhân Tiêu chuẩn (Standard License)"
-            return {
-                "valid": True,
-                "status": "active",
-                "license_key": clean_key,
-                "registered_to": "Khách hàng LUV",
-                "tier": tier,
-                "expires_at": "Vĩnh viễn",
-                "source": "crypto_offline"
-            }
-
-        return {"valid": False, "reason": "Mã khóa không hợp lệ hoặc sai định dạng LUV"}
+        return {"valid": False, "reason": "Mã khóa không tồn tại trên hệ thống hoặc đã bị thu hồi."}
 
     @classmethod
     def validate_key(cls, key: str) -> bool:
-        """Validate if key follows valid LUV format."""
+        """Validate if key is a valid active key."""
         if not key or not isinstance(key, str):
             return False
-        key = key.strip().upper()
-        if key in ["LUV-PDF-2026-PRO-VN99", "LUV-2026-ENTERPRISE", "LUV-MASTER-KEY"]:
-            return True
-        if key.startswith("LUV-") and len(key.replace("-", "")) >= 10:
-            parts = key.split("-")
-            if len(parts) >= 3:
-                return True
-        return False
+        verif = cls.verify_key_online(key)
+        return bool(verif.get("valid"))
 
     @classmethod
     def activate(cls, key: str, registered_to: str = "Doanh nghiệp LUV") -> Dict[str, Any]:

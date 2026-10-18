@@ -91,24 +91,30 @@ window.LicenseManager = {
             const isActive = item.status === 'active';
             const badgeClass = isActive ? 'license-badge-active' : 'license-badge-revoked';
             const badgeText = isActive ? '✓ Hoạt Động' : '✕ Đã Thu Hồi';
+            const deviceText = item.devices || (item.active_devices !== undefined ? `${item.active_devices}/${item.max_devices} máy` : (item.notes && item.notes.includes('máy') ? item.notes : ''));
+            const itemId = item.id || '';
+            const itemKey = item.license_key || '';
+            const fullKey = item.full_key || '';
 
             return `
                 <tr>
                     <td style="text-align:center; color:#64748b;">${idx + 1}</td>
                     <td>
-                        <span class="license-table-key">${item.license_key}</span>
+                        <span class="license-table-key">${this.escapeHtml(itemKey)}</span>
+                        ${deviceText ? `<div class="license-device-tag">📱 ${this.escapeHtml(deviceText)}</div>` : ''}
                     </td>
                     <td><strong>${this.escapeHtml(item.registered_to || 'Khách hàng')}</strong></td>
                     <td><span style="color:#e2e8f0;">${this.escapeHtml(item.tier || 'Enterprise')}</span></td>
                     <td><span style="color:#94a3b8;">${this.escapeHtml(item.expires_at || 'Vĩnh viễn')}</span></td>
                     <td><span class="license-badge-status ${badgeClass}">${badgeText}</span></td>
                     <td style="white-space:nowrap;">
-                        <button class="license-btn-xs license-btn-xs-copy" onclick="window.LicenseManager.copyKey('${item.license_key}')" title="Sao chép Key">Sao chép</button>
-                        <button class="license-btn-xs" style="background:#16a34a;color:#fff;" onclick="window.LicenseManager.copyHandover('${item.license_key}')" title="Copy mẫu bàn giao">Bàn giao</button>
+                        <button class="license-btn-xs license-btn-xs-copy" onclick="window.LicenseManager.copyKey('${this.escapeHtml(fullKey || itemKey)}')" title="Sao chép Key">Sao chép</button>
+                        <button class="license-btn-xs" style="background:#16a34a;color:#fff;" onclick="window.LicenseManager.copyHandover('${this.escapeHtml(itemKey)}')" title="Copy mẫu bàn giao">Bàn giao</button>
                         ${isActive ? `
-                            <button class="license-btn-xs license-btn-xs-revoke" onclick="window.LicenseManager.revokeKey('${item.license_key}')" title="Thu hồi khóa này">Thu hồi</button>
+                            <button class="license-btn-xs license-btn-xs-reset" onclick="window.LicenseManager.resetDevices('${this.escapeHtml(itemId)}', '${this.escapeHtml(itemKey)}')" title="Xóa liên kết máy, cho phép kích hoạt trên thiết bị mới">Reset Máy</button>
+                            <button class="license-btn-xs license-btn-xs-revoke" onclick="window.LicenseManager.revokeKey('${this.escapeHtml(itemId)}', '${this.escapeHtml(itemKey)}')" title="Thu hồi khóa này">Thu hồi</button>
                         ` : ''}
-                        <button class="license-btn-xs license-btn-xs-delete" onclick="window.LicenseManager.deleteKey('${item.license_key}')" title="Xóa vĩnh viễn">✕</button>
+                        <button class="license-btn-xs license-btn-xs-delete" onclick="window.LicenseManager.deleteKey('${this.escapeHtml(itemId)}', '${this.escapeHtml(itemKey)}')" title="Xóa vĩnh viễn">✕</button>
                     </td>
                 </tr>
             `;
@@ -157,7 +163,7 @@ window.LicenseManager = {
                 this._lastGenerated = res.data;
                 await this.loadLicenses();
             } else {
-                alert('Không thể tạo bản quyền: ' + (res.detail || 'Lỗi không xác định'));
+                alert('Không thể tạo bản quyền: ' + (res.detail || res.message || 'Lỗi không xác định'));
             }
         } catch (err) {
             alert('Lỗi máy chủ khi tạo bản quyền: ' + err.message);
@@ -183,10 +189,10 @@ window.LicenseManager = {
     },
 
     copyHandover: function(key) {
-        const item = this.keysCache.find(k => k.license_key === key) || this._lastGenerated;
+        const item = this.keysCache.find(k => k.license_key === key || k.full_key === key || k.id === key) || this._lastGenerated;
         if (!item) return;
 
-        const text = item.handover_message || `Mã bản quyền: ${item.license_key} (Cấp cho: ${item.registered_to})`;
+        const text = item.handover_message || `Mã bản quyền: ${item.full_key || item.license_key}\nKhách hàng: ${item.registered_to}\nGói: ${item.tier}\nThời hạn: ${item.expires_at}`;
         navigator.clipboard.writeText(text).then(() => {
             this.showToast('📋 Đã copy Mẫu Tin Nhắn Bàn Giao Khách Hàng!');
         }).catch(() => {
@@ -202,13 +208,46 @@ window.LicenseManager = {
         }
     },
 
-    revokeKey: async function(key) {
-        if (!confirm(`Bạn có chắc chắn muốn THU HỒI giấy phép [${key}] không?\nSau khi thu hồi, client sử dụng mã này sẽ bị khóa bản quyền.`)) {
+    resetDevices: async function(id, key) {
+        const displayLabel = key || id;
+        if (!confirm(`Bạn có chắc chắn muốn RESET LIÊN KẾT MÁY cho giấy phép [${displayLabel}] không?\nToàn bộ máy đang liên kết sẽ được giải phóng để khách hàng có thể kích hoạt trên thiết bị mới.`)) {
             return;
         }
 
         const formData = new FormData();
-        formData.append('key', key);
+        const targetId = id || key;
+        formData.append('license_id', targetId);
+        formData.append('id', targetId);
+        if (key) formData.append('key', key);
+
+        try {
+            const resp = await fetch('/api/admin/licenses/reset-devices', {
+                method: 'POST',
+                body: formData
+            });
+            const res = await resp.json();
+            if (res.success) {
+                this.showToast('✓ Đã reset liên kết máy thành công!');
+                await this.loadLicenses();
+            } else {
+                alert('Không thể reset máy: ' + (res.detail || res.message || 'Lỗi không xác định'));
+            }
+        } catch (err) {
+            alert('Lỗi kết nối máy chủ: ' + err.message);
+        }
+    },
+
+    revokeKey: async function(id, key) {
+        const displayLabel = key || id;
+        if (!confirm(`Bạn có chắc chắn muốn THU HỒI giấy phép [${displayLabel}] không?\nSau khi thu hồi, client sử dụng mã này sẽ bị khóa bản quyền.`)) {
+            return;
+        }
+
+        const formData = new FormData();
+        const targetId = id || key;
+        formData.append('license_id', targetId);
+        formData.append('id', targetId);
+        if (key) formData.append('key', key);
 
         try {
             const resp = await fetch('/api/admin/licenses/revoke', {
@@ -217,23 +256,27 @@ window.LicenseManager = {
             });
             const res = await resp.json();
             if (res.success) {
-                this.showToast('✓ Đã thu hồi bản quyền: ' + key);
+                this.showToast('✓ Đã thu hồi bản quyền: ' + displayLabel);
                 await this.loadLicenses();
             } else {
-                alert('Không thể thu hồi: ' + (res.detail || 'Lỗi không xác định'));
+                alert('Không thể thu hồi: ' + (res.detail || res.message || 'Lỗi không xác định'));
             }
         } catch (err) {
             alert('Lỗi kết nối: ' + err.message);
         }
     },
 
-    deleteKey: async function(key) {
-        if (!confirm(`Xóa vĩnh viễn hồ sơ bản quyền [${key}] khỏi cơ sở dữ liệu?`)) {
+    deleteKey: async function(id, key) {
+        const displayLabel = key || id;
+        if (!confirm(`Xóa vĩnh viễn hồ sơ bản quyền [${displayLabel}] khỏi cơ sở dữ liệu?`)) {
             return;
         }
 
         const formData = new FormData();
-        formData.append('key', key);
+        const targetId = id || key;
+        formData.append('license_id', targetId);
+        formData.append('id', targetId);
+        if (key) formData.append('key', key);
 
         try {
             const resp = await fetch('/api/admin/licenses/delete', {
@@ -245,7 +288,7 @@ window.LicenseManager = {
                 this.showToast('✓ Đã xóa bản quyền khỏi hệ thống');
                 await this.loadLicenses();
             } else {
-                alert('Không thể xóa: ' + (res.detail || 'Lỗi không xác định'));
+                alert('Không thể xóa: ' + (res.detail || res.message || 'Lỗi không xác định'));
             }
         } catch (err) {
             alert('Lỗi kết nối: ' + err.message);

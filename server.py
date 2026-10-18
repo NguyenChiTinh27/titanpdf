@@ -581,10 +581,10 @@ def auth_verify(response: Response, passkey: str = Form(...)):
     # 2. License Key validation (e.g. LUV-ENT-..., LUV-PRO-...)
     is_license_key = False
     try:
-        is_license_key = clean_key.startswith("LUV-") or LUVLicenseManager.validate_key(clean_key)[0]
+        verif = LUVLicenseManager.verify_key_online(clean_key)
+        is_license_key = bool(verif.get("valid"))
     except Exception:
-        if clean_key.startswith("LUV-"):
-            is_license_key = True
+        is_license_key = False
 
     if is_valid_pass or is_license_key:
         session_token = f"luv_sess_{uuid.uuid4().hex}"
@@ -724,13 +724,13 @@ def auth_toggle_gate(enabled: bool = Form(...), passkey: str = Form(...)):
     cfg = get_security_config()
     
     if cfg.get("is_custom"):
-        is_valid = (prov_hash == cfg["password_hash"] or clean_key.startswith("LUV-"))
+        is_valid = (prov_hash == cfg["password_hash"] or bool(LUVLicenseManager.verify_key_online(clean_key).get("valid")))
     else:
         is_valid = (
             prov_hash == cfg["password_hash"] or
             prov_hash == DEFAULT_PASS_HASH or
             clean_key == DEFAULT_MASTER_PASS or
-            clean_key.startswith("LUV-")
+            bool(LUVLicenseManager.verify_key_online(clean_key).get("valid"))
         )
         
     if not is_valid:
@@ -1027,7 +1027,7 @@ def auth_qr_approve(
             provided_hash == DEFAULT_PASS_HASH or
             clean_key == DEFAULT_MASTER_PASS or
             clean_key.lower() in ["ntc270120cm", "270120", "ntc270120cm@gmail.com"] or
-            clean_key.startswith("LUV-")
+            bool(LUVLicenseManager.verify_key_online(clean_key).get("valid"))
         )
         if is_valid:
             token = f"luv_sess_qr_pass_{uuid.uuid4().hex}"
@@ -1094,10 +1094,13 @@ def deactivate_license():
 
 
 @app.get("/api/admin/licenses")
-def get_admin_licenses(q: str = "", status: str = ""):
+@app.get("/api/admin/licenses/list")
+def list_licenses(q: str = "", status: str = ""):
     """List all registered LUV license keys."""
-    keys = LUVLicenseManager.list_keys(search=q, status=status)
+    keys = LUVLicenseManager.list_licenses(search=q, status=status)
     return {"success": True, "data": keys, "total": len(keys)}
+
+get_admin_licenses = list_licenses
 
 
 @app.post("/api/admin/licenses/create")
@@ -1116,21 +1119,72 @@ def create_admin_license(
 
 
 @app.post("/api/admin/licenses/revoke")
-def revoke_admin_license(key: str = Form(...)):
+async def revoke_admin_license(
+    request: Request,
+    key: Optional[str] = Form(None),
+    license_id: Optional[str] = Form(None),
+    id: Optional[str] = Form(None)
+):
     """Revoke an active license key."""
-    success = LUVLicenseManager.revoke_key(key)
+    target = license_id or id or key
+    if not target:
+        try:
+            body = await request.json()
+            target = body.get("license_id") or body.get("id") or body.get("key")
+        except Exception:
+            pass
+    if not target:
+        raise HTTPException(status_code=400, detail="Thiếu mã bản quyền hoặc license_id.")
+    success = LUVLicenseManager.revoke_key(target)
     if not success:
         raise HTTPException(status_code=404, detail="Không tìm thấy mã bản quyền hoặc đã bị thu hồi.")
-    return {"success": True, "message": f"Đã thu hồi thành công khóa {key}"}
+    return {"success": True, "message": f"Đã thu hồi thành công khóa {target}"}
+
+
+@app.post("/api/admin/licenses/reset-devices")
+async def reset_admin_license_devices(
+    request: Request,
+    license_id: Optional[str] = Form(None),
+    id: Optional[str] = Form(None),
+    key: Optional[str] = Form(None)
+):
+    """Reset device bindings for a license in Cloudflare D1."""
+    target_id = license_id or id or key
+    if not target_id:
+        try:
+            body = await request.json()
+            target_id = body.get("license_id") or body.get("id") or body.get("key")
+        except Exception:
+            pass
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Thiếu license_id hoặc id để reset thiết bị.")
+    res = LUVLicenseManager.reset_devices(target_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("message", "Không thể đặt lại liên kết máy."))
+    return {"success": True, "message": res.get("message", "Đã đặt lại liên kết máy thành công."), "data": res}
 
 
 @app.post("/api/admin/licenses/delete")
-def delete_admin_license(key: str = Form(...)):
+async def delete_admin_license(
+    request: Request,
+    key: Optional[str] = Form(None),
+    license_id: Optional[str] = Form(None),
+    id: Optional[str] = Form(None)
+):
     """Permanently delete a license key."""
-    success = LUVLicenseManager.delete_key(key)
+    target = license_id or id or key
+    if not target:
+        try:
+            body = await request.json()
+            target = body.get("license_id") or body.get("id") or body.get("key")
+        except Exception:
+            pass
+    if not target:
+        raise HTTPException(status_code=400, detail="Thiếu mã hoặc id bản quyền để xóa.")
+    success = LUVLicenseManager.delete_key(target)
     if not success:
         raise HTTPException(status_code=404, detail="Không tìm thấy mã bản quyền để xóa.")
-    return {"success": True, "message": f"Đã xóa vĩnh viễn khóa {key}"}
+    return {"success": True, "message": f"Đã xóa vĩnh viễn khóa {target}"}
 
 
 @app.get("/api/license/verify")

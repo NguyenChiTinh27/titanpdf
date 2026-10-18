@@ -318,12 +318,36 @@
     background: rgba(239, 68, 68, 0.35);
 }
 
+.license-btn-xs-reset {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.license-btn-xs-reset:hover {
+    background: rgba(245, 158, 11, 0.32);
+    color: #fef3c7;
+}
+
 .license-btn-xs-delete {
     background: transparent;
     color: #94a3b8;
 }
 .license-btn-xs-delete:hover {
     color: #ef4444;
+}
+
+.license-device-tag {
+    font-size: 0.75rem;
+    color: #38bdf8;
+    margin-top: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: inherit;
 }
 
 .license-empty-state {
