@@ -838,6 +838,15 @@ function applyNavTabsGuestStyling() {
             }
         });
     });
+
+    const navLicense = document.getElementById("nav-tab-license");
+    if (navLicense) {
+        if (isGuest) {
+            navLicense.style.display = "none";
+        } else {
+            navLicense.style.display = "";
+        }
+    }
 }
 window.applyNavTabsGuestStyling = applyNavTabsGuestStyling;
 

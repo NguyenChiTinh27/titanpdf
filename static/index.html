@@ -50,6 +50,7 @@
     <link rel="stylesheet" href="legal_style.css">
     <link rel="stylesheet" href="monthly_inventory.css">
     <link rel="stylesheet" href="gatepass_studio.css">
+    <link rel="stylesheet" href="license_manager.css">
     <!-- Local Offline PDF.js -->
     <script src="libs/pdf.min.js"></script>
     <!-- Google Identity Services (Sign In With Google) -->
@@ -2256,6 +2257,15 @@
                     </svg>
                     <span class="tab-label">Phiếu Xuất & Vật Tư</span>
                     <span class="nav-tab-pill-badge badge-gatepass" id="nav-gatepass-count-badge"><span class="pulse-dot"></span>XUẤT</span>
+                </button>
+                <button id="nav-tab-license" class="main-nav-tab nav-tab-license" onclick="switchMainTab('license')" title="Quản Lý Bản Quyền LUV Trực Tuyến (License Manager)" role="tab" aria-selected="false">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="7.5" cy="15.5" r="5.5"></circle>
+                        <path d="m21 2-9.6 9.6"></path>
+                        <path d="m15.5 7.5 3 3L22 7l-3-3"></path>
+                    </svg>
+                    <span class="tab-label">Quản Lý Bản Quyền</span>
+                    <span class="nav-tab-pill-badge badge-license" style="background:#0284c7;color:#fff;">KEY</span>
                 </button>
             </div>
 
@@ -4981,6 +4991,131 @@
         </section>
     </main>
 
+    <!-- ========================================================================== -->
+    <!-- 4G. QUẢN LÝ BẢN QUYỀN LUV TRỰC TUYẾN (ONLINE LICENSE SUITE) -->
+    <!-- ========================================================================== -->
+    <main id="license-manager-view" class="license-container hidden" role="region" aria-label="Quản lý bản quyền LUV trực tuyến">
+        <!-- 1. Header Card -->
+        <header class="license-header-card">
+            <div class="license-title-row">
+                <span class="license-title-icon">🔑</span>
+                <div>
+                    <h2 class="license-header-title">
+                        Quản Lý Bản Quyền LUV Trực Tuyến
+                        <span class="license-admin-badge">👑 OWNER / ADMIN EXCLUSIVE</span>
+                    </h2>
+                    <div class="license-header-sub">
+                        Hệ thống tạo và quản lý khóa giấy phép SHA-256 đồng bộ tuyệt đối với LUV_License_Manager.exe &amp; LUV-DOC-TRAN
+                    </div>
+                </div>
+            </div>
+            <div>
+                <span style="font-size:0.85rem; color:#94a3b8; margin-right:8px;">Tổng số bản quyền:</span>
+                <span id="license-total-count" style="font-size:1.1rem; font-weight:700; color:#38bdf8; background:#0f172a; padding:4px 12px; border-radius:999px; border:1px solid rgba(56,189,248,0.3);">0</span>
+            </div>
+        </header>
+
+        <!-- 2. Grid: Key Generator (Left) + License Registry Table (Right) -->
+        <div class="license-grid-layout">
+            <!-- Left: Generator Form -->
+            <section class="license-card">
+                <div class="license-card-header">
+                    <h3 class="license-card-title">⚡ Cấp Khóa Bản Quyền Mới</h3>
+                </div>
+                <form id="license-gen-form" onsubmit="event.preventDefault(); window.LicenseManager.handleGenerate();">
+                    <div class="license-form-group">
+                        <label class="license-form-label" for="license-ent-reg">Đăng ký cho (Khách hàng / Doanh nghiệp):</label>
+                        <input type="text" id="license-ent-reg" class="license-input" placeholder="Ví dụ: Công ty TNHH Hóa Chất ABC" required />
+                    </div>
+
+                    <div class="license-form-group">
+                        <label class="license-form-label" for="license-ent-tier">Gói Bản Quyền (Tier):</label>
+                        <select id="license-ent-tier" class="license-select">
+                            <option value="Enterprise Lifetime (Vĩnh viễn)" selected>👑 Doanh Nghiệp Vĩnh Viễn (Enterprise Lifetime)</option>
+                            <option value="Professional Suite (Chuyên nghiệp)">⭐ Chuyên Nghiệp (Professional Suite)</option>
+                            <option value="Standard License (Tiêu chuẩn)">🔹 Tiêu Chuẩn (Standard License)</option>
+                        </select>
+                    </div>
+
+                    <div class="license-form-group">
+                        <label class="license-form-label" for="license-ent-exp">Thời Hạn Sử Dụng (Expires):</label>
+                        <select id="license-ent-exp" class="license-select">
+                            <option value="Vĩnh viễn (Lifetime)" selected>Vĩnh viễn (Lifetime - Không giới hạn)</option>
+                            <option value="1 Năm (1 Year)">1 Năm (1 Year)</option>
+                            <option value="2 Năm (2 Years)">2 Năm (2 Years)</option>
+                            <option value="6 Tháng (6 Months)">6 Tháng (6 Months)</option>
+                            <option value="3 Tháng (3 Months)">3 Tháng (3 Months)</option>
+                            <option value="1 Tháng (1 Month)">1 Tháng (1 Month)</option>
+                        </select>
+                    </div>
+
+                    <div class="license-form-group">
+                        <label class="license-form-label" for="license-ent-notes">Ghi chú nội bộ (Tùy chọn):</label>
+                        <input type="text" id="license-ent-notes" class="license-input" placeholder="Ghi chú người phụ trách, mã hợp đồng..." />
+                    </div>
+
+                    <button type="submit" id="btn-license-gen" class="license-btn-primary">
+                        <span>⚡ TẠO KHÓA BẢN QUYỀN MỚI</span>
+                    </button>
+                </form>
+
+                <!-- Generated Result Display -->
+                <div id="license-result-box" class="license-result-box" style="display:none;">
+                    <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:6px; font-weight:600;">MÃ BẢN QUYỀN VỪA TẠO:</div>
+                    <div id="license-key-disp" class="license-key-display">LUV-ENT-XXXX-XXXX-XXXX</div>
+                    <div class="license-action-row">
+                        <button type="button" class="license-btn-action license-btn-copy" onclick="window.LicenseManager.copyLastKey()">
+                            📋 Copy Key
+                        </button>
+                        <button type="button" class="license-btn-action license-btn-handover" onclick="window.LicenseManager.copyLastHandover()">
+                            💬 Copy Mẫu Bàn Giao
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right: License Registry Table -->
+            <section class="license-card">
+                <div class="license-card-header">
+                    <h3 class="license-card-title">📋 Danh Sách Giấy Phép Đã Cấp</h3>
+                    <button type="button" class="license-btn-xs" style="background:#0284c7; color:#fff;" onclick="window.LicenseManager.loadLicenses()">
+                        🔄 Làm Mới
+                    </button>
+                </div>
+
+                <div class="license-search-bar">
+                    <input type="text" id="license-search-query" class="license-input license-search-input" placeholder="🔍 Tìm kiếm theo tên khách hàng, mã key, gói..." />
+                    <select id="license-filter-status" class="license-select" style="width:160px;">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="active">Đang hoạt động</option>
+                        <option value="revoked">Đã thu hồi</option>
+                    </select>
+                </div>
+
+                <div class="license-table-wrapper">
+                    <table class="license-table">
+                        <thead>
+                            <tr>
+                                <th style="width:40px; text-align:center;">STT</th>
+                                <th>Mã Bản Quyền</th>
+                                <th>Đăng Ký Cho</th>
+                                <th>Gói</th>
+                                <th>Thời Hạn</th>
+                                <th>Trạng Thái</th>
+                                <th style="text-align:center;">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="license-table-body">
+                            <tr>
+                                <td colspan="7" class="license-empty-state">Đang tải danh sách bản quyền...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
     <!-- SPLIT-VIEW DETAIL MODAL -->
     <div id="gp-detail-modal" class="gatepass-modal-backdrop hidden" aria-hidden="true">
         <div class="gatepass-modal-card">
@@ -5066,5 +5201,6 @@
     <script src="monthly_inventory.js"></script>
     <script src="libs/chart.umd.min.js"></script>
     <script src="gatepass_studio.js"></script>
+    <script src="license_manager.js"></script>
 </body>
 </html>

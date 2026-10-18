@@ -1078,10 +1078,11 @@ def activate_license(key: str = Form(...), registered_to: str = Form("LUV User")
 def generate_license(
     registered_to: str = Form(...),
     tier: str = Form("Enterprise Lifetime"),
-    expires: str = Form("Vĩnh viễn")
+    expires: str = Form("Vĩnh viễn"),
+    notes: str = Form("")
 ):
     """Generate new LUV license key (Admin tool)."""
-    key_info = LUVLicenseManager.generate_key(registered_to, tier, expires)
+    key_info = LUVLicenseManager.generate_key(registered_to, tier, expires, notes=notes, save_to_db=True)
     return {"success": True, "data": key_info}
 
 
@@ -1090,6 +1091,55 @@ def deactivate_license():
     """Deactivate current license and return to login screen."""
     LUVLicenseManager.deactivate()
     return {"success": True, "message": "Đã hủy kích hoạt giấy phép thành công."}
+
+
+@app.get("/api/admin/licenses")
+def get_admin_licenses(q: str = "", status: str = ""):
+    """List all registered LUV license keys."""
+    keys = LUVLicenseManager.list_keys(search=q, status=status)
+    return {"success": True, "data": keys, "total": len(keys)}
+
+
+@app.post("/api/admin/licenses/create")
+def create_admin_license(
+    registered_to: str = Form(...),
+    tier: str = Form("Enterprise Lifetime (Vĩnh viễn)"),
+    expires: str = Form("Vĩnh viễn (Lifetime)"),
+    notes: str = Form("")
+):
+    """Create and record a new LUV license key online."""
+    try:
+        res = LUVLicenseManager.generate_key(registered_to, tier, expires, notes=notes, save_to_db=True)
+        return {"success": True, "data": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo bản quyền: {str(e)}")
+
+
+@app.post("/api/admin/licenses/revoke")
+def revoke_admin_license(key: str = Form(...)):
+    """Revoke an active license key."""
+    success = LUVLicenseManager.revoke_key(key)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy mã bản quyền hoặc đã bị thu hồi.")
+    return {"success": True, "message": f"Đã thu hồi thành công khóa {key}"}
+
+
+@app.post("/api/admin/licenses/delete")
+def delete_admin_license(key: str = Form(...)):
+    """Permanently delete a license key."""
+    success = LUVLicenseManager.delete_key(key)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy mã bản quyền để xóa.")
+    return {"success": True, "message": f"Đã xóa vĩnh viễn khóa {key}"}
+
+
+@app.get("/api/license/verify")
+def verify_license_online(key: str = ""):
+    """Public verification endpoint for client apps (such as LUV-DOC-TRAN)."""
+    if not key:
+        return {"valid": False, "reason": "Thiếu mã bản quyền (key param is required)"}
+    return LUVLicenseManager.verify_key_online(key)
+
 
 
 # 1. MERGE PDF

@@ -48,9 +48,14 @@ function switchMainTab(tab, subTab = null) {
     if (tab === 'vip-editor') tab = 'editor';
     if (tab === 'inventory' || tab === 'nxt') tab = 'monthly-inventory';
     if (tab === 'gatepass' || tab === 'gatepass-studio') tab = 'gatepass';
+    if (tab === 'license' || tab === 'license-manager') tab = 'license';
 
     // RBAC: Check guest permissions before switching tabs
     if (document.body.getAttribute('data-role') === 'guest' && window.GUEST_PERMISSIONS_CACHE) {
+        if (tab === 'license') {
+            alert('Khu vực Quản lý Bản quyền chỉ dành riêng cho Quản trị viên / Chủ sở hữu (Owner).');
+            return;
+        }
         if (typeof isToolAllowedForGuest === "function") {
             if (tab === 'editor' && !isToolAllowedForGuest('vip-editor')) {
                 alert('Công cụ [VIP Editor] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
@@ -122,6 +127,7 @@ function switchMainTab(tab, subTab = null) {
     const legalView = document.getElementById("legal-lookup-view");
     const monthlyView = document.getElementById("monthly-inventory-view");
     const gatepassView = document.getElementById("gatepass-studio-view");
+    const licenseView = document.getElementById("license-manager-view");
     const navTools = document.getElementById("nav-tab-tools");
     const navEditor = document.getElementById("nav-tab-editor");
     const navAi = document.getElementById("nav-tab-ai");
@@ -130,6 +136,7 @@ function switchMainTab(tab, subTab = null) {
     const navLegal = document.getElementById("nav-tab-legal");
     const navMonthly = document.getElementById("nav-tab-inventory") || document.getElementById("nav-tab-monthly-inventory");
     const navGatepass = document.getElementById("nav-tab-gatepass");
+    const navLicense = document.getElementById("nav-tab-license");
     const footer = document.querySelector(".footer");
 
     // Reset active nav states
@@ -141,6 +148,7 @@ function switchMainTab(tab, subTab = null) {
     if (navLegal) navLegal.classList.remove("active");
     if (navMonthly) navMonthly.classList.remove("active");
     if (navGatepass) navGatepass.classList.remove("active");
+    if (navLicense) navLicense.classList.remove("active");
 
     if (tab === 'editor') {
         if (homeView) homeView.classList.add("hidden");
@@ -282,6 +290,32 @@ function switchMainTab(tab, subTab = null) {
         } else if (typeof window.initGatePassStudio === 'function') {
             window.initGatePassStudio();
         }
+    } else if (tab === 'license') {
+        if (homeView) homeView.classList.add("hidden");
+        if (wsView) wsView.classList.add("hidden");
+        if (editorView) editorView.classList.add("hidden");
+        if (aiView) aiView.classList.add("hidden");
+        if (msdsView) msdsView.classList.add("hidden");
+        if (hseView) hseView.classList.add("hidden");
+        if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
+        if (licenseView) licenseView.classList.remove("hidden");
+        if (footer) footer.classList.remove("hidden");
+        document.body.classList.remove("vip-editor-active");
+        document.body.classList.remove("msds-studio-active");
+
+        if (navLicense) navLicense.classList.add("active");
+
+        if (window.location.hash !== '#license-manager' && window.location.hash !== '#license') {
+            history.replaceState(null, '', '#license-manager');
+        }
+
+        if (window.LicenseManager && typeof window.LicenseManager.init === 'function') {
+            window.LicenseManager.init();
+        } else if (typeof window.initLicenseManager === 'function') {
+            window.initLicenseManager();
+        }
     } else {
         if (editorView) editorView.classList.add("hidden");
         if (aiView) aiView.classList.add("hidden");
@@ -290,6 +324,7 @@ function switchMainTab(tab, subTab = null) {
         if (legalView) legalView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.add("hidden");
         if (gatepassView) gatepassView.classList.add("hidden");
+        if (licenseView) licenseView.classList.add("hidden");
         if (homeView) homeView.classList.remove("hidden");
         if (wsView) wsView.classList.add("hidden");
         if (footer) footer.classList.remove("hidden");
@@ -323,6 +358,8 @@ window.addEventListener("DOMContentLoaded", () => {
             switchMainTab("hse");
         } else if (hash === "#legal" || hash === "#legal-lookup") {
             switchMainTab("legal");
+        } else if (hash === "#license" || hash === "#license-manager") {
+            switchMainTab("license");
         }
     };
     window.addEventListener("hashchange", handleHash);
