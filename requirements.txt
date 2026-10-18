@@ -12,3 +12,4 @@ requests>=2.31.0
 pycryptodome>=3.19.0
 gunicorn>=21.2.0
 reportlab>=4.0.0
+mammoth>=1.8.0

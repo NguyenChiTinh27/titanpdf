@@ -394,15 +394,15 @@ const TOOLS = [
     {
         id: "interlinear-translate",
         title: "Dịch Song ngữ Kỹ thuật (DOC-TRAN)",
-        desc: "Hợp nhất Động cơ Siêu Cấp VIP Pro, OCR AI và DeepSeek: Xử lý PDF Scan, tài liệu Word & biểu mẫu sang Song ngữ xen kẽ (#002060 nghiêng), bảo vệ số CAS.",
+        desc: "Hợp nhất Động cơ Siêu Cấp VIP Pro, OCR AI và DeepSeek: Xử lý PDF Scan, tài liệu Word (.doc/.docx) và bảng tính Excel (.xlsx/.xls) sang Song ngữ xen kẽ (#002060 nghiêng), bảo vệ công thức và số CAS.",
         iconImg: "/icons/doc-tran_icon.png",
         category: "ai",
         badge: "VIP PRO AI",
-        accept: ".docx,.doc,.pdf",
+        accept: ".docx,.doc,.pdf,.xlsx,.xls",
         multiple: false,
         actionText: "Dịch Song ngữ Tài liệu",
         endpoint: "/api/process/interlinear-translate",
-        keywords: ["dich", "song ngu", "translate", "doc-tran", "msds", "sds", "hoa chat", "tieng trung", "tieng anh", "en-vi", "zh-vi", "scan", "ocr", "vip pro"]
+        keywords: ["dich", "song ngu", "translate", "doc-tran", "msds", "sds", "hoa chat", "tieng trung", "tieng anh", "en-vi", "zh-vi", "scan", "ocr", "vip pro", "excel", "xlsx", "xls", "bang tinh"]
     },
 
     // 7. TRÌNH CHỈNH SỬA VIP PRO (VIP PDF EDITOR) - Tool 28
@@ -1184,9 +1184,13 @@ function openTool(toolId) {
 
     const wsHint = document.getElementById("ws-hint");
     if (wsHint) {
-        wsHint.innerText = currentTool.multiple 
-            ? "Có thể chọn nhiều tệp cùng lúc (Hỗ trợ " + currentTool.accept + ")"
-            : "Hỗ trợ định dạng " + currentTool.accept;
+        if (currentTool.id === "interlinear-translate") {
+            wsHint.innerText = "Hỗ trợ Word (.docx, .doc), PDF (.pdf) & Excel (.xlsx, .xls)";
+        } else {
+            wsHint.innerText = currentTool.multiple 
+                ? "Có thể chọn nhiều tệp cùng lúc (Hỗ trợ " + currentTool.accept + ")"
+                : "Hỗ trợ định dạng " + currentTool.accept;
+        }
     }
 
     fileInput.accept = currentTool.accept;
@@ -1239,6 +1243,10 @@ function resetWorkspace() {
 
     const compToggle = document.getElementById("comparison-toggle-group");
     if (compToggle) compToggle.classList.add("hidden");
+    const triBox = document.getElementById("doctran-tri-downloads");
+    if (triBox) triBox.classList.add("hidden");
+    const btnDownload = document.getElementById("btn-download");
+    if (btnDownload) btnDownload.classList.remove("hidden");
     const shimmerBar = document.getElementById("canvas-shimmer-bar");
     if (shimmerBar) shimmerBar.classList.add("hidden");
     const statusPill = document.getElementById("canvas-status-pill");
@@ -1419,7 +1427,7 @@ async function renderWordPreview(fileOrBlob, optionalName) {
         pagesGrid.innerHTML = `
             <div style="grid-column: 1 / -1; width: 100%; padding: 60px 20px; text-align: center;">
                 <div class="spinner" style="margin: 0 auto 16px;"></div>
-                <div style="font-size: 14px; font-weight: 600; color: #0284c7;">Đang trích xuất & kết xuất tài liệu Word (.docx) sang giao diện chuẩn A4...</div>
+                <div style="font-size: 14px; font-weight: 600; color: #0284c7;">Đang trích xuất & kết xuất tài liệu Word (.doc / .docx) sang giao diện chuẩn A4...</div>
             </div>
         `;
     }
@@ -1428,31 +1436,50 @@ async function renderWordPreview(fileOrBlob, optionalName) {
         let htmlContent = "";
         let fileSizeText = "";
 
+        let resp;
         if (fileOrBlob instanceof File || fileOrBlob instanceof Blob) {
             fileSizeText = (fileOrBlob.size / 1024).toFixed(1) + " KB";
             const fd = new FormData();
             fd.append("file", fileOrBlob, filename);
-            const resp = await fetch("/api/preview/word", { method: "POST", body: fd });
-            const data = await resp.json();
-            if (!resp.ok || !data.success) {
-                throw new Error(data.detail || "Không thể phân giải tệp Word.");
-            }
-            htmlContent = data.html || "<p>Tài liệu Word không có nội dung văn bản.</p>";
+            resp = await fetch("/api/preview/word", { method: "POST", body: fd });
         } else if (typeof fileOrBlob === "string") {
-            const resp = await fetch(`/api/preview/word-output/${encodeURIComponent(fileOrBlob)}`);
-            const data = await resp.json();
-            if (!resp.ok || !data.success) {
-                throw new Error(data.detail || "Không thể phân giải tệp Word.");
-            }
-            htmlContent = data.html || "<p>Tài liệu Word không có nội dung văn bản.</p>";
-            fileSizeText = data.size ? ((data.size / 1024).toFixed(1) + " KB") : "";
+            resp = await fetch(`/api/preview/word-output/${encodeURIComponent(fileOrBlob)}`);
         }
 
+        if (!resp) throw new Error("Không thể khởi tạo yêu cầu xem trước.");
+
+        let data = null;
+        const contentType = resp.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+            try {
+                data = await resp.json();
+            } catch (jsonErr) {
+                throw new Error("Phản hồi JSON không hợp lệ từ máy chủ.");
+            }
+        } else {
+            const rawText = await resp.text();
+            if (!resp.ok) {
+                throw new Error(rawText.slice(0, 180) || `Lỗi máy chủ (${resp.status} ${resp.statusText})`);
+            }
+            throw new Error("Phản hồi máy chủ không hợp lệ (không phải JSON).");
+        }
+
+        if (!resp.ok || !data || !data.success) {
+            throw new Error((data && (data.detail || data.message)) || "Không thể phân giải tệp Word.");
+        }
+
+        htmlContent = data.html || "<p>Tài liệu Word không có nội dung văn bản.</p>";
+        if (!fileSizeText && data.size) {
+            fileSizeText = (data.size / 1024).toFixed(1) + " KB";
+        }
+
+        const isDoc = filename.toLowerCase().endsWith(".doc");
+        const extBadge = isDoc ? "Word (.doc)" : "Word (.docx)";
         const sidePages = document.getElementById("side-filepages");
-        if (sidePages) sidePages.innerText = `Word (.docx)`;
+        if (sidePages) sidePages.innerText = extBadge;
         const metaText = document.getElementById("grid-meta-text");
         if (metaText) {
-            metaText.innerHTML = `📄 <span style="color:#0284c7; font-weight:700;">Xem trước Microsoft Word (.docx)</span> · ${escapeHtml(filename)} ${fileSizeText ? `(${fileSizeText})` : ''}`;
+            metaText.innerHTML = `📄 <span style="color:#0284c7; font-weight:700;">Xem trước Microsoft ${extBadge}</span> · ${escapeHtml(filename)} ${fileSizeText ? `(${fileSizeText})` : ''}`;
         }
 
         currentWordZoomLevel = 1.0;
@@ -1460,7 +1487,7 @@ async function renderWordPreview(fileOrBlob, optionalName) {
             <div class="word-preview-wrapper" style="grid-column: 1 / -1; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 12px 6px;">
                 <div class="word-preview-toolbar">
                     <div class="word-toolbar-left">
-                        <span class="word-doc-badge">📝 Microsoft Word (.docx)</span>
+                        <span class="word-doc-badge">📝 Microsoft ${extBadge}</span>
                         <span class="word-filename" title="${escapeHtml(filename)}">${escapeHtml(filename)}</span>
                     </div>
                     <div class="word-toolbar-actions">
@@ -1499,6 +1526,559 @@ async function renderWordPreview(fileOrBlob, optionalName) {
     }
 }
 
+// -------------------------------------------------------------
+// 4.1 EXCEL SPREADSHEET PREVIEW ENGINE (.XLSX / .XLS)
+// -------------------------------------------------------------
+let currentExcelZoomLevel = 1.0;
+
+function toggleExcelZoom() {
+    const sheet = document.getElementById("excel-paper-sheet");
+    const btn = document.getElementById("btn-excel-zoom");
+    if (!sheet) return;
+    if (currentExcelZoomLevel === 1.0) {
+        currentExcelZoomLevel = 1.25;
+        sheet.style.transform = "scale(1.25)";
+        sheet.style.transformOrigin = "top center";
+        if (btn) btn.innerHTML = "🔍 Thu nhỏ 100%";
+    } else {
+        currentExcelZoomLevel = 1.0;
+        sheet.style.transform = "none";
+        if (btn) btn.innerHTML = "🔍 Phóng to 125%";
+    }
+}
+
+function printExcelPreview() {
+    const content = document.getElementById("excel-paper-content");
+    if (!content) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+        alert("Vui lòng cho phép popup để in tài liệu.");
+        return;
+    }
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>In Bảng Tính Excel</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Times New Roman", sans-serif; padding: 20px; color: #1e293b; }
+                table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+                th, td { border: 1px solid #cbd5e1; padding: 6px 10px; }
+                .excel-trans-line { color: #002060 !important; font-style: italic !important; }
+                @media print { body { padding: 0; } }
+            </style>
+        </head>
+        <body>
+            ${content.innerHTML}
+            <script>window.onload = function() { window.print(); window.close(); }<\/script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+function switchExcelPreviewSheet(sheetTitle) {
+    document.querySelectorAll(".excel-tab-btn").forEach(btn => {
+        const text = btn.innerText || "";
+        btn.classList.toggle("active", text.trim().indexOf(sheetTitle.trim()) !== -1);
+    });
+    document.querySelectorAll(".excel-sheet-panel").forEach(panel => {
+        if (panel.getAttribute("data-sheet-id") === sheetTitle) {
+            panel.classList.remove("hidden");
+        } else {
+            panel.classList.add("hidden");
+        }
+    });
+}
+
+async function renderExcelPreview(fileOrBlob, optionalName) {
+    const pagesGrid = document.getElementById("pages-grid");
+    const studioLoading = document.getElementById("studio-loading");
+    const filename = optionalName || (fileOrBlob && fileOrBlob.name) || (typeof fileOrBlob === "string" ? fileOrBlob : "Bang_tinh.xlsx");
+
+    if (studioLoading) studioLoading.classList.remove("hidden");
+    if (pagesGrid) {
+        pagesGrid.innerHTML = `
+            <div style="grid-column: 1 / -1; width: 100%; padding: 60px 20px; text-align: center;">
+                <div class="spinner" style="margin: 0 auto 16px;"></div>
+                <div style="font-size: 14px; font-weight: 600; color: #10b981;">Đang phân tích bảng tính Excel (.xlsx / .xls) & bảo toàn cấu trúc...</div>
+            </div>
+        `;
+    }
+
+    try {
+        let resp;
+        let fileSizeText = "";
+        if (fileOrBlob instanceof File || fileOrBlob instanceof Blob) {
+            fileSizeText = (fileOrBlob.size / 1024).toFixed(1) + " KB";
+            const fd = new FormData();
+            fd.append("file", fileOrBlob, filename);
+            resp = await fetch("/api/preview/excel", { method: "POST", body: fd });
+        } else if (typeof fileOrBlob === "string") {
+            resp = await fetch(`/api/preview/excel-output/${encodeURIComponent(fileOrBlob)}`);
+        }
+
+        if (!resp) throw new Error("Không thể khởi tạo yêu cầu xem trước.");
+
+        let data = null;
+        const contentType = resp.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+            try {
+                data = await resp.json();
+            } catch (jsonErr) {
+                throw new Error("Phản hồi JSON không hợp lệ từ máy chủ.");
+            }
+        } else {
+            const rawText = await resp.text();
+            if (!resp.ok) {
+                throw new Error(rawText.slice(0, 180) || `Lỗi máy chủ (${resp.status} ${resp.statusText})`);
+            }
+            throw new Error("Phản hồi máy chủ không hợp lệ.");
+        }
+
+        if (!resp.ok || !data || !data.success) {
+            throw new Error((data && (data.detail || data.message)) || "Không thể phân giải tệp Excel.");
+        }
+
+        const isXls = filename.toLowerCase().endsWith(".xls");
+        const extBadge = isXls ? "Excel (.xls)" : "Excel (.xlsx)";
+        const sidePages = document.getElementById("side-filepages");
+        const sheetCount = (data.sheets && data.sheets.length) || 1;
+        if (sidePages) sidePages.innerText = `${sheetCount} Sheet (${extBadge})`;
+        const metaText = document.getElementById("grid-meta-text");
+        if (metaText) {
+            metaText.innerHTML = `📊 <span style="color:#10b981; font-weight:700;">Xem trước Microsoft ${extBadge}</span> · ${escapeHtml(filename)} ${fileSizeText ? `(${fileSizeText})` : ''} · ${sheetCount} Sheet`;
+        }
+
+        let tabsHtml = "";
+        let sheetsHtml = "";
+        if (data.sheets_data && data.sheets_data.length > 0) {
+            tabsHtml = data.sheets_data.map((s, idx) => `
+                <button type="button" class="excel-tab-btn ${idx === 0 ? 'active' : ''}" onclick="switchExcelPreviewSheet('${escapeHtml(s.title)}')">
+                    📄 ${escapeHtml(s.title)}
+                </button>
+            `).join("");
+
+            sheetsHtml = data.sheets_data.map((s, idx) => `
+                <div class="excel-sheet-panel ${idx === 0 ? '' : 'hidden'}" data-sheet-id="${escapeHtml(s.title)}" id="excel-sheet-${idx}">
+                    ${s.html}
+                </div>
+            `).join("");
+        } else {
+            sheetsHtml = data.html || "<p>Bảng tính không có dữ liệu hiển thị.</p>";
+        }
+
+        currentExcelZoomLevel = 1.0;
+        pagesGrid.innerHTML = `
+            <div class="excel-preview-wrapper" style="grid-column: 1 / -1; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 12px 6px;">
+                <div class="excel-preview-toolbar">
+                    <div class="excel-toolbar-left">
+                        <span class="excel-doc-badge">📊 Microsoft ${extBadge}</span>
+                        <span class="excel-filename" title="${escapeHtml(filename)}">${escapeHtml(filename)}</span>
+                    </div>
+                    <div class="excel-sheet-tabs-bar">
+                        ${tabsHtml}
+                    </div>
+                    <div class="excel-toolbar-actions">
+                        <button type="button" class="btn-word-tool" onclick="printExcelPreview()" title="In bảng tính">
+                            🖨️ In
+                        </button>
+                        <button type="button" class="btn-word-tool" onclick="toggleExcelZoom()" id="btn-excel-zoom" title="Phóng to / Thu nhỏ">
+                            🔍 Phóng to 125%
+                        </button>
+                    </div>
+                </div>
+
+                <div class="excel-paper-container" id="excel-paper-sheet">
+                    <div class="excel-paper-inner" id="excel-paper-content">
+                        ${sheetsHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error("renderExcelPreview error:", err);
+        pagesGrid.innerHTML = `
+            <div class="office-preview-box" style="grid-column: 1 / -1; width: 100%; padding: 48px 24px; text-align: center;">
+                <div style="font-size: 32px; margin-bottom: 12px;">⚠️</div>
+                <h4 style="font-size: 16px; font-weight: 700; color: #ef4444; margin-bottom: 6px;">Không thể xem trước tệp Excel</h4>
+                <p style="font-size: 13px; color: var(--text-secondary); max-width: 440px; margin: 0 auto 16px;">
+                    ${escapeHtml(err.message)}
+                </p>
+                <button type="button" class="btn-primary" onclick="renderStudioInteractiveReview()" style="padding: 8px 16px;">
+                    Thử lại
+                </button>
+            </div>
+        `;
+    } finally {
+        if (studioLoading) studioLoading.classList.add("hidden");
+    }
+}
+
+// -------------------------------------------------------------
+// 4.2 POST-TRANSLATION SPLIT-VIEW REVIEW STUDIO (DOC-TRAN)
+// -------------------------------------------------------------
+let currentSplitZoom = 1.0;
+let isSyncingLeft = false;
+let isSyncingRight = false;
+let syncScrollEnabled = true;
+let isInlineEditActive = false;
+
+function changeSplitZoom(delta) {
+    currentSplitZoom = Math.max(0.5, Math.min(2.0, currentSplitZoom + delta));
+    applySplitZoom();
+}
+
+function resetSplitZoom() {
+    currentSplitZoom = 1.0;
+    applySplitZoom();
+}
+
+function applySplitZoom() {
+    const leftPaper = document.getElementById("split-left-paper");
+    const rightPaper = document.getElementById("split-right-paper");
+    const zoomVal = document.getElementById("split-zoom-val");
+
+    if (leftPaper) {
+        leftPaper.style.transform = `scale(${currentSplitZoom})`;
+        leftPaper.style.transformOrigin = "top center";
+    }
+    if (rightPaper) {
+        rightPaper.style.transform = `scale(${currentSplitZoom})`;
+        rightPaper.style.transformOrigin = "top center";
+    }
+    if (zoomVal) {
+        zoomVal.innerText = `${Math.round(currentSplitZoom * 100)}%`;
+    }
+}
+
+function toggleSyncScroll() {
+    syncScrollEnabled = !syncScrollEnabled;
+    const btn = document.getElementById("btn-toggle-sync-scroll");
+    const text = document.getElementById("sync-scroll-text");
+    if (btn) {
+        btn.classList.toggle("active", syncScrollEnabled);
+    }
+    if (text) {
+        text.innerText = syncScrollEnabled ? "Cuộn đồng bộ: BẬT" : "Cuộn đồng bộ: TẮT";
+    }
+}
+
+function bindSplitSyncScroll() {
+    const left = document.getElementById("split-left-pane");
+    const right = document.getElementById("split-right-pane");
+    if (!left || !right) return;
+
+    left.addEventListener("scroll", () => {
+        if (!syncScrollEnabled || isSyncingLeft) return;
+        isSyncingRight = true;
+        const maxLeft = left.scrollHeight - left.clientHeight;
+        const maxRight = right.scrollHeight - right.clientHeight;
+        if (maxLeft > 0 && maxRight > 0) {
+            right.scrollTop = (left.scrollTop / maxLeft) * maxRight;
+        }
+        requestAnimationFrame(() => { isSyncingRight = false; });
+    });
+
+    right.addEventListener("scroll", () => {
+        if (!syncScrollEnabled || isSyncingRight) return;
+        isSyncingLeft = true;
+        const maxLeft = left.scrollHeight - left.clientHeight;
+        const maxRight = right.scrollHeight - right.clientHeight;
+        if (maxLeft > 0 && maxRight > 0) {
+            left.scrollTop = (right.scrollTop / maxRight) * maxLeft;
+        }
+        requestAnimationFrame(() => { isSyncingLeft = false; });
+    });
+}
+
+function toggleInlineEditMode() {
+    isInlineEditActive = !isInlineEditActive;
+    const btn = document.getElementById("btn-toggle-inline-edit");
+    const rightPaper = document.getElementById("split-right-paper");
+    if (!rightPaper) return;
+
+    const nodes = rightPaper.querySelectorAll(".doc-tran-vn, .excel-trans-line, [style*='002060'], p em, td em, span em");
+    nodes.forEach(node => {
+        node.contentEditable = isInlineEditActive ? "true" : "false";
+        if (isInlineEditActive) {
+            node.classList.add("inline-editable-active");
+        } else {
+            node.classList.remove("inline-editable-active");
+        }
+    });
+
+    if (btn) {
+        btn.classList.toggle("active", isInlineEditActive);
+        btn.innerHTML = isInlineEditActive ? "💾 Chỉnh sửa nhanh: BẬT" : "✏️ Chỉnh sửa nhanh: TẮT";
+    }
+}
+
+function printSplitTranslation() {
+    const rightPaper = document.getElementById("split-right-paper");
+    if (!rightPaper) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+        alert("Vui lòng cho phép popup để in tài liệu.");
+        return;
+    }
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Bản Dịch Song Ngữ DOC-TRAN</title>
+            <style>
+                body {
+                    font-family: "Times New Roman", Times, serif;
+                    padding: 30px;
+                    color: #0f172a;
+                    line-height: 1.5;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 14px 0;
+                }
+                th, td {
+                    border: 1px solid #cbd5e1;
+                    padding: 6px 10px;
+                    vertical-align: top;
+                }
+                th {
+                    background: #f8fafc;
+                }
+                .excel-trans-line, .doc-tran-vn, [style*="002060"], em {
+                    color: #002060 !important;
+                    font-style: italic !important;
+                    font-family: "Times New Roman", Times, serif !important;
+                }
+                img { max-width: 100%; height: auto; }
+                @media print {
+                    body { padding: 0; }
+                    @page { margin: 15mm; }
+                }
+            </style>
+        </head>
+        <body>
+            ${rightPaper.innerHTML}
+            <script>window.onload = function() { window.print(); window.close(); }<\/script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+async function launchSplitViewStudio(originalFile, resultData) {
+    switchStudioView("grid");
+    const compToggle = document.getElementById("comparison-toggle-group");
+    if (compToggle) compToggle.classList.add("hidden");
+
+    const pagesGrid = document.getElementById("pages-grid");
+    if (!pagesGrid) return;
+
+    const origName = (originalFile && originalFile.name) || "Tai_lieu_goc";
+    const resName = (resultData && resultData.filename) || "Tai_lieu_song_ngu";
+
+    const isExcel = /\.(xlsx|xls)$/i.test(origName) || /\.(xlsx|xls)$/i.test(resName);
+    const docxUrl = (resultData && resultData.download_docx_url) || (resultData && resultData.download_url) || "#";
+    const pdfUrl = (resultData && resultData.download_pdf_url) || (resultData && resultData.download_url) || "#";
+    const zipUrl = (resultData && resultData.download_zip_url) || (resultData && resultData.download_url) || "#";
+
+    currentSplitZoom = 1.0;
+    syncScrollEnabled = true;
+    isInlineEditActive = false;
+
+    pagesGrid.innerHTML = `
+        <div class="split-review-container" id="doctran-split-studio" style="grid-column: 1 / -1; width: 100%;">
+            <!-- Top Sticky HUD Toolbar -->
+            <div class="split-hud-bar">
+                <div class="split-hud-left">
+                    <span class="split-hud-badge">⚡ DOC-TRAN Split-View Studio</span>
+                    <span class="split-hud-meta" id="split-hud-file-meta" title="${escapeHtml(origName)} ➔ ${escapeHtml(resName)}">
+                        ${escapeHtml(origName)} ➔ ${escapeHtml(resName)}
+                    </span>
+                </div>
+                
+                <div class="split-hud-center">
+                    <!-- Zoom HUD -->
+                    <div class="split-zoom-hud">
+                        <button type="button" class="btn-hud" onclick="changeSplitZoom(-0.15)" title="Thu nhỏ">🔍−</button>
+                        <span class="zoom-value" id="split-zoom-val">100%</span>
+                        <button type="button" class="btn-hud" onclick="changeSplitZoom(0.15)" title="Phóng to">🔍+</button>
+                        <button type="button" class="btn-hud" onclick="resetSplitZoom()" title="Đặt lại 100%">1:1</button>
+                    </div>
+                    
+                    <!-- Synchronized Scrolling toggle -->
+                    <button type="button" class="btn-hud btn-sync-scroll active" id="btn-toggle-sync-scroll" onclick="toggleSyncScroll()" title="Bật/Tắt cuộn đồng bộ 2 bên">
+                        <span id="sync-scroll-icon">🔗</span> <span id="sync-scroll-text">Cuộn đồng bộ: BẬT</span>
+                    </button>
+
+                    <!-- Quick Inline Edit Mode -->
+                    <button type="button" class="btn-hud btn-inline-edit" id="btn-toggle-inline-edit" onclick="toggleInlineEditMode()" title="Chỉnh sửa trực tiếp bản dịch tiếng Việt #002060">
+                        ✏️ Chỉnh sửa nhanh: TẮT
+                    </button>
+
+                    <!-- Print Action -->
+                    <button type="button" class="btn-hud btn-hud-print" onclick="printSplitTranslation()" title="In bản dịch song ngữ">
+                        🖨️ In tài liệu
+                    </button>
+                </div>
+
+                <!-- 3 Action Download Buttons in HUD -->
+                <div class="split-hud-downloads">
+                    <a id="btn-hud-download-docx" href="${docxUrl}" download class="btn-download-tri btn-tri-docx" title="${isExcel ? 'Tải file Excel (.xlsx)' : 'Tải file Word (.docx)'}">
+                        ${isExcel ? '📊 Tải Excel (.xlsx)' : '📝 Tải Word (.docx)'}
+                    </a>
+                    <a id="btn-hud-download-pdf" href="${pdfUrl}" download class="btn-download-tri btn-tri-pdf" title="Tải file PDF (.pdf)">
+                        📑 Tải PDF (.pdf)
+                    </a>
+                    <a id="btn-hud-download-zip" href="${zipUrl}" download class="btn-download-tri btn-tri-zip" title="Tải trọn bộ (.zip)">
+                        📦 Tải trọn bộ (.zip)
+                    </a>
+                </div>
+            </div>
+
+            <!-- Dual-Column Document Body -->
+            <div class="split-panes-wrapper" id="split-panes-wrapper">
+                <!-- Left Column: Original Document -->
+                <div class="split-column split-col-left" id="split-left-column">
+                    <div class="split-col-header">
+                        <span class="col-title">📄 Tài Liệu Gốc</span>
+                        <span class="col-sub" id="split-left-sub">${escapeHtml(origName)}</span>
+                    </div>
+                    <div class="split-pane-viewport split-left-pane" id="split-left-pane">
+                        <div class="split-doc-paper" id="split-left-paper">
+                            <div style="padding: 40px; text-align: center; color: #64748b;">
+                                <div class="spinner-sm" style="margin: 0 auto 10px;"></div>
+                                Đang tải bản xem trước tài liệu gốc...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Central Divider -->
+                <div class="split-pane-divider"></div>
+
+                <!-- Right Column: Bilingual Translation -->
+                <div class="split-column split-col-right" id="split-right-column">
+                    <div class="split-col-header">
+                        <span class="col-title">✨ Bản Dịch Song Ngữ DOC-TRAN</span>
+                        <span class="col-sub">Dòng gốc trên · Dòng dịch #002060 nghiêng dưới</span>
+                    </div>
+                    <div class="split-pane-viewport split-right-pane" id="split-right-pane">
+                        <div class="split-doc-paper" id="split-right-paper">
+                            <div style="padding: 40px; text-align: center; color: #0284c7;">
+                                <div class="spinner-sm" style="margin: 0 auto 10px;"></div>
+                                Đang nạp bản dịch song ngữ...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    bindSplitSyncScroll();
+
+    // 1. Load Left Pane (Original Document)
+    const leftPaper = document.getElementById("split-left-paper");
+    if (leftPaper && originalFile) {
+        try {
+            if (/\.(docx|doc)$/i.test(origName)) {
+                const fd = new FormData();
+                fd.append("file", originalFile, origName);
+                const resp = await fetch("/api/preview/word", { method: "POST", body: fd });
+                if (resp.ok) {
+                    const d = await resp.json();
+                    if (d.success) leftPaper.innerHTML = d.html || "<p>Tài liệu không có nội dung.</p>";
+                }
+            } else if (/\.(xlsx|xls)$/i.test(origName)) {
+                const fd = new FormData();
+                fd.append("file", originalFile, origName);
+                const resp = await fetch("/api/preview/excel", { method: "POST", body: fd });
+                if (resp.ok) {
+                    const d = await resp.json();
+                    if (d.success) leftPaper.innerHTML = d.html || "<p>Bảng tính không có nội dung.</p>";
+                }
+            } else if (/\.pdf$/i.test(origName)) {
+                const fr = new FileReader();
+                fr.onload = async function() {
+                    try {
+                        const typedarray = new Uint8Array(this.result);
+                        const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                        leftPaper.innerHTML = "";
+                        for (let p = 1; p <= pdf.numPages; p++) {
+                            const page = await pdf.getPage(p);
+                            const viewport = page.getViewport({ scale: 1.15 });
+                            const canvas = document.createElement("canvas");
+                            canvas.className = "split-pdf-canvas";
+                            const ctx = canvas.getContext("2d");
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+                            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                            leftPaper.appendChild(canvas);
+                        }
+                    } catch (e) {
+                        leftPaper.innerHTML = `<p style="color:#ef4444; padding:20px;">Không thể kết xuất PDF gốc: ${escapeHtml(e.message)}</p>`;
+                    }
+                };
+                fr.readAsArrayBuffer(originalFile);
+            }
+        } catch (e) {
+            console.error("Lỗi nạp tài liệu gốc:", e);
+            leftPaper.innerHTML = `<p style="color:#ef4444; padding:20px;">Lỗi nạp tài liệu gốc: ${escapeHtml(e.message)}</p>`;
+        }
+    }
+
+    // 2. Load Right Pane (Translated Document)
+    const rightPaper = document.getElementById("split-right-paper");
+    if (rightPaper && resultData) {
+        try {
+            const transWordFile = resultData.docx_path ? resultData.docx_path.split(/[\\/]/).pop() : (/\.(docx|doc)$/i.test(resName) ? resName : null);
+            const transExcelFile = resultData.xlsx_path ? resultData.xlsx_path.split(/[\\/]/).pop() : (/\.(xlsx|xls)$/i.test(resName) ? resName : null);
+
+            if (transWordFile) {
+                const resp = await fetch(`/api/preview/word-output/${encodeURIComponent(transWordFile)}`);
+                if (resp.ok) {
+                    const d = await resp.json();
+                    if (d.success) rightPaper.innerHTML = d.html || "<p>Bản dịch không có nội dung.</p>";
+                } else {
+                    rightPaper.innerHTML = `<p style="color:#ef4444; padding:20px;">Không thể tải bản xem trước Word: HTTP ${resp.status}</p>`;
+                }
+            } else if (transExcelFile) {
+                const resp = await fetch(`/api/preview/excel-output/${encodeURIComponent(transExcelFile)}`);
+                if (resp.ok) {
+                    const d = await resp.json();
+                    if (d.success) rightPaper.innerHTML = d.html || "<p>Bảng tính không có nội dung.</p>";
+                } else {
+                    rightPaper.innerHTML = `<p style="color:#ef4444; padding:20px;">Không thể tải bản xem trước Excel: HTTP ${resp.status}</p>`;
+                }
+            } else if (resultData.download_url && /\.pdf$/i.test(resultData.download_url)) {
+                const resp = await fetch(resultData.download_url);
+                const arrayBuffer = await resp.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                rightPaper.innerHTML = "";
+                for (let p = 1; p <= pdf.numPages; p++) {
+                    const page = await pdf.getPage(p);
+                    const viewport = page.getViewport({ scale: 1.15 });
+                    const canvas = document.createElement("canvas");
+                    canvas.className = "split-pdf-canvas";
+                    const ctx = canvas.getContext("2d");
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                    rightPaper.appendChild(canvas);
+                }
+            } else {
+                rightPaper.innerHTML = `<p style="padding:20px;">Bản dịch đã hoàn tất. Vui lòng bấm các nút tải bên trên để tải tài liệu.</p>`;
+            }
+        } catch (e) {
+            console.error("Lỗi nạp bản dịch:", e);
+            rightPaper.innerHTML = `<p style="color:#ef4444; padding:20px;">Lỗi nạp bản dịch: ${escapeHtml(e.message)}</p>`;
+        }
+    }
+}
+
 async function renderStudioInteractiveReview() {
     if (selectedFiles.length === 0) return;
     const primaryFile = selectedFiles[0];
@@ -1525,6 +2105,12 @@ async function renderStudioInteractiveReview() {
         // If Word Document (.docx / .doc) -> Render Live Word Preview!
         if (/\.(docx|doc)$/i.test(primaryFile.name)) {
             renderWordPreview(primaryFile);
+            return;
+        }
+
+        // If Excel Spreadsheet (.xlsx / .xls) -> Render Live Excel Preview!
+        if (/\.(xlsx|xls)$/i.test(primaryFile.name)) {
+            renderExcelPreview(primaryFile);
             return;
         }
 
@@ -3936,14 +4522,49 @@ async function executeProcess() {
         lastResultFilename = data.filename;
 
         const btnDownload = document.getElementById("btn-download");
-        if (btnDownload) {
-            btnDownload.href = data.download_url;
-            btnDownload.download = data.filename;
-        }
+        const triBox = document.getElementById("doctran-tri-downloads");
 
-        // Auto preview if it's a PDF or Word document (.docx/.doc)
-        if (data.filename && (/\.(pdf|docx|doc)$/i.test(data.filename))) {
-            previewOutputResult();
+        if (currentTool && currentTool.id === "interlinear-translate") {
+            if (btnDownload) btnDownload.classList.add("hidden");
+            if (triBox) {
+                triBox.classList.remove("hidden");
+                const btnTriDocx = document.getElementById("btn-tri-docx");
+                const btnTriPdf = document.getElementById("btn-tri-pdf");
+                const btnTriZip = document.getElementById("btn-tri-zip");
+                const docxUrl = data.download_docx_url || data.download_url;
+                const pdfUrl = data.download_pdf_url || data.download_url;
+                const zipUrl = data.download_zip_url || data.download_url;
+
+                const isExcel = /\.(xlsx|xls)$/i.test((selectedFiles[0] && selectedFiles[0].name) || "") || /\.(xlsx|xls)$/i.test(data.filename || "");
+                if (btnTriDocx) {
+                    btnTriDocx.href = docxUrl;
+                    btnTriDocx.download = isExcel ? (data.docx_path ? data.docx_path.split(/[\\/]/).pop() : "document.xlsx") : (data.docx_path ? data.docx_path.split(/[\\/]/).pop() : "document.docx");
+                    btnTriDocx.innerHTML = isExcel ? `<span>📊</span> Tải file Bảng tính (.xlsx)` : `<span>📝</span> Tải file Word (.docx)`;
+                }
+                if (btnTriPdf) {
+                    btnTriPdf.href = pdfUrl;
+                    btnTriPdf.download = data.pdf_path ? data.pdf_path.split(/[\\/]/).pop() : "document.pdf";
+                }
+                if (btnTriZip) {
+                    btnTriZip.href = zipUrl;
+                    btnTriZip.download = data.zip_path ? data.zip_path.split(/[\\/]/).pop() : "document_tron_bo.zip";
+                }
+            }
+
+            // Launch Post-Translation Split-View Review Studio!
+            launchSplitViewStudio(selectedFiles[0], data);
+        } else {
+            if (btnDownload) {
+                btnDownload.classList.remove("hidden");
+                btnDownload.href = data.download_url;
+                btnDownload.download = data.filename;
+            }
+            if (triBox) triBox.classList.add("hidden");
+
+            // Auto preview if it's a PDF or Word document (.docx/.doc)
+            if (data.filename && (/\.(pdf|docx|doc)$/i.test(data.filename))) {
+                previewOutputResult();
+            }
         }
 
     } catch (err) {

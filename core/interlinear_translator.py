@@ -23,11 +23,16 @@ import time
 import base64
 import zipfile
 import requests
+import subprocess
+import shutil
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from pathlib import Path
 import threading
 from concurrent.futures import ThreadPoolExecutor
+
+logger = logging.getLogger("titanpdf.interlinear")
 
 import fitz  # PyMuPDF
 import docx
@@ -57,35 +62,352 @@ def is_scanned_pdf(pdf_path: str, threshold_chars_per_page: int = 40) -> bool:
         return False
 
 
+def _find_soffice_binary() -> Optional[str]:
+    """Tìm đường dẫn tệp thực thi LibreOffice (soffice / libreoffice) trên Windows và Linux."""
+    for cmd in ["soffice", "libreoffice", "soffice.com", "soffice.exe"]:
+        p = shutil.which(cmd)
+        if p:
+            return p
+    if os.name == 'nt':
+        candidates = [
+            r"C:\Program Files\LibreOffice\program\soffice.com",
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.com",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\LibreOffice\program\soffice.com"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\LibreOffice\program\soffice.exe"),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+    else:
+        candidates = [
+            "/usr/bin/soffice",
+            "/usr/bin/libreoffice",
+            "/usr/local/bin/soffice",
+            "/usr/local/bin/libreoffice",
+            "/usr/lib/libreoffice/program/soffice.bin",
+            "/opt/libreoffice/program/soffice",
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+    return None
+
+
+def _convert_doc_to_docx_libreoffice(abs_doc: str, abs_docx: str) -> bool:
+    """Chuyển đổi tệp .doc sang .docx bằng headless LibreOffice CLI."""
+    soffice = _find_soffice_binary()
+    if not soffice:
+        return False
+
+    out_dir = os.path.dirname(abs_docx) or "."
+    os.makedirs(out_dir, exist_ok=True)
+
+    creationflags = 0
+    if os.name == 'nt' and hasattr(subprocess, 'CREATE_NO_WINDOW'):
+        creationflags = subprocess.CREATE_NO_WINDOW
+
+    cmd = [
+        soffice,
+        "--headless",
+        "--convert-to",
+        "docx",
+        "--outdir",
+        out_dir,
+        abs_doc
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            creationflags=creationflags
+        )
+        doc_stem = Path(abs_doc).stem
+        expected_output = os.path.join(out_dir, f"{doc_stem}.docx")
+        if os.path.exists(expected_output):
+            if os.path.abspath(expected_output) != abs_docx:
+                if os.path.exists(abs_docx):
+                    try:
+                        os.remove(abs_docx)
+                    except Exception:
+                        pass
+                shutil.move(expected_output, abs_docx)
+            return os.path.exists(abs_docx) and os.path.getsize(abs_docx) > 0
+        return False
+    except Exception as e:
+        logger.warning("LibreOffice doc-to-docx conversion failed: %s", e)
+        return False
+
+
 def convert_doc_to_docx(doc_path: str, docx_path: str) -> str:
-    """Chuyển đổi tệp .doc (Word nhị phân cũ) sang .docx chuẩn hiện đại qua COM Automation."""
+    """
+    Chuyển đổi tệp .doc (Word nhị phân cũ) sang .docx chuẩn hiện đại đa nền tảng:
+    - Trên Windows: Ưu tiên Word COM Automation, tự động fallback sang headless LibreOffice nếu lỗi hoặc thiếu Office.
+    - Trên Linux / Render / Docker: Sử dụng headless LibreOffice (soffice).
+    """
     abs_doc = os.path.abspath(doc_path)
     abs_docx = os.path.abspath(docx_path)
+    out_dir = os.path.dirname(abs_docx)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    # 1. On Windows: Try Word COM first
     if os.name == 'nt':
-        import pythoncom
-        pythoncom.CoInitialize()
-        import win32com.client
-        word = None
-        doc = None
         try:
-            word = win32com.client.DispatchEx("Word.Application")
-            word.Visible = False
-            word.DisplayAlerts = 0
-            word.ScreenUpdating = False
-            try: word.FeatureInstall = 0
-            except Exception: pass
-            doc = word.Documents.Open(FileName=abs_doc, ConfirmConversions=False, ReadOnly=True, Visible=False)
-            doc.SaveAs2(FileName=abs_docx, FileFormat=16)  # 16 = wdFormatXMLDocument
+            import pythoncom
+            pythoncom.CoInitialize()
+            import win32com.client
+            word = None
+            doc = None
+            try:
+                word = win32com.client.DispatchEx("Word.Application")
+                word.Visible = False
+                word.DisplayAlerts = 0
+                word.ScreenUpdating = False
+                try:
+                    word.FeatureInstall = 0
+                except Exception:
+                    pass
+                doc = word.Documents.Open(FileName=abs_doc, ConfirmConversions=False, ReadOnly=True, Visible=False)
+                doc.SaveAs2(FileName=abs_docx, FileFormat=16)  # 16 = wdFormatXMLDocument
+                if os.path.exists(abs_docx) and os.path.getsize(abs_docx) > 0:
+                    return abs_docx
+            finally:
+                if doc:
+                    try:
+                        doc.Close(False)
+                    except Exception:
+                        pass
+                if word:
+                    try:
+                        word.Quit()
+                    except Exception:
+                        pass
+                pythoncom.CoUninitialize()
+        except Exception as com_err:
+            logger.warning("Word COM conversion failed (%s), falling back to LibreOffice...", com_err)
+
+    # 2. LibreOffice Headless Fallback (Windows fallback or Linux/POSIX primary)
+    if _convert_doc_to_docx_libreoffice(abs_doc, abs_docx):
+        if os.path.exists(abs_docx) and os.path.getsize(abs_docx) > 0:
             return abs_docx
-        finally:
-            if doc:
-                try: doc.Close(False)
-                except Exception: pass
-            if word:
-                try: word.Quit()
-                except Exception: pass
-            pythoncom.CoUninitialize()
-    raise RuntimeError("Hệ thống chỉ hỗ trợ chuyển đổi .doc sang .docx trên nền tảng Windows.")
+
+    raise RuntimeError(
+        "Hệ thống không tìm thấy Microsoft Word hoặc LibreOffice để chuyển đổi tệp .doc sang .docx. "
+        "Vui lòng cài đặt LibreOffice hoặc Microsoft Word trên hệ thống."
+    )
+
+
+def _convert_docx_to_pdf_libreoffice(abs_docx: str, abs_pdf: str) -> bool:
+    """Chuyển đổi tệp .docx sang .pdf bằng headless LibreOffice CLI bảo toàn 100% định dạng, màu #002060 và bảng biểu."""
+    soffice = _find_soffice_binary()
+    if not soffice:
+        return False
+
+    out_dir = os.path.dirname(abs_pdf) or "."
+    os.makedirs(out_dir, exist_ok=True)
+
+    creationflags = 0
+    if os.name == 'nt' and hasattr(subprocess, 'CREATE_NO_WINDOW'):
+        creationflags = subprocess.CREATE_NO_WINDOW
+
+    cmd = [
+        soffice,
+        "--headless",
+        "--convert-to",
+        "pdf",
+        "--outdir",
+        out_dir,
+        abs_docx
+    ]
+    try:
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            creationflags=creationflags
+        )
+        docx_stem = Path(abs_docx).stem
+        expected_output = os.path.join(out_dir, f"{docx_stem}.pdf")
+        if os.path.exists(expected_output):
+            if os.path.abspath(expected_output) != abs_pdf:
+                if os.path.exists(abs_pdf):
+                    try:
+                        os.remove(abs_pdf)
+                    except Exception:
+                        pass
+                shutil.move(expected_output, abs_pdf)
+            return os.path.exists(abs_pdf) and os.path.getsize(abs_pdf) > 0
+        return False
+    except Exception as e:
+        logger.warning("LibreOffice docx-to-pdf conversion failed: %s", e)
+        return False
+
+
+def _convert_docx_to_doc_libreoffice(abs_docx: str, abs_doc: str) -> bool:
+    """Chuyển đổi tệp .docx sang .doc (Word 97-2003) bằng headless LibreOffice CLI."""
+    soffice = _find_soffice_binary()
+    if not soffice:
+        return False
+
+    out_dir = os.path.dirname(abs_doc) or "."
+    os.makedirs(out_dir, exist_ok=True)
+
+    creationflags = 0
+    if os.name == 'nt' and hasattr(subprocess, 'CREATE_NO_WINDOW'):
+        creationflags = subprocess.CREATE_NO_WINDOW
+
+    cmd = [
+        soffice,
+        "--headless",
+        "--convert-to",
+        "doc:MS Word 97",
+        "--outdir",
+        out_dir,
+        abs_docx
+    ]
+    try:
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            creationflags=creationflags
+        )
+        docx_stem = Path(abs_docx).stem
+        expected_output = os.path.join(out_dir, f"{docx_stem}.doc")
+        if os.path.exists(expected_output):
+            if os.path.abspath(expected_output) != abs_doc:
+                if os.path.exists(abs_doc):
+                    try:
+                        os.remove(abs_doc)
+                    except Exception:
+                        pass
+                shutil.move(expected_output, abs_doc)
+            return os.path.exists(abs_doc) and os.path.getsize(abs_doc) > 0
+        return False
+    except Exception as e:
+        logger.warning("LibreOffice docx-to-doc conversion failed: %s", e)
+        return False
+
+
+def convert_docx_to_pdf(docx_path: str, pdf_path: str) -> str:
+    """
+    Chuyển đổi tệp .docx sang .pdf bảo toàn 100% bố cục, bảng biểu, font Times New Roman,
+    màu xanh đậm #002060 và chữ in nghiêng:
+    - Trên Windows / Linux: Thử headless LibreOffice CLI.
+    - Trên Windows: Thử Word COM Automation (SaveAs2 FileFormat=17) nếu LibreOffice lỗi hoặc không có.
+    - Fallback: Dùng AIReconstructedOCREngine._create_fallback_text_pdf nếu cả hai đều không khả dụng.
+    """
+    abs_docx = os.path.abspath(docx_path)
+    abs_pdf = os.path.abspath(pdf_path)
+    out_dir = os.path.dirname(abs_pdf)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    # 1. Thử LibreOffice headless CLI trước (nhanh, chuẩn font/màu trên cả Win/Linux)
+    if _convert_docx_to_pdf_libreoffice(abs_docx, abs_pdf):
+        return abs_pdf
+
+    # 2. Trên Windows: Thử Word COM Automation
+    if os.name == 'nt':
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+            import win32com.client
+            word = None
+            doc = None
+            try:
+                word = win32com.client.DispatchEx("Word.Application")
+                word.Visible = False
+                word.DisplayAlerts = 0
+                word.ScreenUpdating = False
+                doc = word.Documents.Open(FileName=abs_docx, ConfirmConversions=False, ReadOnly=True, Visible=False)
+                doc.SaveAs2(FileName=abs_pdf, FileFormat=17)  # 17 = wdFormatPDF
+                if os.path.exists(abs_pdf) and os.path.getsize(abs_pdf) > 0:
+                    return abs_pdf
+            finally:
+                if doc:
+                    try:
+                        doc.Close(False)
+                    except Exception:
+                        pass
+                if word:
+                    try:
+                        word.Quit()
+                    except Exception:
+                        pass
+                pythoncom.CoUninitialize()
+        except Exception as com_err:
+            logger.warning("Word COM docx-to-pdf failed: %s", com_err)
+
+    # 3. Fallback PyMuPDF nếu cả 2 phương án trên đều không khả dụng
+    try:
+        from core.ai_reconstructed_ocr import AIReconstructedOCREngine
+        AIReconstructedOCREngine._create_fallback_text_pdf(abs_docx, abs_pdf)
+        if os.path.exists(abs_pdf) and os.path.getsize(abs_pdf) > 0:
+            return abs_pdf
+    except Exception as fb_err:
+        logger.error("Fallback docx-to-pdf failed: %s", fb_err)
+
+    raise RuntimeError("Hệ thống không thể chuyển đổi tài liệu DOCX sang PDF.")
+
+
+def convert_docx_to_doc(docx_path: str, doc_path: str) -> Optional[str]:
+    """
+    Chuyển đổi tệp .docx sang định dạng .doc (Word 97-2003):
+    - Thử headless LibreOffice CLI.
+    - Thử Word COM trên Windows.
+    - Trả về đường dẫn tệp nếu thành công, None nếu thất bại.
+    """
+    abs_docx = os.path.abspath(docx_path)
+    abs_doc = os.path.abspath(doc_path)
+    out_dir = os.path.dirname(abs_doc)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    # 1. Thử LibreOffice
+    if _convert_docx_to_doc_libreoffice(abs_docx, abs_doc):
+        return abs_doc
+
+    # 2. Thử Word COM
+    if os.name == 'nt':
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+            import win32com.client
+            word = None
+            doc = None
+            try:
+                word = win32com.client.DispatchEx("Word.Application")
+                word.Visible = False
+                word.DisplayAlerts = 0
+                word.ScreenUpdating = False
+                doc = word.Documents.Open(FileName=abs_docx, ConfirmConversions=False, ReadOnly=True, Visible=False)
+                doc.SaveAs2(FileName=abs_doc, FileFormat=0)  # 0 = wdFormatDocument (.doc)
+                if os.path.exists(abs_doc) and os.path.getsize(abs_doc) > 0:
+                    return abs_doc
+            finally:
+                if doc:
+                    try:
+                        doc.Close(False)
+                    except Exception:
+                        pass
+                if word:
+                    try:
+                        word.Quit()
+                    except Exception:
+                        pass
+                pythoncom.CoUninitialize()
+        except Exception as e:
+            logger.warning("Word COM docx-to-doc failed: %s", e)
+
+    return None
+
 
 # Màu xanh đậm chuẩn Word Dark Blue #002060
 DARK_BLUE = RGBColor(0, 32, 96)
@@ -986,16 +1308,8 @@ class InterlinearTranslator:
             )
 
         elif ext == ".pdf":
-            # Xác định nhánh xử lý PDF: Scan vs Native Text
-            is_scan = False
+            # Khi engine_mode là "ocr_scan" thì mới kích hoạt Vision OCR
             if engine_mode == "ocr_scan":
-                is_scan = True
-            elif engine_mode == "vip_pro_doc":
-                is_scan = False
-            else:  # "auto"
-                is_scan = is_scanned_pdf(input_path)
-
-            if is_scan:
                 if not actual_key:
                     raise ValueError("Tài liệu là dạng Scan/Ảnh chụp. Vui lòng nhập DeepSeek API Key để kích hoạt Động cơ Vision AI & Tái tạo Siêu Cấp VIP Pro!")
                 engine_used = "DeepSeek Vision AI + Tái tạo Bố cục Siêu Cấp VIP Pro"
@@ -1008,18 +1322,111 @@ class InterlinearTranslator:
                     output_mode=output_mode
                 )
             else:
-                engine_used = "Động cơ Chuyển đổi Siêu Cấp VIP Pro + Dịch Interlinear"
-                trans_result = cls.translate_pdf_with_vip_pro_engine(
-                    pdf_path=input_path,
-                    output_docx_path=final_docx_path,
+                # engine_mode là "auto" hoặc "vip_pro_doc":
+                # Tự động chuyển đổi PDF sang Word .docx qua SmartPDFToWordDispatcher / pdf2docx
+                # và đưa trực tiếp vào translate_docx.
+                temp_pdf_docx = os.path.join(output_dir, f"{base_name}_pdf_to_word_{session_id}.docx")
+                res_conv = SmartPDFToWordDispatcher.convert(input_path, temp_pdf_docx, mode="auto")
+                temp_files_to_cleanup.append(temp_pdf_docx)
+
+                conv_engine = res_conv.get("engine", "VIP Pro") if isinstance(res_conv, dict) else "VIP Pro"
+                engine_used = f"Động cơ Chuyển đổi Siêu Cấp VIP Pro ({conv_engine}) + Dịch Interlinear"
+                trans_result = cls.translate_docx(
+                    docx_path=temp_pdf_docx,
+                    output_path=final_docx_path,
                     api_key=actual_key,
                     source_lang=source_lang,
                     target_lang=target_lang,
                     output_mode=output_mode,
                     provider=provider
                 )
+        elif ext in [".xlsx", ".xls"]:
+            from core.excel_interlinear_translator import ExcelInterlinearTranslator
+            final_xlsx_name = f"{base_name}_SongNgu_{session_id}.xlsx"
+            final_xlsx_path = os.path.join(output_dir, final_xlsx_name)
+
+            trans_result = ExcelInterlinearTranslator.translate_excel(
+                input_path=work_input,
+                output_path=final_xlsx_path,
+                source_lang=source_lang,
+                target_lang=target_lang,
+                provider=provider,
+                api_key=actual_key,
+                output_mode=output_mode
+            )
+            engine_used = trans_result.get("engine", "Động cơ Bảng tính Excel DOC-TRAN (openpyxl)")
+
+            # Dọn dẹp tệp trung gian
+            for tf in temp_files_to_cleanup:
+                if os.path.exists(tf):
+                    try: os.remove(tf)
+                    except Exception: pass
+
+            out_fmt = (output_format or "xlsx").lower().strip()
+            src_str = LANG_NAME_MAP.get(source_lang, source_lang)
+            tgt_str = LANG_NAME_MAP.get(target_lang, target_lang)
+
+            final_pdf_name = f"{base_name}_SongNgu_{session_id}.pdf"
+            final_pdf_path = os.path.join(output_dir, final_pdf_name)
+            try:
+                ExcelInterlinearTranslator.convert_xlsx_to_pdf(final_xlsx_path, final_pdf_path)
+            except Exception as e:
+                logger.warning("Không thể chuyển đổi Excel sang PDF: %s", e)
+
+            zip_name = f"{base_name}_SongNgu_TronBo_{session_id}.zip"
+            zip_path = os.path.join(output_dir, zip_name)
+            try:
+                with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+                    zf.write(final_xlsx_path, arcname=final_xlsx_name)
+                    if os.path.exists(final_pdf_path):
+                        zf.write(final_pdf_path, arcname=final_pdf_name)
+            except Exception as e:
+                logger.warning("Không thể tạo ZIP cho Excel: %s", e)
+
+            out_fmt = (output_format or "xlsx").lower().strip()
+            src_str = LANG_NAME_MAP.get(source_lang, source_lang)
+            tgt_str = LANG_NAME_MAP.get(target_lang, target_lang)
+
+            if out_fmt == "pdf" and os.path.exists(final_pdf_path):
+                primary_filename = final_pdf_name
+                primary_output_path = final_pdf_path
+                primary_download_url = f"/api/download/{final_pdf_name}"
+                output_format_label = "PDF Bảng Tính Chuẩn In Ấn"
+            elif out_fmt == "both" and os.path.exists(zip_path):
+                primary_filename = zip_name
+                primary_output_path = zip_path
+                primary_download_url = f"/api/download/{zip_name}"
+                output_format_label = "Trọn bộ Excel (.xlsx) & PDF (.pdf)"
+            else:
+                primary_filename = final_xlsx_name
+                primary_output_path = final_xlsx_path
+                primary_download_url = f"/api/download/{final_xlsx_name}"
+                output_format_label = "Excel (.xlsx)"
+
+            return {
+                "success": True,
+                "filename": primary_filename,
+                "output_path": primary_output_path,
+                "download_url": primary_download_url,
+                "download_docx_url": f"/api/download/{final_xlsx_name}",
+                "download_xlsx_url": f"/api/download/{final_xlsx_name}",
+                "download_pdf_url": f"/api/download/{final_pdf_name}" if os.path.exists(final_pdf_path) else primary_download_url,
+                "download_zip_url": f"/api/download/{zip_name}" if os.path.exists(zip_path) else primary_download_url,
+                "xlsx_path": final_xlsx_path,
+                "docx_path": final_xlsx_path,
+                "pdf_path": final_pdf_path if os.path.exists(final_pdf_path) else None,
+                "zip_path": zip_path if os.path.exists(zip_path) else None,
+                "engine": engine_used,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "output_mode": output_mode,
+                "output_format": output_format_label,
+                "total_sheets": trans_result.get("total_sheets", 1),
+                "translated_cells": trans_result.get("translated_cells", 0),
+                "details": f"Dịch song ngữ bảng tính ({src_str} ➔ {tgt_str}) hoàn tất ({trans_result.get('translated_cells', 0)} ô) bằng {engine_used}. Đã xuất trọn bộ tệp Excel (.xlsx), PDF và ZIP."
+            }
         else:
-            raise ValueError(f"Định dạng tệp không được hỗ trợ: {ext}. Vui lòng chọn .docx, .doc hoặc .pdf.")
+            raise ValueError(f"Định dạng tệp không được hỗ trợ: {ext}. Vui lòng chọn .docx, .doc, .pdf, .xlsx hoặc .xls.")
 
         # Dọn dẹp tệp trung gian
         for tf in temp_files_to_cleanup:
@@ -1027,67 +1434,75 @@ class InterlinearTranslator:
                 try: os.remove(tf)
                 except Exception: pass
 
-        # 4. Xuất định dạng đầu ra theo yêu cầu người dùng (docx, pdf, both)
-        out_fmt = (output_format or "docx").lower().strip()
+        # 4. Xuất trọn bộ 3 định dạng sản phẩm (Tri-Format Output Packaging):
+        # Artifact 1: File Word (.docx) đã được dịch tại final_docx_path, kèm tùy chọn .doc
+        final_doc_name = f"{base_name}_SongNgu_{session_id}.doc"
+        final_doc_path = os.path.join(output_dir, final_doc_name)
+        has_doc = False
+        try:
+            doc_res = convert_docx_to_doc(final_docx_path, final_doc_path)
+            if doc_res and os.path.exists(final_doc_path) and os.path.getsize(final_doc_path) > 0:
+                has_doc = True
+        except Exception as e:
+            logger.warning("Không thể xuất thêm định dạng .doc: %s", e)
 
-        if out_fmt == "pdf":
-            final_pdf_name = f"{base_name}_SongNgu_{session_id}.pdf"
-            final_pdf_path = os.path.join(output_dir, final_pdf_name)
-            # Chuyển DOCX sang PDF Vector Siêu Cấp VIP Pro
-            AIReconstructedOCREngine.convert_docx_to_reconstructed_pdf(final_docx_path, final_pdf_path)
-            # Xóa file docx tạm nếu người dùng chỉ cần PDF
-            try:
-                if os.path.exists(final_docx_path):
-                    os.remove(final_docx_path)
-            except Exception:
-                pass
-            src_str = LANG_NAME_MAP.get(source_lang, source_lang)
-            tgt_str = LANG_NAME_MAP.get(target_lang, target_lang)
-            return {
-                "success": True,
-                "filename": final_pdf_name,
-                "download_url": f"/api/download/{final_pdf_name}",
-                "engine": engine_used,
-                "source_lang": source_lang,
-                "target_lang": target_lang,
-                "output_format": "PDF Vector Siêu Cấp VIP Pro",
-                "details": f"Dịch song ngữ ({src_str} ➔ {tgt_str}) hoàn tất bằng {engine_used}. Xuất PDF Vector Siêu Cấp VIP Pro chuẩn in ấn thương mại."
-            }
+        # Artifact 2: File PDF (.pdf) chuyển ngược từ final_docx_path bảo toàn #002060, italic, bảng biểu
+        final_pdf_name = f"{base_name}_SongNgu_{session_id}.pdf"
+        final_pdf_path = os.path.join(output_dir, final_pdf_name)
+        convert_docx_to_pdf(final_docx_path, final_pdf_path)
 
-        elif out_fmt == "both":
-            final_pdf_name = f"{base_name}_SongNgu_{session_id}.pdf"
-            final_pdf_path = os.path.join(output_dir, final_pdf_name)
-            AIReconstructedOCREngine.convert_docx_to_reconstructed_pdf(final_docx_path, final_pdf_path)
-
-            zip_name = f"{base_name}_SongNgu_TronBo_{session_id}.zip"
-            zip_path = os.path.join(output_dir, zip_name)
-            with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-                zf.write(final_docx_path, arcname=final_docx_name)
+        # Artifact 3: File ZIP (.zip) đóng gói cả Word (.docx, .doc) và PDF (.pdf)
+        zip_name = f"{base_name}_SongNgu_TronBo_{session_id}.zip"
+        zip_path = os.path.join(output_dir, zip_name)
+        with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.write(final_docx_path, arcname=final_docx_name)
+            if os.path.exists(final_pdf_path):
                 zf.write(final_pdf_path, arcname=final_pdf_name)
+            if has_doc and os.path.exists(final_doc_path):
+                zf.write(final_doc_path, arcname=final_doc_name)
 
-            src_str = LANG_NAME_MAP.get(source_lang, source_lang)
-            tgt_str = LANG_NAME_MAP.get(target_lang, target_lang)
-            return {
-                "success": True,
-                "filename": zip_name,
-                "download_url": f"/api/download/{zip_name}",
-                "engine": engine_used,
-                "source_lang": source_lang,
-                "target_lang": target_lang,
-                "output_format": "Trọn bộ Word (.docx) & PDF Vector (.pdf)",
-                "details": f"Dịch song ngữ ({src_str} ➔ {tgt_str}) hoàn tất bằng {engine_used}. Đã đóng gói trọn bộ cả file Word và PDF Vector vào tệp ZIP."
-            }
+        # 5. Thiết lập phản hồi đa định dạng theo yêu cầu người dùng
+        out_fmt = (output_format or "docx").lower().strip()
+        if out_fmt == "pdf":
+            primary_filename = final_pdf_name
+            primary_output_path = final_pdf_path
+            primary_download_url = f"/api/download/{final_pdf_name}"
+            output_format_label = "PDF Vector Siêu Cấp VIP Pro"
+        elif out_fmt == "both":
+            primary_filename = zip_name
+            primary_output_path = zip_path
+            primary_download_url = f"/api/download/{zip_name}"
+            output_format_label = "Trọn bộ Word (.docx) & PDF Vector (.pdf)"
+        else:  # "docx" or default
+            primary_filename = final_docx_name
+            primary_output_path = final_docx_path
+            primary_download_url = f"/api/download/{final_docx_name}"
+            output_format_label = "Word (.docx)"
 
-        else:  # "docx"
-            src_str = LANG_NAME_MAP.get(source_lang, source_lang)
-            tgt_str = LANG_NAME_MAP.get(target_lang, target_lang)
-            return {
-                "success": True,
-                "filename": final_docx_name,
-                "download_url": f"/api/download/{final_docx_name}",
-                "engine": engine_used,
-                "source_lang": source_lang,
-                "target_lang": target_lang,
-                "output_format": "Word (.docx)",
-                "details": f"Dịch song ngữ ({src_str} ➔ {tgt_str}) hoàn tất ({trans_result.get('total_items', 0)} mục) bằng {engine_used}. Đã chuẩn hóa Times New Roman, chữ xanh #002060 nghiêng và tự động kéo bảng."
-            }
+        src_str = LANG_NAME_MAP.get(source_lang, source_lang)
+        tgt_str = LANG_NAME_MAP.get(target_lang, target_lang)
+
+        response_payload = {
+            "success": True,
+            "filename": primary_filename,
+            "output_path": primary_output_path,
+            "docx_path": final_docx_path,
+            "pdf_path": final_pdf_path,
+            "zip_path": zip_path,
+            "download_url": primary_download_url,
+            "download_docx_url": f"/api/download/{final_docx_name}",
+            "download_pdf_url": f"/api/download/{final_pdf_name}",
+            "download_zip_url": f"/api/download/{zip_name}",
+            "engine": engine_used,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "output_mode": output_mode,
+            "output_format": output_format_label,
+            "total_items": trans_result.get("total_items", 0),
+            "details": f"Dịch song ngữ ({src_str} ➔ {tgt_str}) hoàn tất ({trans_result.get('total_items', 0)} mục) bằng {engine_used}. Đã chuẩn hóa Times New Roman, chữ xanh #002060 nghiêng và bảo toàn bảng biểu."
+        }
+        if has_doc and os.path.exists(final_doc_path):
+            response_payload["doc_path"] = final_doc_path
+            response_payload["download_doc_url"] = f"/api/download/{final_doc_name}"
+
+        return response_payload

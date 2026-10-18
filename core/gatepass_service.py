@@ -278,45 +278,27 @@ def normalize_plate_number(plate: Optional[str]) -> str:
 class GatePassDatabase:
     """Quản trị kết nối SQLite đa luồng an toàn (Thread-Safe SQLite WAL Manager)."""
     _write_lock = threading.Lock()
-    _local = threading.local()
 
     @classmethod
     @contextmanager
     def get_connection(cls, db_path: Optional[Path] = None) -> Generator[sqlite3.Connection, None, None]:
         target = Path(db_path) if db_path else DEFAULT_DB_PATH
-        target_str = str(target)
-        if not hasattr(cls._local, "connections"):
-            cls._local.connections = {}
-
-        conn = cls._local.connections.get(target_str)
-        if conn is not None:
-            try:
-                conn.execute("SELECT 1;")
-            except Exception:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-                conn = None
-
-        if conn is None:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(
-                target_str,
-                timeout=30.0,
-                check_same_thread=False,
-                isolation_level=None
-            )
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode = WAL;")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(
+            str(target),
+            timeout=30.0,
+            check_same_thread=False,
+            isolation_level=None
+        )
+        conn.row_factory = sqlite3.Row
+        try:
             conn.execute("PRAGMA synchronous = NORMAL;")
             conn.execute("PRAGMA busy_timeout = 30000;")
             conn.execute("PRAGMA foreign_keys = ON;")
-            conn.execute("PRAGMA cache_size = -64000;")
-            conn.execute("PRAGMA temp_store = MEMORY;")
-            cls._local.connections[target_str] = conn
+            yield conn
+        finally:
+            conn.close()
 
-        yield conn
 
 
 

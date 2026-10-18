@@ -13,12 +13,15 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=7860 \
     HOST=0.0.0.0
 
-# Install essential system dependencies (fonts for Chinese and Vietnamese, image processing libs)
+# Install essential system dependencies (fonts for Chinese and Vietnamese, image processing libs, headless LibreOffice)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     fonts-dejavu \
     fonts-wqy-microhei \
+    fonts-liberation \
+    libreoffice-writer-nogui \
+    libreoffice-calc-nogui \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 

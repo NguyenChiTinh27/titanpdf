@@ -7480,3 +7480,539 @@ body[data-role="guest"] #gp-btn-add-proof {
   color: #06b6d4;
 }
 
+/* =============================================================================
+   MILESTONE M4: DOC-TRAN PREVIEW & SPLIT-VIEW REVIEW STUDIO STYLES
+   ============================================================================= */
+
+/* 1. Pre-Translation Excel Spreadsheet Preview */
+.excel-preview-wrapper {
+  grid-column: 1 / -1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 6px;
+}
+
+.excel-preview-toolbar {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.excel-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.excel-doc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+
+.excel-filename {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.excel-sheet-tabs-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  align-items: center;
+}
+
+.excel-tab-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.excel-tab-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.excel-tab-btn.active {
+  background: #10b981;
+  color: #ffffff;
+  border-color: #059669;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+
+.excel-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.excel-paper-container {
+  width: 100%;
+  max-width: 1100px;
+  min-height: 600px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  padding: 24px;
+  margin-bottom: 40px;
+  transition: transform 0.2s ease;
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+
+.excel-paper-inner {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Times New Roman", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1e293b;
+}
+
+.excel-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12.5px;
+  background: #ffffff;
+}
+
+.excel-table th,
+.excel-table td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 10px;
+  vertical-align: top;
+}
+
+.excel-table th {
+  background: #f8fafc;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.excel-table tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+.excel-orig-line {
+  color: #1e293b;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.excel-trans-line {
+  color: #002060 !important;
+  font-style: italic !important;
+  font-family: "Times New Roman", Times, serif !important;
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* 2. Post-Translation Split-View Review Studio Container */
+.split-review-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - 190px);
+  min-height: 620px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: 0 10px 35px rgba(15, 23, 42, 0.08);
+  position: relative;
+}
+
+/* 3. Sticky Top HUD Toolbar */
+.split-hud-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #ffffff;
+  border-bottom: 1.5px solid var(--border-subtle);
+  gap: 12px;
+  flex-wrap: wrap;
+  z-index: 20;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.split-hud-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.split-hud-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  white-space: nowrap;
+}
+
+.split-hud-meta {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.split-hud-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Zoom HUD */
+.split-zoom-hud {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 2px 4px;
+  gap: 3px;
+}
+
+.split-zoom-hud .btn-hud {
+  background: transparent;
+  border: none;
+  color: #334155;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.split-zoom-hud .btn-hud:hover {
+  background: #ffffff;
+  color: #0284c7;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.split-zoom-hud .zoom-value {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0f172a;
+  min-width: 42px;
+  text-align: center;
+  user-select: none;
+}
+
+/* HUD Control Buttons */
+.btn-hud {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.btn-hud:hover {
+  background: #f8fafc;
+  color: #0284c7;
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.btn-sync-scroll.active {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  font-weight: 700;
+}
+
+.btn-inline-edit.active {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fcd34d;
+  font-weight: 700;
+  animation: pulseEditRing 1.5s infinite;
+}
+
+@keyframes pulseEditRing {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+/* 4. Tri-Format Action Download Buttons */
+.split-hud-downloads {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-download-tri {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-tri-docx {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.btn-tri-docx:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #1d4ed8;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-tri-pdf {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+.btn-tri-pdf:hover {
+  background: #ea580c;
+  color: #ffffff;
+  border-color: #c2410c;
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-tri-zip {
+  background: #faf5ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+.btn-tri-zip:hover {
+  background: #9333ea;
+  color: #ffffff;
+  border-color: #7e22ce;
+  box-shadow: 0 2px 8px rgba(147, 51, 234, 0.25);
+  transform: translateY(-1px);
+}
+
+/* 5. Dual-Column Side-by-Side Layout */
+.split-panes-wrapper {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.split-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.split-col-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #cbd5e1;
+  flex-shrink: 0;
+}
+
+.split-col-header .col-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.split-col-header .col-sub {
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.split-pane-divider {
+  width: 3px;
+  background: #cbd5e1;
+  flex-shrink: 0;
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.split-pane-divider:hover {
+  background: #0284c7;
+}
+
+.split-pane-viewport {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 24px;
+  background: #f1f5f9;
+  scroll-behavior: smooth;
+}
+
+.split-left-pane {
+  border-right: 1px solid transparent;
+}
+
+.split-right-pane {
+  border-left: 1px solid transparent;
+}
+
+.split-doc-paper {
+  background: #ffffff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 40px 48px;
+  margin: 0 auto;
+  min-height: 100%;
+  max-width: 820px;
+  transition: transform 0.15s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Times New Roman", Times, serif;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #1e293b;
+  box-sizing: border-box;
+}
+
+.split-pdf-canvas {
+  display: block;
+  margin: 0 auto 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  max-width: 100%;
+  height: auto;
+}
+
+/* 6. Quick Inline Edit Highlight Styles */
+.inline-editable-active {
+  outline: 1.5px dashed #002060 !important;
+  background: rgba(0, 32, 96, 0.06) !important;
+  border-radius: 4px !important;
+  cursor: text !important;
+  padding: 1px 4px !important;
+  transition: background 0.15s ease !important;
+  display: inline-block !important;
+}
+
+.inline-editable-active:hover {
+  background: rgba(0, 32, 96, 0.12) !important;
+}
+
+.inline-editable-active:focus {
+  outline: 2px solid #002060 !important;
+  background: rgba(0, 32, 96, 0.16) !important;
+  box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.18) !important;
+}
+
+/* 7. Responsive Mobile Collapse (< 768px) */
+@media (max-width: 768px) {
+  .split-review-container {
+    height: auto;
+    min-height: 700px;
+  }
+
+  .split-hud-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .split-hud-left,
+  .split-hud-center,
+  .split-hud-downloads {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .split-panes-wrapper {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .split-pane-divider {
+    height: 4px;
+    width: 100%;
+    cursor: row-resize;
+  }
+
+  .split-pane-viewport {
+    height: 380px;
+    padding: 14px;
+  }
+
+  .split-doc-paper {
+    padding: 20px 16px;
+  }
+}
+
+

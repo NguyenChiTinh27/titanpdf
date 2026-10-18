@@ -689,6 +689,18 @@ class AIReconstructedOCREngine:
             except Exception as e:
                 logger.warning(f"Word COM PDF export gặp lỗi ({e}), chuyển sang fallback...")
 
+        try:
+            from core.interlinear_translator import _convert_docx_to_pdf_libreoffice
+            if _convert_docx_to_pdf_libreoffice(abs_docx, abs_pdf):
+                return {
+                    "success": True,
+                    "engine": "LibreOffice Headless PDF Vector Engine",
+                    "output_file": abs_pdf,
+                    "size": os.path.getsize(abs_pdf)
+                }
+        except Exception as lo_err:
+            logger.warning(f"LibreOffice PDF export gặp lỗi ({lo_err}), chuyển sang fallback...")
+
         return cls._create_fallback_text_pdf(docx_path, abs_pdf)
 
     @classmethod

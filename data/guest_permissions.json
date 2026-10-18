@@ -1,12 +1,12 @@
 {
   "version": "1.0.0",
-  "updated_at": "2026-10-18T13:31:43.571563",
+  "updated_at": "2026-10-18T19:31:00.046171",
   "profile": {
     "guest_name": "Khách (Chỉ Xem & Tra Cứu)",
     "is_blocked": false,
     "max_visits": 0,
-    "current_visits": 2,
-    "last_visit_at": "2026-10-18T13:31:43.571320",
+    "current_visits": 51,
+    "last_visit_at": "2026-10-18T19:30:58.302605",
     "max_devices": 0,
     "registered_devices": [
       {
@@ -22,13 +22,188 @@
         "ip": "127.0.0.1",
         "registered_at": "2026-10-18T13:31:43.571320",
         "last_seen_at": "2026-10-18T13:31:43.571320"
+      },
+      {
+        "device_id": "dev_b3d914e3-02a1-4eaf-a3a0-106f1237e418",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:37:37.745409",
+        "last_seen_at": "2026-10-18T13:37:37.745409"
+      },
+      {
+        "device_id": "dev_5aaefefa-55dd-4e43-b4a1-2929a3e1e98c",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:37:51.903628",
+        "last_seen_at": "2026-10-18T13:38:06.754948"
+      },
+      {
+        "device_id": "dev_7a6765c2-3c77-4458-90cf-c60f601cd60a",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:38:17.279898",
+        "last_seen_at": "2026-10-18T13:38:32.030961"
+      },
+      {
+        "device_id": "dev_6d4349d2-070b-45e1-86f9-f76f2834211c",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+        "ip": "2402:800:6311:774d:e1fe:22c9:193c:e084",
+        "registered_at": "2026-10-18T13:39:06.070870",
+        "last_seen_at": "2026-10-18T13:39:06.070870"
+      },
+      {
+        "device_id": "dev_19c101c5-0c68-4d8f-afcb-ac1c72db1286",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:41:50.201275",
+        "last_seen_at": "2026-10-18T13:42:06.315954"
+      },
+      {
+        "device_id": "dev_6237215e-d7f6-4a93-807c-e141ca4574eb",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:42:20.119705",
+        "last_seen_at": "2026-10-18T13:42:20.119705"
+      },
+      {
+        "device_id": "dev_0c077ee8-c96e-4d80-8b14-6294fd58227c",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:42:35.334994",
+        "last_seen_at": "2026-10-18T13:42:35.334994"
+      },
+      {
+        "device_id": "dev_fdd9ed29-4c38-4994-926d-cb9325eeef80",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:43:46.995458",
+        "last_seen_at": "2026-10-18T13:43:46.995458"
+      },
+      {
+        "device_id": "dev_1b60563f-4ac6-4a14-b0fd-3aa9d34208f1",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:44:12.623908",
+        "last_seen_at": "2026-10-18T13:44:12.623908"
+      },
+      {
+        "device_id": "dev_230300a9-d6ff-4e3e-befb-1edc20238c05",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:46:22.154038",
+        "last_seen_at": "2026-10-18T13:46:22.154038"
+      },
+      {
+        "device_id": "dev_5b1b92aa-d131-4f9e-adb3-742de656daa4",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:46:25.962926",
+        "last_seen_at": "2026-10-18T13:46:25.962926"
+      },
+      {
+        "device_id": "dev_2881ca10-b41f-4380-b02d-b20a4d28e3dc",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:47:32.004231",
+        "last_seen_at": "2026-10-18T13:47:32.004231"
+      },
+      {
+        "device_id": "dev_915d997f-2b10-45bc-837b-4e6833eda94d",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:47:50.184606",
+        "last_seen_at": "2026-10-18T13:48:09.562012"
+      },
+      {
+        "device_id": "dev_f786f0c7-8332-4772-b6e7-fc2ef6f8a7d2",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:48:37.144202",
+        "last_seen_at": "2026-10-18T13:48:52.046667"
+      },
+      {
+        "device_id": "dev_910fa26e-749f-4aab-8542-d789a08e3eef",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:49:08.022391",
+        "last_seen_at": "2026-10-18T13:49:08.022391"
+      },
+      {
+        "device_id": "dev_595fb447-5df1-45a0-8afc-d7949242a9ff",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:49:11.743952",
+        "last_seen_at": "2026-10-18T13:49:11.743952"
+      },
+      {
+        "device_id": "dev_f32bf439-d6d1-41c4-bb43-5c0af4febabb",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:49:12.528423",
+        "last_seen_at": "2026-10-18T13:49:12.528423"
+      },
+      {
+        "device_id": "dev_59d0aa23-28c7-4865-97b2-f65325f1490d",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:50:16.797818",
+        "last_seen_at": "2026-10-18T13:50:16.797818"
+      },
+      {
+        "device_id": "dev_4ca38879-7bd8-4acd-8277-49592389f905",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:50:19.891034",
+        "last_seen_at": "2026-10-18T13:50:19.891034"
+      },
+      {
+        "device_id": "dev_66ac7795-f428-4569-9a28-248481a70289",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:50:36.642627",
+        "last_seen_at": "2026-10-18T13:50:51.421526"
+      },
+      {
+        "device_id": "dev_2aaab61c-01b2-4e5a-a33e-052bb86694a9",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T14:01:02.004947",
+        "last_seen_at": "2026-10-18T14:01:02.004947"
+      },
+      {
+        "device_id": "dev_a61e44ee-834f-4d8b-ae62-a54f924c1625",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T14:01:05.178570",
+        "last_seen_at": "2026-10-18T14:01:05.178570"
+      },
+      {
+        "device_id": "dev_5bab43d8-1892-41d7-8797-0dd5f7b684bd",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T14:01:24.581234",
+        "last_seen_at": "2026-10-18T14:01:24.581234"
+      },
+      {
+        "device_id": "dev_dbc5e3e5-ebbc-48b2-a093-e3a80aea1b56",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T14:01:44.014464",
+        "last_seen_at": "2026-10-18T14:01:58.732941"
+      },
+      {
+        "device_id": "dev_5e1711ad-e9ec-4a03-b49f-f9188146c20e",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T19:30:43.858226",
+        "last_seen_at": "2026-10-18T19:30:58.302605"
       }
     ]
   },
   "tool_groups": {
     "basic_pdf": true,
-    "pro_tools": false,
-    "studios": false,
+    "pro_tools": true,
+    "studios": true,
     "legal": true,
     "msds": true,
     "monthly_inventory": true,
@@ -61,13 +236,13 @@
     "redact": true,
     "compare": true,
     "remove-watermark": true,
-    "interlinear-translate": false,
-    "vip-editor": false,
-    "ai-translator": false,
-    "ai-summarizer": false,
-    "ocr": false,
-    "ai-studio": false,
-    "hse-studio": false,
+    "interlinear-translate": true,
+    "vip-editor": true,
+    "ai-translator": true,
+    "ai-summarizer": true,
+    "ocr": true,
+    "ai-studio": true,
+    "hse-studio": true,
     "legal-lookup": true,
     "msds-studio": true,
     "monthly-inventory": true,

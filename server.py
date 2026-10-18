@@ -5,6 +5,8 @@ import zipfile
 import json
 import re
 import html
+import tempfile
+import logging
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -12,6 +14,8 @@ import traceback
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger("titanpdf")
 import socket
 import secrets
 import subprocess
@@ -57,7 +61,8 @@ import uvicorn
 from core.engine import PDFEngine
 from core.license_manager import LUVLicenseManager
 from core.deepseek_ocr import DeepSeekOCR
-from core.interlinear_translator import InterlinearTranslator
+from core.interlinear_translator import InterlinearTranslator, convert_doc_to_docx
+from core.excel_interlinear_translator import ExcelInterlinearTranslator
 from core.vip_editor_engine import VIPEditorEngine
 from core.ai_text_engine import AITextEngine
 
@@ -1744,8 +1749,18 @@ def process_interlinear_translate(
             output_format=output_format,
             api_key=api_key
         )
+        if isinstance(res, dict):
+            if "download_url" not in res and "output_path" in res:
+                res["download_url"] = f"/api/download/{os.path.basename(res['output_path'])}"
+            if "download_docx_url" not in res and "docx_path" in res:
+                res["download_docx_url"] = f"/api/download/{os.path.basename(res['docx_path'])}"
+            if "download_pdf_url" not in res and "pdf_path" in res:
+                res["download_pdf_url"] = f"/api/download/{os.path.basename(res['pdf_path'])}"
+            if "download_zip_url" not in res and "zip_path" in res:
+                res["download_zip_url"] = f"/api/download/{os.path.basename(res['zip_path'])}"
         return res
     except Exception as e:
+        logger.error("Interlinear translation error for %s: %s", file.filename, e)
         raise HTTPException(status_code=500, detail=f"Lỗi dịch song ngữ: {str(e)}")
 
 
@@ -3126,7 +3141,7 @@ def api_msds_gdrive_open_folder(_: str = Depends(require_owner)):
 
 
 # ============================================================
-# WORD DOCUMENT (.DOCX) PREVIEW ENDPOINTS
+# WORD DOCUMENT (.DOCX / .DOC) PREVIEW ENDPOINTS
 # ============================================================
 def convert_docx_bytes_to_html(content: bytes) -> str:
     """Chuyển đổi tệp docx sang HTML giàu hình ảnh và bảng biểu bằng mammoth."""
@@ -3148,48 +3163,45 @@ def convert_docx_bytes_to_html(content: bytes) -> str:
     return result.value
 
 
+def convert_word_bytes_to_html(content: bytes, filename: str = "document.docx") -> str:
+    """
+    Chuyển đổi tệp Word (.docx hoặc .doc nhị phân OLE2) sang HTML.
+    Nếu là tệp .doc nhị phân, tự động chuyển đổi sang .docx tạm trước khi kết xuất HTML.
+    """
+    is_binary_doc = (
+        content.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+        or (filename.lower().endswith(".doc") and not content.startswith(b"PK\x03\x04"))
+    )
+    if is_binary_doc:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_doc = os.path.join(temp_dir, "input.doc")
+            temp_docx = os.path.join(temp_dir, "converted.docx")
+            with open(temp_doc, "wb") as f:
+                f.write(content)
+            convert_doc_to_docx(temp_doc, temp_docx)
+            if not os.path.exists(temp_docx) or os.path.getsize(temp_docx) == 0:
+                raise RuntimeError("Không thể chuyển đổi tệp .doc nhị phân sang định dạng .docx.")
+            with open(temp_docx, "rb") as f:
+                content = f.read()
+    return convert_docx_bytes_to_html(content)
+
+
 @app.post("/api/preview/word")
 async def api_preview_word_upload(file: UploadFile = File(...)):
     """Trích xuất và kết xuất tài liệu Word (.docx/.doc) sang HTML để xem trước tức thì."""
+    filename = file.filename or "document.docx"
     try:
         content = await file.read()
         if not content:
-            raise HTTPException(status_code=400, detail="Tệp tin tải lên rỗng.")
-        html = convert_docx_bytes_to_html(content)
-        return {
-            "success": True,
-            "filename": file.filename,
-            "size": len(content),
-            "html": html
-        }
-    except Exception as e:
-        logger.error("Word preview error for %s: %s", file.filename, e)
-        raise HTTPException(status_code=500, detail=f"Không thể kết xuất xem trước tài liệu Word: {str(e)}")
-
-
-@app.get("/api/preview/word/{filename}")
-@app.get("/api/preview/word-output/{filename}")
-def api_preview_word_output(filename: str):
-    """Kết xuất xem trước tệp Word (.docx) đã được xuất trong hệ thống (output/ hoặc exports/)."""
-    candidates = [
-        Path(OUTPUT_DIR) / filename,
-        Path(DATA_DIR) / "exports" / filename,
-        Path(DATA_DIR) / "temp" / filename,
-        Path(DATA_DIR) / filename,
-        Path(BASE_DIR) / filename,
-    ]
-    target_path = None
-    for c in candidates:
-        if c.exists() and c.is_file():
-            target_path = c
-            break
-    
-    if not target_path:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy tệp Word '{filename}'.")
-
-    try:
-        content = target_path.read_bytes()
-        html = convert_docx_bytes_to_html(content)
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "detail": "Tệp tin tải lên rỗng."
+                }
+            )
+        html = convert_word_bytes_to_html(content, filename=filename)
         return {
             "success": True,
             "filename": filename,
@@ -3197,8 +3209,169 @@ def api_preview_word_output(filename: str):
             "html": html
         }
     except Exception as e:
-        logger.error("Word output preview error for %s: %s", filename, e)
-        raise HTTPException(status_code=500, detail=f"Lỗi phân giải tệp Word '{filename}': {str(e)}")
+        logger.error("Word preview error for %s: %s", filename, e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "filename": filename,
+                "detail": f"Không thể kết xuất xem trước tài liệu Word: {str(e)}"
+            }
+        )
+
+
+@app.get("/api/preview/word/{filename}")
+@app.get("/api/preview/word-output/{filename}")
+def api_preview_word_output(filename: str):
+    """Kết xuất xem trước tệp Word (.docx/.doc) đã được xuất trong hệ thống (output/ hoặc exports/)."""
+    try:
+        candidates = [
+            Path(OUTPUT_DIR) / filename,
+            Path(DATA_DIR) / "exports" / filename,
+            Path(DATA_DIR) / "temp" / filename,
+            Path(DATA_DIR) / filename,
+            Path(BASE_DIR) / filename,
+        ]
+        target_path = None
+        for c in candidates:
+            if c.exists() and c.is_file():
+                target_path = c
+                break
+        
+        if not target_path:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "detail": f"Không tìm thấy tệp Word '{filename}'."
+                }
+            )
+
+        content = target_path.read_bytes()
+        html = convert_word_bytes_to_html(content, filename=filename)
+        return {
+            "success": True,
+            "filename": filename,
+            "size": len(content),
+            "html": html
+        }
+    except Exception as e:
+        logger.error("Word output preview error for %s: %s", filename, e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "filename": filename,
+                "detail": f"Lỗi phân giải tệp Word '{filename}': {str(e)}"
+            }
+        )
+
+
+# ============================================================
+# EXCEL SPREADSHEET (.XLSX / .XLS) PREVIEW ENDPOINTS
+# ============================================================
+@app.post("/api/preview/excel")
+async def api_preview_excel_upload(file: UploadFile = File(...)):
+    """Trích xuất và kết xuất bảng tính Excel (.xlsx/.xls) sang HTML dạng Sheet Tabs + Table để xem trước tức thì."""
+    filename = file.filename or "document.xlsx"
+    try:
+        content = await file.read()
+        if not content:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "detail": "Tệp tin tải lên rỗng."
+                }
+            )
+        
+        is_binary_xls = (
+            content.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+            or (filename.lower().endswith(".xls") and not content.startswith(b"PK\x03\x04"))
+        )
+        if is_binary_xls:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_xls = os.path.join(temp_dir, "input.xls")
+                temp_xlsx = os.path.join(temp_dir, "converted.xlsx")
+                with open(temp_xls, "wb") as f:
+                    f.write(content)
+                ExcelInterlinearTranslator.convert_xls_to_xlsx(temp_xls, temp_xlsx)
+                if not os.path.exists(temp_xlsx) or os.path.getsize(temp_xlsx) == 0:
+                    raise RuntimeError("Không thể chuyển đổi tệp .xls nhị phân sang định dạng .xlsx.")
+                data = ExcelInterlinearTranslator.render_excel_to_html(temp_xlsx)
+        else:
+            data = ExcelInterlinearTranslator.render_excel_to_html(content)
+        
+        data["filename"] = filename
+        data["size"] = len(content)
+        if "sheets_data" in data and data["sheets_data"]:
+            data["html"] = data["sheets_data"][0]["html"]
+        return data
+    except Exception as e:
+        logger.error("Excel preview error for %s: %s", filename, e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "filename": filename,
+                "detail": f"Không thể kết xuất xem trước bảng tính Excel: {str(e)}"
+            }
+        )
+
+
+@app.get("/api/preview/excel/{filename}")
+@app.get("/api/preview/excel-output/{filename}")
+def api_preview_excel_output(filename: str):
+    """Kết xuất xem trước tệp Excel (.xlsx/.xls) đã được xuất trong hệ thống (output/ hoặc exports/)."""
+    try:
+        candidates = [
+            Path(OUTPUT_DIR) / filename,
+            Path(DATA_DIR) / "exports" / filename,
+            Path(DATA_DIR) / "temp" / filename,
+            Path(DATA_DIR) / filename,
+            Path(BASE_DIR) / filename,
+        ]
+        target_path = None
+        for c in candidates:
+            if c.exists() and c.is_file():
+                target_path = c
+                break
+        
+        if not target_path:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "success": False,
+                    "filename": filename,
+                    "detail": f"Không tìm thấy tệp Excel '{filename}'."
+                }
+            )
+
+        if filename.lower().endswith(".xls"):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_xlsx = os.path.join(temp_dir, "converted.xlsx")
+                ExcelInterlinearTranslator.convert_xls_to_xlsx(str(target_path), temp_xlsx)
+                data = ExcelInterlinearTranslator.render_excel_to_html(temp_xlsx)
+        else:
+            data = ExcelInterlinearTranslator.render_excel_to_html(str(target_path))
+
+        data["filename"] = filename
+        data["size"] = target_path.stat().st_size
+        if "sheets_data" in data and data["sheets_data"]:
+            data["html"] = data["sheets_data"][0]["html"]
+        return data
+    except Exception as e:
+        logger.error("Excel output preview error for %s: %s", filename, e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "filename": filename,
+                "detail": f"Lỗi phân giải tệp Excel '{filename}': {str(e)}"
+            }
+        )
 
 
 
