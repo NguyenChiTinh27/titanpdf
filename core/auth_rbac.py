@@ -46,7 +46,8 @@ DEFAULT_GUEST_PERMISSIONS: Dict[str, Any] = {
         "studios": False,
         "legal": True,
         "msds": True,
-        "monthly_inventory": True
+        "monthly_inventory": True,
+        "gatepass": True
     },
     "tools": {
         "merge": True,
@@ -84,11 +85,13 @@ DEFAULT_GUEST_PERMISSIONS: Dict[str, Any] = {
         "hse-studio": False,
         "legal-lookup": True,
         "msds-studio": True,
-        "monthly-inventory": True
+        "monthly-inventory": True,
+        "gatepass-studio": True
     },
     "read_only": {
         "msds": True,
-        "monthly_inventory": True
+        "monthly_inventory": True,
+        "gatepass": True
     }
 }
 
@@ -103,7 +106,8 @@ GROUP_TOOL_MAPPING: Dict[str, List[str]] = {
     "studios": ["ai-studio", "hse-studio"],
     "legal": ["legal-lookup"],
     "msds": ["msds-studio"],
-    "monthly_inventory": ["monthly-inventory"]
+    "monthly_inventory": ["monthly-inventory"],
+    "gatepass": ["gatepass-studio"]
 }
 
 

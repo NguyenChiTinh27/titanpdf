@@ -47,6 +47,7 @@ function switchMainTab(tab, subTab = null) {
     if (tab === 'ai-studio') tab = 'ai';
     if (tab === 'vip-editor') tab = 'editor';
     if (tab === 'inventory' || tab === 'nxt') tab = 'monthly-inventory';
+    if (tab === 'gatepass' || tab === 'gatepass-studio') tab = 'gatepass';
 
     // RBAC: Check guest permissions before switching tabs
     if (document.body.getAttribute('data-role') === 'guest' && window.GUEST_PERMISSIONS_CACHE) {
@@ -75,6 +76,10 @@ function switchMainTab(tab, subTab = null) {
                 alert('Công cụ [Báo Cáo Tháng (NXT)] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
+            if (tab === 'gatepass' && !isToolAllowedForGuest('gatepass-studio')) {
+                alert('Công cụ [Phiếu Xuất & Vật Tư] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                return;
+            }
         } else {
             const groups = window.GUEST_PERMISSIONS_CACHE.tool_groups || {};
             if (tab === 'editor' && groups.pro_tools === false) {
@@ -101,6 +106,10 @@ function switchMainTab(tab, subTab = null) {
                 alert('Công cụ [Báo Cáo Tháng (NXT)] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
                 return;
             }
+            if (tab === 'gatepass' && groups.gatepass === false) {
+                alert('Công cụ [Phiếu Xuất & Vật Tư] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.');
+                return;
+            }
         }
     }
 
@@ -112,6 +121,7 @@ function switchMainTab(tab, subTab = null) {
     const hseView = document.getElementById("hse-studio-view");
     const legalView = document.getElementById("legal-lookup-view");
     const monthlyView = document.getElementById("monthly-inventory-view");
+    const gatepassView = document.getElementById("gatepass-studio-view");
     const navTools = document.getElementById("nav-tab-tools");
     const navEditor = document.getElementById("nav-tab-editor");
     const navAi = document.getElementById("nav-tab-ai");
@@ -119,6 +129,7 @@ function switchMainTab(tab, subTab = null) {
     const navHse = document.getElementById("nav-tab-hse");
     const navLegal = document.getElementById("nav-tab-legal");
     const navMonthly = document.getElementById("nav-tab-inventory") || document.getElementById("nav-tab-monthly-inventory");
+    const navGatepass = document.getElementById("nav-tab-gatepass");
     const footer = document.querySelector(".footer");
 
     // Reset active nav states
@@ -129,6 +140,7 @@ function switchMainTab(tab, subTab = null) {
     if (navHse) navHse.classList.remove("active");
     if (navLegal) navLegal.classList.remove("active");
     if (navMonthly) navMonthly.classList.remove("active");
+    if (navGatepass) navGatepass.classList.remove("active");
 
     if (tab === 'editor') {
         if (homeView) homeView.classList.add("hidden");
@@ -138,6 +150,7 @@ function switchMainTab(tab, subTab = null) {
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
         if (editorView) editorView.classList.remove("hidden");
         if (footer) footer.classList.add("hidden");
         document.body.classList.add("vip-editor-active");
@@ -157,6 +170,7 @@ function switchMainTab(tab, subTab = null) {
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
         if (msdsView) msdsView.classList.remove("hidden");
         if (footer) footer.classList.add("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -175,6 +189,7 @@ function switchMainTab(tab, subTab = null) {
         if (msdsView) msdsView.classList.add("hidden");
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -193,6 +208,7 @@ function switchMainTab(tab, subTab = null) {
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
         if (aiView) aiView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -211,6 +227,7 @@ function switchMainTab(tab, subTab = null) {
         if (msdsView) msdsView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
         if (hseView) hseView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -229,6 +246,7 @@ function switchMainTab(tab, subTab = null) {
         if (msdsView) msdsView.classList.add("hidden");
         if (hseView) hseView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
         if (legalView) legalView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -239,6 +257,31 @@ function switchMainTab(tab, subTab = null) {
         if (typeof window.initLegalCatalog === 'function') {
             window.initLegalCatalog();
         }
+    } else if (tab === 'gatepass') {
+        if (homeView) homeView.classList.add("hidden");
+        if (wsView) wsView.classList.add("hidden");
+        if (editorView) editorView.classList.add("hidden");
+        if (aiView) aiView.classList.add("hidden");
+        if (msdsView) msdsView.classList.add("hidden");
+        if (hseView) hseView.classList.add("hidden");
+        if (legalView) legalView.classList.add("hidden");
+        if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.remove("hidden");
+        if (footer) footer.classList.remove("hidden");
+        document.body.classList.remove("vip-editor-active");
+        document.body.classList.remove("msds-studio-active");
+
+        if (navGatepass) navGatepass.classList.add("active");
+
+        if (window.location.hash !== '#gatepass-studio' && window.location.hash !== '#gatepass') {
+            history.replaceState(null, '', '#gatepass-studio');
+        }
+
+        if (window.GatePassStudio && typeof window.GatePassStudio.init === 'function') {
+            window.GatePassStudio.init();
+        } else if (typeof window.initGatePassStudio === 'function') {
+            window.initGatePassStudio();
+        }
     } else {
         if (editorView) editorView.classList.add("hidden");
         if (aiView) aiView.classList.add("hidden");
@@ -246,6 +289,7 @@ function switchMainTab(tab, subTab = null) {
         if (hseView) hseView.classList.add("hidden");
         if (legalView) legalView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.add("hidden");
+        if (gatepassView) gatepassView.classList.add("hidden");
         if (homeView) homeView.classList.remove("hidden");
         if (wsView) wsView.classList.add("hidden");
         if (footer) footer.classList.remove("hidden");
@@ -253,12 +297,37 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("msds-studio-active");
 
         if (navTools) navTools.classList.add("active");
+        if (window.location.hash === '#gatepass-studio' || window.location.hash === '#gatepass') {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
     }
 
     if (typeof window.applyNavTabsGuestStyling === "function") {
         window.applyNavTabsGuestStyling();
     }
 }
+
+// URL Hash Router Bridge
+window.addEventListener("DOMContentLoaded", () => {
+    const handleHash = () => {
+        const hash = window.location.hash.toLowerCase();
+        if (hash === "#gatepass-studio" || hash === "#gatepass") {
+            switchMainTab("gatepass");
+        } else if (hash === "#monthly-inventory" || hash === "#inventory" || hash === "#nxt") {
+            switchMainTab("monthly-inventory");
+        } else if (hash === "#vip-editor" || hash === "#editor") {
+            switchMainTab("editor");
+        } else if (hash === "#msds" || hash === "#msds-studio") {
+            switchMainTab("msds");
+        } else if (hash === "#hse" || hash === "#hse-studio") {
+            switchMainTab("hse");
+        } else if (hash === "#legal" || hash === "#legal-lookup") {
+            switchMainTab("legal");
+        }
+    };
+    window.addEventListener("hashchange", handleHash);
+    handleHash();
+});
 
 // -------------------------------------------------------------
 // 2. FILE LOADING & INITIALIZATION (Supports PDF & Image Files)

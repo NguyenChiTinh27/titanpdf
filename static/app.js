@@ -514,6 +514,42 @@ const TOOLS = [
         endpoint: "/api/legal/catalog",
         customAction: () => switchMainTab("legal"),
         keywords: ["phap ly", "legal", "nghi dinh 24", "nghi dinh 28", "qcvn", "cas", "luat hoa chat", "tien chat", "hoa chat cam", "hoa chat han che", "nguyen lieu", "thanh pham"]
+    },
+
+    // 14. BÁO CÁO HÓA CHẤT THÁNG (NXT) - Tool 35
+    {
+        id: "monthly-inventory",
+        title: "Báo Cáo Tháng (NXT)",
+        description: "Quản lý Nhập - Xuất - Tồn hóa chất, tự động cảnh báo an toàn và xuất báo cáo Excel/PDF",
+        desc: "Quản lý Nhập - Xuất - Tồn hóa chất, tự động cảnh báo an toàn và xuất báo cáo Excel/PDF",
+        category: "ai",
+        badge: "NXT KHO",
+        icon: "bar-chart-2",
+        iconImg: "/icons/excel-to-pdf_icon.png",
+        accept: ".xlsx,.json",
+        multiple: false,
+        actionText: "Mở Báo Cáo Tháng (NXT)",
+        endpoint: "/api/monthly-inventory/dashboard",
+        customAction: () => switchMainTab("monthly-inventory"),
+        keywords: ["nxt", "nhap xuat ton", "ton kho", "bao cao thang", "inventory", "hoa chat", "can doi", "kho"]
+    },
+
+    // 15. QUẢN LÝ PHIẾU XUẤT HÀNG & VẬT TƯ - Tool 36
+    {
+        id: "gatepass-studio",
+        title: "Phiếu Xuất & Vật Tư",
+        description: "Studio quản lý phiếu xuất hàng & vật tư: Quét Vision AI, đối soát ảnh bằng chứng, đồng bộ Google Sheet & Drive",
+        desc: "Studio quản lý phiếu xuất hàng & vật tư: Quét Vision AI, đối soát ảnh bằng chứng, đồng bộ Google Sheet & Drive",
+        category: "ai",
+        badge: "XUẤT KHO",
+        icon: "file-text",
+        iconImg: "/icons/pdf-to-word_icon.png",
+        accept: ".jpg,.jpeg,.png,.pdf",
+        multiple: true,
+        actionText: "Mở Studio Phiếu Xuất Kho",
+        endpoint: "/api/gatepass/dashboard",
+        customAction: () => switchMainTab("gatepass"),
+        keywords: ["gatepass", "phieu xuat", "xuat kho", "vat tu", "bien so xe", "deepseek vision", "google sheet", "google drive", "dispatch", "gate pass"]
     }
 ];
 
@@ -722,6 +758,8 @@ function isToolAllowedForGuest(toolId) {
         "hse": "hse-studio",
         "nxt": "monthly-inventory",
         "inventory": "monthly-inventory",
+        "gatepass": "gatepass-studio",
+        "gatepass-studio": "gatepass-studio",
         "ai": "ai-studio"
     };
     const targetId = CANONICAL_TOOL_MAP[toolId] || toolId;
@@ -766,6 +804,9 @@ function isToolAllowedForGuest(toolId) {
     if (targetId === "monthly-inventory" || targetId === "nxt" || targetId === "inventory") {
         return groups.monthly_inventory !== false;
     }
+    if (targetId === "gatepass-studio" || targetId === "gatepass") {
+        return groups.gatepass !== false;
+    }
     return groups.basic_pdf !== false;
 }
 window.isToolAllowedForGuest = isToolAllowedForGuest;
@@ -779,7 +820,8 @@ function applyNavTabsGuestStyling() {
         { ids: ["nav-tab-msds"], toolId: "msds-studio", name: "Sổ Hóa Chất MSDS & CIL" },
         { ids: ["nav-tab-hse"], toolId: "hse-studio", name: "HSE Report" },
         { ids: ["nav-tab-legal"], toolId: "legal-lookup", name: "Tra Cứu Pháp Lý" },
-        { ids: ["nav-tab-inventory", "nav-tab-monthly-inventory"], toolId: "monthly-inventory", name: "Báo Cáo Tháng (NXT)" }
+        { ids: ["nav-tab-inventory", "nav-tab-monthly-inventory"], toolId: "monthly-inventory", name: "Báo Cáo Tháng (NXT)" },
+        { ids: ["nav-tab-gatepass"], toolId: "gatepass-studio", name: "Phiếu Xuất & Vật Tư" }
     ];
 
     tabConfigs.forEach(tabCfg => {
@@ -1105,6 +1147,13 @@ function openTool(toolId) {
     if (toolId === "legal-lookup" || toolId === "legal") {
         if (typeof switchMainTab === "function") {
             switchMainTab("legal");
+        }
+        return;
+    }
+
+    if (toolId === "gatepass-studio" || toolId === "gatepass") {
+        if (typeof switchMainTab === "function") {
+            switchMainTab("gatepass");
         }
         return;
     }

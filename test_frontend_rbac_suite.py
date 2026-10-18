@@ -139,7 +139,7 @@ async def test_frontend_rbac():
         # Count individual tool checkboxes
         tool_count = await page.locator(".guest-tool-chk").count()
         print(f"  Total individual tool checkboxes rendered: {tool_count}")
-        assert tool_count == 35, f"Expected 35 tools, found {tool_count}"
+        assert tool_count == 36, f"Expected 36 tools, found {tool_count}"
 
         # Capture screenshot of Modal Tab 3 to verify no text clipping
         screenshot_path = "C:/Users/ntc27/.gemini/antigravity/brain/9166a9f1-2c38-41c5-967b-79b51c7e5cf6/e2e_granular_tools_modal.png"

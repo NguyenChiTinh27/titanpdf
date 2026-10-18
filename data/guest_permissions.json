@@ -1,22 +1,38 @@
 {
   "version": "1.0.0",
-  "updated_at": "2026-10-17T19:12:03.864388",
+  "updated_at": "2026-10-18T13:31:43.571563",
   "profile": {
     "guest_name": "Khách (Chỉ Xem & Tra Cứu)",
     "is_blocked": false,
     "max_visits": 0,
-    "current_visits": 0,
-    "last_visit_at": null,
+    "current_visits": 2,
+    "last_visit_at": "2026-10-18T13:31:43.571320",
     "max_devices": 0,
-    "registered_devices": []
+    "registered_devices": [
+      {
+        "device_id": "dev_61557eb6-a05a-406f-a452-4f5c82c39588",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:30:51.723791",
+        "last_seen_at": "2026-10-18T13:30:51.723791"
+      },
+      {
+        "device_id": "dev_3cfb3e21-47ea-460d-bb7d-313629870c64",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+        "ip": "127.0.0.1",
+        "registered_at": "2026-10-18T13:31:43.571320",
+        "last_seen_at": "2026-10-18T13:31:43.571320"
+      }
+    ]
   },
   "tool_groups": {
     "basic_pdf": true,
-    "pro_tools": true,
-    "studios": true,
+    "pro_tools": false,
+    "studios": false,
     "legal": true,
     "msds": true,
-    "monthly_inventory": true
+    "monthly_inventory": true,
+    "gatepass": true
   },
   "tools": {
     "merge": true,
@@ -45,19 +61,21 @@
     "redact": true,
     "compare": true,
     "remove-watermark": true,
-    "interlinear-translate": true,
-    "vip-editor": true,
-    "ai-translator": true,
-    "ai-summarizer": true,
-    "ocr": true,
-    "ai-studio": true,
-    "hse-studio": true,
+    "interlinear-translate": false,
+    "vip-editor": false,
+    "ai-translator": false,
+    "ai-summarizer": false,
+    "ocr": false,
+    "ai-studio": false,
+    "hse-studio": false,
     "legal-lookup": true,
     "msds-studio": true,
-    "monthly-inventory": true
+    "monthly-inventory": true,
+    "gatepass-studio": true
   },
   "read_only": {
     "msds": true,
-    "monthly_inventory": true
+    "monthly_inventory": true,
+    "gatepass": true
   }
 }

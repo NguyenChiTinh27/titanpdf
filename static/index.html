@@ -49,6 +49,7 @@
     <link rel="stylesheet" href="hse_style.css">
     <link rel="stylesheet" href="legal_style.css">
     <link rel="stylesheet" href="monthly_inventory.css">
+    <link rel="stylesheet" href="gatepass_studio.css">
     <!-- Local Offline PDF.js -->
     <script src="libs/pdf.min.js"></script>
     <!-- Google Identity Services (Sign In With Google) -->
@@ -742,11 +743,11 @@
                     <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <input type="text" id="sec-tools-search" placeholder="🔍 Tìm kiếm công cụ..." oninput="filterSecTools(this.value)" style="padding:6px 12px; font-size:12px; border:1px solid #cbd5e1; border-radius:6px; width:200px;" />
-                            <span id="sec-tools-counter" style="font-size:12px; font-weight:600; color:#64748b;">Đang bật: 35/35</span>
+                            <span id="sec-tools-counter" style="font-size:12px; font-weight:600; color:#64748b;">Đang bật: 36/36</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px;">
                             <button type="button" onclick="toggleAllSecTools(true)" style="background:#ecfdf5; color:#059669; border:1px solid #a7f3d0; font-size:11.5px; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer;">
-                                🟢 Bật Toàn Bộ (35)
+                                🟢 Bật Toàn Bộ (36)
                             </button>
                             <button type="button" onclick="toggleAllSecTools(false)" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; font-size:11.5px; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer;">
                                 ⚪ Tắt Toàn Bộ
@@ -1097,7 +1098,7 @@
                     <div class="tool-perm-group-card">
                         <div class="tool-perm-group-header">
                             <div class="tool-perm-group-title">
-                                <span>🧪</span> Nhóm 6: Nghiệp Vụ Hóa Chất &amp; EHS Chuyên Sâu (4 Modules)
+                                <span>🧪</span> Nhóm 6: Nghiệp Vụ Hóa Chất, EHS &amp; Phiếu Xuất Kho (5 Modules)
                             </div>
                             <div class="tool-perm-group-actions">
                                 <button type="button" class="tool-perm-btn-link" onclick="toggleSecGroupTools('special', true)">Chọn nhóm</button>
@@ -1136,6 +1137,14 @@
                                 <div class="tool-perm-item-info">
                                     <span class="tool-perm-item-name">Tra Cứu Pháp Lý</span>
                                     <span class="tool-perm-item-id">legal-lookup</span>
+                                </div>
+                            </label>
+                            <label class="tool-perm-item" for="perm-tool-gatepass-studio">
+                                <input type="checkbox" class="guest-tool-chk" id="perm-tool-gatepass-studio" data-tool-id="gatepass-studio" data-group="special" checked />
+                                <img src="/icons/pdf-to-word_icon.png" class="tool-perm-item-icon" alt="" />
+                                <div class="tool-perm-item-info">
+                                    <span class="tool-perm-item-name">Phiếu Xuất &amp; Vật Tư <small style="color:#2563eb;">(Chỉ Xem)</small></span>
+                                    <span class="tool-perm-item-id">gatepass-studio</span>
                                 </div>
                             </label>
                         </div>
@@ -1904,6 +1913,7 @@
             var legalVal = !!toolsMap["legal-lookup"];
             var msdsVal = !!toolsMap["msds-studio"];
             var nxtVal = !!toolsMap["monthly-inventory"];
+            var gatepassVal = !!toolsMap["gatepass-studio"];
 
             if (basicChk) basicChk.checked = basicVal;
             if (proChk) proChk.checked = proVal;
@@ -1920,7 +1930,8 @@
                     studios: studiosVal,
                     legal: legalVal,
                     msds: msdsVal,
-                    monthly_inventory: nxtVal
+                    monthly_inventory: nxtVal,
+                    gatepass: gatepassVal
                 }
             };
 
@@ -1938,7 +1949,7 @@
                     window.GUEST_PERMISSIONS_CACHE = data.permissions;
                     updateSecToolsCounter();
                     if (msg) {
-                        msg.innerText = "✓ Đã lưu cấu hình phân quyền 35 công cụ thành công!";
+                        msg.innerText = "✓ Đã lưu cấu hình phân quyền 36 công cụ thành công!";
                         msg.style.background = "#f0fdf4";
                         msg.style.color = "#16a34a";
                         msg.style.border = "1px solid #bbf7d0";
@@ -2234,6 +2245,17 @@
                     </svg>
                     <span class="tab-label">Báo Cáo Tháng</span>
                     <span class="nav-tab-pill-badge badge-nxt" id="nav-monthly-count-badge">NXT</span>
+                </button>
+                <button id="nav-tab-gatepass" class="main-nav-tab nav-tab-gatepass" onclick="switchMainTab('gatepass')" title="Quản Lý Phiếu Xuất Hàng & Vật Tư (Gate Pass Studio)" role="tab" aria-selected="false">
+                    <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <span class="tab-label">Phiếu Xuất & Vật Tư</span>
+                    <span class="nav-tab-pill-badge badge-gatepass" id="nav-gatepass-count-badge"><span class="pulse-dot"></span>XUẤT</span>
                 </button>
             </div>
 
@@ -4607,6 +4629,385 @@
   </div>
 </div>
 
+    <!-- ========================================================================== -->
+    <!-- 4F. QUẢN LÝ PHIẾU XUẤT HÀNG & VẬT TƯ (GATE PASS & MATERIAL DISPATCH STUDIO) -->
+    <!-- ========================================================================== -->
+    <main id="gatepass-studio-view" class="gatepass-container hidden" role="region" aria-label="Quản lý phiếu xuất hàng và vật tư">
+        <!-- 1. Header Card with Nav Pills -->
+        <header class="gatepass-header-card">
+            <div class="gatepass-title-row">
+                <span class="gatepass-title-icon">🚚</span>
+                <div>
+                    <h2 class="gatepass-header-title">
+                        Phiếu Xuất Hàng &amp; Vật Tư
+                        <span class="gatepass-guest-badge">🔒 CHẾ ĐỘ CHỈ XEM</span>
+                    </h2>
+                    <div class="gatepass-header-sub">
+                        Studio bóc tách Vision AI, kiểm toán bằng chứng đối soát, đồng bộ Google Sheet &amp; Drive
+                    </div>
+                </div>
+            </div>
+            <div class="gatepass-header-actions">
+                <div class="gatepass-nav-pills" role="tablist">
+                    <button type="button" class="gatepass-nav-pill-btn active" data-view="dashboard">📊 Tổng Quan KPI</button>
+                    <button type="button" class="gatepass-nav-pill-btn" data-view="scan">⚡ Studio Quét AI</button>
+                    <button type="button" class="gatepass-nav-pill-btn" data-view="history">📜 Tra Cứu Lịch Sử</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 2. KPI Metrics Grid -->
+        <section id="gp-kpi-section" class="gatepass-kpi-grid">
+            <div class="gatepass-kpi-card kpi-blue">
+                <div class="gatepass-kpi-header">
+                    <span class="gatepass-kpi-title">Tổng Phiếu Xuất</span>
+                    <span class="gatepass-kpi-icon">📋</span>
+                </div>
+                <div class="gatepass-kpi-value" id="gp-kpi-total-slips">0</div>
+                <div class="gatepass-kpi-sub">Phiếu xuất hàng &amp; vật tư</div>
+            </div>
+            <div class="gatepass-kpi-card kpi-emerald">
+                <div class="gatepass-kpi-header">
+                    <span class="gatepass-kpi-title">Tổng Khối Lượng</span>
+                    <span class="gatepass-kpi-icon">⚖️</span>
+                </div>
+                <div class="gatepass-kpi-value" id="gp-kpi-total-kg">0 kg</div>
+                <div class="gatepass-kpi-sub">Cộng dồn toàn bộ phiếu</div>
+            </div>
+            <div class="gatepass-kpi-card kpi-amber">
+                <div class="gatepass-kpi-header">
+                    <span class="gatepass-kpi-title">Số Lượng Kiện / Thùng</span>
+                    <span class="gatepass-kpi-icon">📦</span>
+                </div>
+                <div class="gatepass-kpi-value" id="gp-kpi-total-units">0 kiện / 0 thùng</div>
+                <div class="gatepass-kpi-sub">Tổng kiện &amp; thùng đóng gói</div>
+            </div>
+            <div class="gatepass-kpi-card kpi-purple">
+                <div class="gatepass-kpi-header">
+                    <span class="gatepass-kpi-title">Khách Hàng &amp; Đội Xe</span>
+                    <span class="gatepass-kpi-icon">🚛</span>
+                </div>
+                <div class="gatepass-kpi-value" id="gp-kpi-total-clients">0 KH (0 xe)</div>
+                <div class="gatepass-kpi-sub">Đối tác vận chuyển &amp; giao nhận</div>
+            </div>
+        </section>
+
+        <!-- 3. Visual Charts Row -->
+        <section id="gp-charts-section" class="gatepass-charts-row">
+            <div class="gatepass-chart-card">
+                <div class="gatepass-chart-header">
+                    <div class="gatepass-chart-title">📈 Diễn Biến Xuất Hàng Theo Thời Gian</div>
+                    <div class="gatepass-chart-toggles">
+                        <button type="button" class="gatepass-chart-toggle-btn active" data-metric="kg">Khối Lượng (KG)</button>
+                        <button type="button" class="gatepass-chart-toggle-btn" data-metric="slips">Số Phiếu</button>
+                        <button type="button" class="gatepass-chart-toggle-btn" data-metric="units">Kiện / Thùng</button>
+                    </div>
+                </div>
+                <div class="gatepass-chart-body">
+                    <canvas id="gp-chart-timeline"></canvas>
+                </div>
+            </div>
+            <div class="gatepass-chart-card">
+                <div class="gatepass-chart-header">
+                    <div class="gatepass-chart-title">🏭 Cơ Cấu Khách Hàng / Đơn Vị Nhận</div>
+                </div>
+                <div class="gatepass-chart-body">
+                    <canvas id="gp-chart-customers"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Dual-Column Scan Studio -->
+        <section id="gp-studio-layout" class="gatepass-studio-layout">
+            <!-- Left Column: Queue & Canvas -->
+            <div class="gatepass-left-col">
+                <!-- Queue Card -->
+                <div class="gatepass-queue-card">
+                    <div class="gatepass-queue-header">
+                        <div class="gatepass-queue-title">
+                            <span>🎞️ Hàng Đợi Phiếu Xuất</span>
+                            <span id="gp-queue-counter" style="color:var(--gp-text-muted); font-size:0.75rem;">(0 ảnh)</span>
+                        </div>
+                        <div>
+                            <input type="file" id="gp-queue-file-input" accept="image/*,.pdf" multiple style="display:none;" />
+                            <button type="button" class="gatepass-hud-btn" onclick="document.getElementById('gp-queue-file-input').click()">
+                                ➕ Thêm Ảnh Phiếu
+                            </button>
+                        </div>
+                    </div>
+                    <div class="gatepass-queue-strip" id="gp-queue-strip">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Interactive Canvas Card -->
+                <div class="gatepass-canvas-card">
+                    <div class="gatepass-canvas-hud">
+                        <div class="gatepass-hud-group">
+                            <button type="button" class="gatepass-hud-btn" id="btn-gp-zoom-in" title="Phóng to">➕</button>
+                            <span class="gatepass-hud-zoom-text" id="gp-hud-zoom-val">100%</span>
+                            <button type="button" class="gatepass-hud-btn" id="btn-gp-zoom-out" title="Thu nhỏ">➖</button>
+                            <button type="button" class="gatepass-hud-btn" id="btn-gp-zoom-reset" title="Vừa khung hình">⟲ Reset</button>
+                        </div>
+                        <div class="gatepass-hud-group">
+                            <button type="button" class="gatepass-hud-btn" id="btn-gp-rotate" title="Xoay 90 độ">↻ Xoay</button>
+                            <button type="button" class="gatepass-hud-btn" id="btn-gp-contrast" title="Tăng độ tương phản chữ">◑ Tương phản</button>
+                        </div>
+                    </div>
+                    <div class="gatepass-canvas-container" id="gp-canvas-container">
+                        <canvas id="gp-slip-canvas"></canvas>
+                        <div class="gatepass-canvas-empty-state" id="gp-canvas-empty">
+                            <span class="gatepass-canvas-empty-icon">📄</span>
+                            <div style="font-weight:700;">Kéo thả ảnh phiếu xuất vào đây</div>
+                            <div style="font-size:0.75rem;">hoặc nhấn Ctrl+V để dán trực tiếp từ bộ nhớ tạm (Clipboard)</div>
+                            <button type="button" class="gatepass-btn gatepass-btn-primary" style="margin-top:6px;" onclick="document.getElementById('gp-queue-file-input').click()">
+                                📂 Chọn Tệp Ảnh Phiếu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Metadata Form & Items Table -->
+            <div class="gatepass-right-col">
+                <div class="gatepass-form-card">
+                    <!-- Dispatch Type Selector -->
+                    <div class="gatepass-type-selector">
+                        <div class="gatepass-type-pill">
+                            <input type="radio" id="gp-type-tp" name="gp_loai_xuat" value="Xuất hàng thành phẩm" checked />
+                            <label for="gp-type-tp">📦 Xuất hàng thành phẩm</label>
+                        </div>
+                        <div class="gatepass-type-pill">
+                            <input type="radio" id="gp-type-vt" name="gp_loai_xuat" value="Xuất vật tư ra công" />
+                            <label for="gp-type-vt">⚙️ Xuất vật tư ra công</label>
+                        </div>
+                        <div class="gatepass-type-pill">
+                            <input type="radio" id="gp-type-tra" name="gp_loai_xuat" value="Xuất trả hàng" />
+                            <label for="gp-type-tra">↩️ Xuất trả hàng</label>
+                        </div>
+                    </div>
+
+                    <!-- Header Metadata Fields -->
+                    <div class="gatepass-form-grid">
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-so-phieu">
+                                Mã Số Phiếu Xuất <span class="gatepass-label-required">*</span>
+                            </label>
+                            <input type="text" id="gp-field-so-phieu" class="gatepass-input" placeholder="Ví dụ: PXK-2026-001..." />
+                        </div>
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-ngay-thang">
+                                Ngày Xuất Kho <span class="gatepass-label-required">*</span>
+                            </label>
+                            <input type="date" id="gp-field-ngay-thang" class="gatepass-input" />
+                        </div>
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-so-xe">Biển Số Xe Chuyên Chở</label>
+                            <input type="text" id="gp-field-so-xe" class="gatepass-input" placeholder="Ví dụ: 29C-123.45..." />
+                        </div>
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-don-vi-vc">Đơn Vị Vận Chuyển</label>
+                            <input type="text" id="gp-field-don-vi-vc" class="gatepass-input" placeholder="Đội xe nội bộ / Đối tác vận tải..." />
+                        </div>
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-khach-hang">Đơn Vị Đặt Hàng / Khách Hàng</label>
+                            <input type="text" id="gp-field-khach-hang" class="gatepass-input" placeholder="Tên khách hàng / Nhà máy đặt gia công..." />
+                        </div>
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-so-po">Số Đơn Hàng (PO)</label>
+                            <input type="text" id="gp-field-so-po" class="gatepass-input" placeholder="Ví dụ: PO-88992..." />
+                        </div>
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-bo-phan">Bộ Phận Ký Tên / Xuất</label>
+                            <input type="text" id="gp-field-bo-phan" class="gatepass-input" value="Kho Xuất" />
+                        </div>
+                        <div class="gatepass-field-group">
+                            <label class="gatepass-label" for="gp-field-phe-duyet">Người Phê Duyệt</label>
+                            <input type="text" id="gp-field-phe-duyet" class="gatepass-input" placeholder="Quản lý kho phê duyệt..." />
+                        </div>
+                        <div class="gatepass-field-group full-width">
+                            <label class="gatepass-label" for="gp-field-ghi-chu">Ghi Chú Chung</label>
+                            <input type="text" id="gp-field-ghi-chu" class="gatepass-input" placeholder="Ghi chú về kiểm hóa, điều kiện vận chuyển..." />
+                        </div>
+                    </div>
+
+                    <!-- Bilingual Items Table -->
+                    <div class="gatepass-items-header">
+                        <div class="gatepass-items-title">
+                            <span>📋 Danh Mục Mặt Hàng (Song Ngữ Trung - Việt)</span>
+                        </div>
+                        <button type="button" class="gatepass-btn gatepass-btn-secondary gatepass-btn-add-item" id="btn-gatepass-add-item">
+                            ➕ Thêm Mặt Hàng
+                        </button>
+                    </div>
+
+                    <div class="gatepass-table-responsive">
+                        <table class="gatepass-items-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:36px; text-align:center;">STT</th>
+                                    <th>Tên Hàng Hóa (Trung - Việt)</th>
+                                    <th style="width:110px;">Quy Cách</th>
+                                    <th style="width:75px; text-align:right;">SL Kiện</th>
+                                    <th style="width:75px; text-align:right;">SL Thùng</th>
+                                    <th style="width:90px; text-align:right;">Trọng Lượng (KG)</th>
+                                    <th>Ghi Chú</th>
+                                    <th style="width:36px; text-align:center;">Xóa</th>
+                                </tr>
+                            </thead>
+                            <tbody id="gp-items-tbody">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Live Totals Summary Bar -->
+                    <div class="gatepass-totals-bar">
+                        <div class="gatepass-total-item">
+                            <span class="gatepass-total-label">Tổng kiện:</span>
+                            <span class="gatepass-total-val" id="gp-total-kien">0</span>
+                        </div>
+                        <div class="gatepass-total-item">
+                            <span class="gatepass-total-label">Tổng thùng:</span>
+                            <span class="gatepass-total-val" id="gp-total-thung">0</span>
+                        </div>
+                        <div class="gatepass-total-item">
+                            <span class="gatepass-total-label">Tổng khối lượng (KG):</span>
+                            <span class="gatepass-total-val" id="gp-total-kg">0.0 kg</span>
+                        </div>
+                    </div>
+
+                    <!-- Proof Photos & Audit Engine -->
+                    <div class="gatepass-proof-card">
+                        <div class="gatepass-proof-header">
+                            <div class="gatepass-proof-title">
+                                <span>📸 Ảnh Bằng Chứng &amp; Đối Soát Thực Tế</span>
+                            </div>
+                            <button type="button" class="gatepass-btn gatepass-btn-purple gatepass-mutation-action" id="btn-gatepass-audit-proof">
+                                🔍 AI Đối Soát Bằng Chứng
+                            </button>
+                        </div>
+                        <div class="gatepass-proof-grid">
+                            <input type="file" id="gp-proof-input-vehicle" accept="image/*" style="display:none;" />
+                            <div class="gatepass-proof-slot" id="gp-proof-slot-vehicle" onclick="document.getElementById('gp-proof-input-vehicle').click()">
+                                <span class="gatepass-proof-slot-label">🚛 + Ảnh Xe Chở Hàng</span>
+                            </div>
+
+                            <input type="file" id="gp-proof-input-plate" accept="image/*" style="display:none;" />
+                            <div class="gatepass-proof-slot" id="gp-proof-slot-plate" onclick="document.getElementById('gp-proof-input-plate').click()">
+                                <span class="gatepass-proof-slot-label">🔢 + Ảnh Biển Số Xe</span>
+                            </div>
+
+                            <input type="file" id="gp-proof-input-cargo" accept="image/*" style="display:none;" />
+                            <div class="gatepass-proof-slot" id="gp-proof-slot-cargo" onclick="document.getElementById('gp-proof-input-cargo').click()">
+                                <span class="gatepass-proof-slot-label">📦 + Ảnh Kiện Hàng Thực Tế</span>
+                            </div>
+                        </div>
+
+                        <div id="gp-audit-result-box" class="gatepass-audit-box" style="display:none;"></div>
+                    </div>
+
+                    <!-- Actions Bar -->
+                    <div class="gatepass-actions-bar">
+                        <button type="button" class="gatepass-btn gatepass-btn-secondary" id="btn-gatepass-new-slip">
+                            ✨ Phiếu Mới
+                        </button>
+                        <button type="button" class="gatepass-btn gatepass-btn-secondary" id="btn-gatepass-print">
+                            🖨️ In Phiếu (A4/A5)
+                        </button>
+                        <button type="button" class="gatepass-btn gatepass-btn-primary gatepass-mutation-action" id="btn-gatepass-scan-ocr">
+                            ⚡ Quét Phiếu Vision AI
+                        </button>
+                        <button type="button" class="gatepass-btn gatepass-btn-success gatepass-mutation-action" id="btn-gatepass-save-slip">
+                            💾 Lưu Phiếu &amp; Đồng Bộ Cloud
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. History & Search Section -->
+        <section id="gp-history-card" class="gatepass-history-card">
+            <div class="gatepass-history-header">
+                <div class="gatepass-history-title">
+                    <span>📜 Lịch Sử Phiếu Xuất Hàng &amp; Vật Tư</span>
+                </div>
+                <div class="gatepass-filter-bar">
+                    <input type="search" id="gp-history-search" class="gatepass-search-input" placeholder="Tìm theo số phiếu, biển số xe, khách hàng..." />
+                    <select id="gp-history-filter-period" class="gatepass-filter-select">
+                        <option value="all">Tất cả thời gian</option>
+                        <option value="today">Hôm nay</option>
+                        <option value="7days">7 ngày qua</option>
+                        <option value="month">Tháng này</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="gatepass-table-responsive">
+                <table class="gatepass-items-table">
+                    <thead>
+                        <tr>
+                            <th>Mã Phiếu</th>
+                            <th>Ngày Xuất</th>
+                            <th>Loại Phiếu</th>
+                            <th>Biển Số Xe</th>
+                            <th>Khách Hàng</th>
+                            <th style="text-align:right;">Khối Lượng</th>
+                            <th style="text-align:center;">Đồng Bộ</th>
+                            <th style="text-align:center;">Drive</th>
+                            <th style="text-align:center;">Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gp-history-tbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="gp-history-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+    </main>
+
+    <!-- SPLIT-VIEW DETAIL MODAL -->
+    <div id="gp-detail-modal" class="gatepass-modal-backdrop hidden" aria-hidden="true">
+        <div class="gatepass-modal-card">
+            <div class="gatepass-modal-header">
+                <h3 class="gatepass-modal-title" id="gp-modal-slip-title">Chi Tiết Phiếu Xuất Kho</h3>
+                <button type="button" class="gatepass-modal-close" onclick="window.GatePassStudio.closeDetailModal()">✕</button>
+            </div>
+            <div class="gatepass-modal-body">
+                <div>
+                    <img id="gp-modal-slip-img" src="" alt="Ảnh phiếu xuất gốc" style="max-width:100%; border-radius:8px; border:1px solid var(--gp-border); display:none;" />
+                </div>
+                <div>
+                    <div id="gp-modal-slip-meta" style="margin-bottom:18px;"></div>
+                    <div class="gatepass-table-responsive">
+                        <table class="gatepass-items-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align:center;">STT</th>
+                                    <th>Mặt Hàng (Song Ngữ)</th>
+                                    <th>Quy Cách</th>
+                                    <th style="text-align:right;">Kiện</th>
+                                    <th style="text-align:right;">Thùng</th>
+                                    <th style="text-align:right;">KG</th>
+                                    <th>Ghi Chú</th>
+                                </tr>
+                            </thead>
+                            <tbody id="gp-modal-items-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="gatepass-modal-footer">
+                <button type="button" class="gatepass-btn gatepass-btn-secondary" onclick="window.GatePassStudio.closeDetailModal()">Đóng</button>
+                <button type="button" class="gatepass-btn gatepass-btn-primary" id="gp-btn-modal-print">🖨️ In Phiếu</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 5. MINIMALIST FOOTER -->
     <footer class="footer">
         <div class="footer-container">
@@ -4652,5 +5053,7 @@
     <script src="hse_studio.js"></script>
     <script src="legal_lookup.js"></script>
     <script src="monthly_inventory.js"></script>
+    <script src="libs/chart.umd.min.js"></script>
+    <script src="gatepass_studio.js"></script>
 </body>
 </html>

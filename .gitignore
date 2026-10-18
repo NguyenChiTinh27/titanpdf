@@ -35,6 +35,8 @@ bin/
 
 # Temporary / logs
 *.log
+*.db-shm
+*.db-wal
 tunnel_url.txt
 cloudflare.log
 scratch/

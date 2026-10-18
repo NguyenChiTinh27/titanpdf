@@ -1,36 +1,48 @@
-# E2E Test Infra: TitanPDF Monthly Chemical Inventory & Usage Tracking (NXT)
+# E2E Test Infra: Gate Pass & Material Dispatch Studio
 
 ## Test Philosophy
-- Opaque-box, requirement-driven derived strictly from `ORIGINAL_REQUEST.md` (lines 773-851).
-- Methodology: Category-Partition + Boundary Value Analysis (BVA) + Pairwise Combinations + Real-World Workloads.
-- Zero-Regression Invariant: All 30 existing test cases in `test_msds_full_suite.py` must maintain 100% PASS rate.
-- Absolute Ban on Repealed Decrees: Zero occurrences of NĐ 113/2017, NĐ 82/2022, TT 32/2017, TT 04/2012.
+- Opaque-box, requirement-driven. Derived strictly from `ORIGINAL_REQUEST.md` and user-facing specifications.
+- Methodology: Category-Partition + Boundary Value Analysis (BVA) + Pairwise Combinatorial Testing + Real-World Workload Testing + Adversarial Hardening.
 
-## Feature Inventory & Test Mapping
-| # | Feature | Requirement | Tier 1 (Happy Path) | Tier 2 (Boundary/Edge) | Tier 3 (Cross-Feature) | Tier 4 (Workload/E2E) |
-|---|---------|-------------|:-------------------:|:----------------------:|:----------------------:|:---------------------:|
-| 1 | Tab Navigation & View | R1 | T1_01: Tab switch & load | T2_01: Theme switch & layout | T3_01: Nav + Filter state | T4_01: Full user workflow |
-| 2 | Period Selection & Roll-Forward | R1, R2 | T1_02: Create period & pick | T2_02: Leap year / year wrap | T3_02: Multi-month roll-forward | T4_02: 12-month audit trail |
-| 3 | KPI Real-time Cards | R1 | T1_03: KPI calculation | T2_03: Zero stock / large qty | T3_03: Trans + KPI sync | T4_03: Bulk transaction KPI |
-| 4 | Searchable Data Grid | R1 | T1_04: Search & filter | T2_04: Unicode / special CAS | T3_04: Search + Quick Edit | T4_04: Production grid stress |
-| 5 | Dual-Mode Data Entry | R2 | T1_05: Quick edit & Trans log | T2_05: Decimal precision | T3_05: Dual-mode balance sync | T4_05: Concurrent entry |
-| 6 | Auto-Balance Formula | R2 | T1_06: Ending = In + Imp - Exp | T2_06: Floating point precision | T3_06: Trans delta balance | T4_06: Complex journal audit |
-| 7 | CIL Chemical Linkage | R3 | T1_07: Select from CIL | T2_07: Missing GHS / Non-CAS | T3_07: CIL update sync | T4_07: All 13 CIL chemicals |
-| 8 | 1-Click Batch Add | R3 | T1_08: Batch add 13 chems | T2_08: Duplicate prevention | T3_08: Batch add + Roll-forward | T4_08: Large batch import |
-| 9 | Professional Excel (.xlsx) | R4 | T1_09: Export valid xlsx | T2_09: Long text / special char | T3_09: Formulas SUM / balance | T4_09: Openpyxl byte stream |
-| 10 | Print Preview & A4 Layout | R4 | T1_10: Print HTML render | T2_10: Multi-page pagination | T3_10: Print CSS isolation | T4_10: High-density print |
-| 11 | Safety Thresholds (NĐ 24 IV) | R5 | T1_11: Exceed threshold alert | T2_11: Exact boundary threshold | T3_11: Multiple alerts filter | T4_11: Factory safety audit |
-| 12 | Negative Balance Alert | R5 | T1_12: Negative stock warning | T2_12: Zero stock vs -0.001 | T3_12: Roll-forward neg warning | T4_12: Production sanity test |
+## Feature Inventory
+| # | Feature | Source (requirement) | Tier 1 | Tier 2 | Tier 3 |
+|---|---------|---------------------|:------:|:------:|:------:|
+| 1 | Navbar Tab & Routing (`#gatepass-studio`) | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ |
+| 2 | KPI Dashboard Metrics & Calculations | ORIGINAL_REQUEST §R1.a | 5 | 5 | ✓ |
+| 3 | KPI Chart.js Data Visualizations | ORIGINAL_REQUEST §R1.a | 5 | 5 | ✓ |
+| 4 | Scan Studio Split-screen & Canvas HUD | ORIGINAL_REQUEST §R1.b | 5 | 5 | ✓ |
+| 5 | Multi-file Queue Strip Management | ORIGINAL_REQUEST §R1.b | 5 | 5 | ✓ |
+| 6 | Bilingual CN-VN Items Table & Inline Editing | ORIGINAL_REQUEST §R1.b | 5 | 5 | ✓ |
+| 7 | Auto-Summation & Formula Engine | ORIGINAL_REQUEST §R1.b | 5 | 5 | ✓ |
+| 8 | DeepSeek Vision OCR Extraction | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ |
+| 9 | Audit & Proof Match Engine | ORIGINAL_REQUEST §R1.c | 5 | 5 | ✓ |
+| 10 | History Search & Date Filters | ORIGINAL_REQUEST §R1.d | 5 | 5 | ✓ |
+| 11 | Split-view Detail Modal & Zoom | ORIGINAL_REQUEST §R1.d | 5 | 5 | ✓ |
+| 12 | A4 / A5 Print Engine | ORIGINAL_REQUEST §R1.d | 5 | 5 | ✓ |
+| 13 | FastAPI Backend & SQLite WAL Cache | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ |
+| 14 | Google Apps Script Bridge & Drive Upload | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ |
+| 15 | Google Sheet 19-Column Sync | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ |
+| 16 | Granular RBAC (Tool #36 Registration) | ORIGINAL_REQUEST §R4 | 5 | 5 | ✓ |
+| 17 | Guest Mode Read-Only Protection & Masking | ORIGINAL_REQUEST §R4 | 5 | 5 | ✓ |
 
 ## Test Architecture
-- **Test Runner**: Python test runner invoking FastAPI `TestClient(app)` with both offline fallback and live HTTP capabilities.
-- **Test Suite Location**: `test_monthly_inventory_suite.py` at project root.
-- **Pass/Fail Semantics**: 100% assertions pass, zero pending, zero regression on existing 30 tests.
-- **Temporary Resource Discipline**: Zero file leaks in `temp/` or `data/` after test execution.
+- **Test Runners**:
+  - Python Backend Runner: `pytest` / `unittest` on `tests/test_gatepass_service_suite.py` with Dual-Mode ApiClient (Live 8888 + in-process ASGI TestClient).
+  - Playwright E2E Runner: `pytest` / `async_playwright` on `tests/test_gatepass_e2e_suite.py` verifying real browser interaction, canvas manipulation, modal switching, and RBAC locking.
+- **Pass/Fail Semantics**: 100% PASS, zero HTTP 500 errors, zero unhandled JavaScript console exceptions, exit code 0.
+
+## Real-World Application Scenarios (Tier 4)
+| # | Scenario | Features Exercised | Complexity |
+|---|----------|--------------------|------------|
+| 1 | Full Finished Goods Dispatch Lifecycle | F1, F4, F5, F6, F7, F8, F13, F14, F15 | High |
+| 2 | Material Outwork Processing with A5 Print | F6, F7, F9, F11, F12, F13 | High |
+| 3 | Mismatched Plate & Unsigned Slip Audit Alert | F8, F9, F11, F13 | Medium |
+| 4 | Offline Caching & Background Cloud Resync | F2, F10, F13, F14, F15 | High |
+| 5 | Guest Mode Unauthorized Mutation Lockout | F1, F2, F10, F11, F16, F17 | High |
 
 ## Coverage Thresholds
-- Tier 1: 12 test cases covering all 12 core features (Happy path)
-- Tier 2: 12 test cases covering boundary conditions, zero values, unicode, and extreme quantities
-- Tier 3: 6 test cases covering cross-feature interactions (Roll-forward + CIL + Transactions + Excel)
-- Tier 4: 5 realistic factory workload scenarios (full monthly closing cycle, 12-month chain, annual reconciliation)
-- **Total: 35 comprehensive test cases**.
+- Tier 1: ≥5 per feature (≥85 test cases)
+- Tier 2: ≥5 per feature where boundaries exist (≥85 test cases)
+- Tier 3: Pairwise coverage of major feature interactions (≥17 test cases)
+- Tier 4: ≥5 realistic factory application scenarios
+- Tier 5: Adversarial white-box gap hardening

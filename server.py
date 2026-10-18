@@ -3236,6 +3236,19 @@ MonthlyInventoryEngine.init_db()
 app.include_router(monthly_inventory_router, prefix="/api/monthly-inventory", tags=["Monthly Chemical Inventory"])
 app.include_router(monthly_inventory_router, prefix="/api/msds/monthly-report", tags=["Monthly Chemical Inventory Report Alias"])
 
+# ============================================================
+# GATE PASS & MATERIAL DISPATCH STUDIO SUB-ROUTER (Milestone M1)
+# ============================================================
+try:
+    from core.gatepass_router import gatepass_router
+    from core.gatepass_service import GatePassService
+
+    GatePassService.init_db()
+    app.include_router(gatepass_router, prefix="/api/gatepass", tags=["Gate Pass & Material Dispatch Studio"])
+    print("[INFO] Successfully mounted Gate Pass Studio Router at /api/gatepass")
+except Exception as e:
+    print(f"[ERROR] Failed to mount Gate Pass Studio Router: {e}")
+
 
 # SERVE FRONTEND
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

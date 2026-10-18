@@ -7202,6 +7202,31 @@ body[data-role="guest"] .nxt-num-input {
   user-select: text !important;
 }
 
+/* Gate Pass Studio Guest Mode Restrictions */
+body[data-role="owner"] .gatepass-guest-badge {
+  display: none !important;
+}
+
+body[data-role="guest"] .gatepass-guest-badge {
+  display: inline-flex !important;
+}
+
+body[data-role="guest"] #btn-gatepass-scan-ocr,
+body[data-role="guest"] #btn-gatepass-save-slip,
+body[data-role="guest"] #btn-gatepass-audit-proof,
+body[data-role="guest"] .gatepass-btn-add-item,
+body[data-role="guest"] .gatepass-mutation-action,
+body[data-role="guest"] .gatepass-btn-del-row,
+body[data-role="guest"] .gatepass-btn-delete-slip,
+body[data-role="guest"] #gp-btn-header-new,
+body[data-role="guest"] #gp-btn-header-sync,
+body[data-role="guest"] #gp-btn-ai-scan,
+body[data-role="guest"] #gp-btn-save-slip,
+body[data-role="guest"] #gp-btn-run-audit,
+body[data-role="guest"] #gp-btn-add-proof {
+  display: none !important;
+}
+
 /* ============================================================
    SECURITY SETTINGS & RBAC MODAL (FIX OVERFLOW & GRANULAR TABS)
    ============================================================ */
