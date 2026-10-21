@@ -316,11 +316,11 @@
   // ==========================================================================
   // AI INTEGRATION CLIENT (/api/hse/*)
   // ==========================================================================
-  async function analyzeImageWithAi(imageData, hint = "") {
+  async function analyzeImageWithAi(imageData, hint = "", context = "") {
     const resp = await fetch("/api/hse/ai_analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageData, hint })
+      body: JSON.stringify({ imageData, hint, context })
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -343,11 +343,11 @@
     return data.translation || "";
   }
 
-  async function polishText(text) {
+  async function polishText(text, context = "") {
     const resp = await fetch("/api/hse/polish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, context })
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -482,7 +482,7 @@
                   Dịch từ tiếng Việt
                 </button>
               </div>
-              <textarea class="hse-textarea" data-field="issueZh" placeholder="Bản dịch tiếng Trung tự động (问题: ...)...">${escapeHtml(finding.issueZh)}</textarea>
+              <textarea class="hse-textarea" data-field="issueZh" placeholder="Bản dịch tiếng Trung tự động (简体中文)...">${escapeHtml(finding.issueZh)}</textarea>
             </label>
 
             <label class="hse-label">
@@ -510,7 +510,7 @@
             </label>
 
             <button type="button" class="hse-btn hse-btn-primary" style="width: 100%; justify-content: center;" data-action="ai-read" ${!finding.imageData ? "disabled" : ""}>
-              🐳 ✦ DeepSeek đọc ảnh & tự soạn
+              🤖 ✦ Đọc ảnh & tự soạn
             </button>
 
             <!-- Improvement Mode Controls & After Photo -->
@@ -594,7 +594,8 @@
           aiBtn.innerHTML = `<span>⏳</span> Đang đọc ảnh...`;
           try {
             const hint = (finding.aiHint || "").trim() || (state.globalAiHint || "").trim() || (finding.issueVi || "").trim();
-            const res = await analyzeImageWithAi(finding.imageData, hint);
+            const context = `Bộ phận: ${finding.departmentVi || "Sản xuất"}. Hạng mục kiểm tra an toàn PCCC/EHS nhà máy sản xuất.`;
+            const res = await analyzeImageWithAi(finding.imageData, hint, context);
             if (res.departmentKey && DEPARTMENTS[res.departmentKey]) {
               finding.departmentKey = res.departmentKey;
               finding.departmentVi = res.departmentVi || DEPARTMENTS[res.departmentKey].vi;
@@ -605,12 +606,12 @@
             renderFindings();
             renderPreview();
             triggerAutoSave();
-            showToast("✦ DeepSeek AI đã phân tích ảnh và hoàn thành soạn thảo!");
+            showToast("✦ Vision AI đã phân tích ảnh và hoàn thành soạn thảo!");
           } catch (err) {
             showToast(`Lỗi AI: ${err.message}`, true);
           } finally {
             aiBtn.disabled = false;
-            aiBtn.innerHTML = `🐳 ✦ DeepSeek đọc ảnh & tự soạn`;
+            aiBtn.innerHTML = `🤖 ✦ Đọc ảnh & tự soạn`;
           }
           return;
         }
@@ -632,7 +633,7 @@
           transBtn.textContent = "Đang dịch...";
           try {
             const tr = await translateText(finding.issueVi, "text");
-            finding.issueZh = tr.startsWith("问题:") ? tr : `问题: ${tr}`;
+            finding.issueZh = tr.trim();
             renderFindings();
             renderPreview();
             triggerAutoSave();
@@ -680,7 +681,7 @@
           renderFindings();
           renderPreview();
           triggerAutoSave();
-          showToast("Đã tải ảnh! Bấm 'DeepSeek đọc ảnh' để AI tự động soạn.");
+          showToast("Đã tải ảnh! Bấm '🤖 ✦ Đọc ảnh & tự soạn' để AI tự động soạn.");
         });
       }
 
@@ -809,7 +810,7 @@
 
                 <label class="hse-label">
                   <span>问题（中文）*</span>
-                  <textarea class="hse-textarea" data-field="issueZh" placeholder="问题: ...">${escapeHtml(data.issueZh)}</textarea>
+                  <textarea class="hse-textarea" data-field="issueZh" placeholder="问题（中文）...">${escapeHtml(data.issueZh)}</textarea>
                 </label>
               </div>
             ` : ""}
@@ -1605,8 +1606,22 @@
       btn.disabled = true;
       btn.textContent = "Đang soạn...";
     }
+    let context = "";
+    if (state.writingTarget) {
+      if (state.writingTarget.type === "checklist") {
+        const itemDef = CHECKLIST_DEFAULTS.find(d => d.row === state.writingTarget.row);
+        if (itemDef) {
+          context = `Tiêu chuẩn kiểm tra: ${itemDef.contentVi} | Phương pháp: ${itemDef.methodVi}`;
+        }
+      } else if (state.writingTarget.type === "finding") {
+        const f = state.findings.find(x => x.id === state.writingTarget.id);
+        if (f) {
+          context = `Bộ phận: ${f.departmentVi || ""}. ${f.aiHint || state.globalAiHint || ""}`;
+        }
+      }
+    }
     try {
-      state.writingOptions = await polishText(text);
+      state.writingOptions = await polishText(text, context);
       renderWritingOptions();
     } catch (err) {
       showToast(err.message, true);
@@ -1758,11 +1773,12 @@
       const candidates = state.findings.filter(f => f.imageData && (!f.issueVi || !f.issueZh));
       if (!candidates.length) return showToast("Tất cả các ảnh đã có nội dung hoặc chưa có ảnh.", true);
 
-      setLoading(true, `DeepSeek AI đang phân tích đồng loạt ${candidates.length} ảnh...`);
+      setLoading(true, `Vision AI đang phân tích đồng loạt ${candidates.length} ảnh...`);
       try {
         for (const f of candidates) {
           const hint = (f.aiHint || "").trim() || (state.globalAiHint || "").trim();
-          const res = await analyzeImageWithAi(f.imageData, hint);
+          const context = `Bộ phận: ${f.departmentVi || "Sản xuất"}. Kiểm tra an toàn PCCC/EHS nhà máy.`;
+          const res = await analyzeImageWithAi(f.imageData, hint, context);
           if (res.departmentKey && DEPARTMENTS[res.departmentKey]) {
             f.departmentKey = res.departmentKey;
             f.departmentVi = res.departmentVi || DEPARTMENTS[res.departmentKey].vi;

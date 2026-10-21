@@ -247,117 +247,235 @@ def classify_department_from_text(hint: str) -> tuple[str, str, str]:
         return "san-xuat", "Sản xuất", "生产部"
 
 
-def professionalize_hse(text: str) -> list[str]:
-    """Return three professional Vietnamese HSE phrasings without changing reported fact."""
+def professionalize_hse(text: str, context: str = "") -> list[str]:
+    """
+    Soạn thảo biên bản HSE chuyên nghiệp bằng AI (3 phương án: Ngắn gọn, Tập trung Rủi ro, Hành động CAPA).
+    Tuyệt đối không dùng template nối chuỗi thô thiển.
+    """
     raw = normalize_space(text)
     if not raw:
         raise ValueError("Hãy nhập nội dung ghi nhận trước khi tạo câu chuyên nghiệp.")
 
+    # 1. Thử gọi LLM AI chuyên nghiệp nếu hệ thống đã có API Key
+    try:
+        from core.ai_text_engine import AITextEngine
+        creds = AITextEngine.get_ai_credentials()
+        if creds.get("api_key"):
+            system_prompt = (
+                "Bạn là Chuyên gia Soạn thảo Biên bản An toàn EHS & PCCC nhà máy.\n"
+                "Nhiệm vụ: Dựa vào ý ghi nhận nháp của người dùng và tiêu chí kiểm tra (nếu có), "
+                "soạn thảo lại thành 3 phương án câu văn phong chuyên nghiệp, sắc bén, chuẩn mực EHS:\n"
+                "- Phương án 1: Ngắn gọn, trực tiếp, mô tả đúng trọng tâm vi phạm.\n"
+                "- Phương án 2: Nêu rõ hiện trạng lỗi và phân tích nguy cơ/rủi ro mất an toàn (cháy nổ, tai nạn, vi phạm luật).\n"
+                "- Phương án 3: Định hướng hành động khắc phục (CAPA) và yêu cầu bộ phận liên quan xử lý triệt để.\n\n"
+                "BẮT BUỘC chỉ trả về DUY NHẤT một mảng JSON 3 phần tử string dạng [\"...\": \"...\", \"...\"], không giải thích thêm."
+            )
+            user_prompt = f"GHI NHẬN HIỆN TRƯỜNG: {raw}\nTIÊU CHÍ KIỂM TRA (NGỮ CẢNH): {context or 'Không có'}"
+            ai_res = AITextEngine.call_universal_chat(
+                messages=[{"role": "user", "content": user_prompt}],
+                system_prompt=system_prompt,
+                temperature=0.2
+            )
+            # Parse JSON
+            m_json = re.search(r"\[[\s\S]*\]", ai_res)
+            if m_json:
+                opts = json.loads(m_json.group(0))
+                if isinstance(opts, list) and len(opts) >= 3 and all(isinstance(x, str) for x in opts):
+                    return [normalize_space(opts[0]), normalize_space(opts[1]), normalize_space(opts[2])]
+    except Exception as e:
+        logger.warning(f"Không thể gọi AI viết chuyên nghiệp ({e}), sử dụng bộ tinh chỉnh ngữ pháp tự nhiên.")
+
+    # 2. Tinh chỉnh ngữ pháp tự nhiên chuẩn mực khi offline (Không nối chuỗi sáo rỗng)
     statement = re.sub(r"^(?:vấn đề|ghi nhận|hiện trạng)\s*[:\-–]\s*", "", raw, flags=re.IGNORECASE)
     replacements = (
         (r"\bkhông gọn gàng\b", "chưa được sắp xếp gọn gàng"),
-        (r"\bkhông đậy nắp\b", "chưa được đậy kín"),
-        (r"\bnắp mở\b", "chưa được đậy kín"),
-        (r"\bnhiều bụi\b", "có tình trạng tích tụ nhiều bụi"),
-        (r"\bbị che\b", "đang bị che khuất"),
+        (r"\bkhông đậy nắp\b", "chưa được đậy kín nắp bảo quản"),
+        (r"\bnắp mở\b", "chưa được đậy kín nắp"),
+        (r"\bnhiều bụi\b", "có tình trạng tích tụ bụi bẩn chưa vệ sinh"),
+        (r"\bbị che\b", "đang bị che khuất lối tiếp cận"),
+        (r"\bbị vướng\b", "đang bị cản trở lối đi lại"),
     )
     for pattern, replacement in replacements:
         statement = re.sub(pattern, replacement, statement, flags=re.IGNORECASE)
     statement = normalize_space(statement).strip(" .;,:-–")
     if not statement:
-        raise ValueError("Nội dung ghi nhận chưa đủ để tạo câu chuyên nghiệp.")
+        statement = raw
     statement = statement[0].upper() + statement[1:]
 
-    folded = statement.casefold()
-    risk = "Tình trạng này có thể làm gia tăng nguy cơ mất an toàn trong quá trình làm việc."
-    action = "khắc phục tình trạng nêu trên và duy trì kiểm tra định kỳ"
-    for keywords, matched_risk, matched_action in HSE_WRITING_GUIDANCE:
-        if any(keyword in folded for keyword in keywords):
-            risk = matched_risk
-            action = matched_action
-            break
-
     concise = f"Ghi nhận tại hiện trường: {statement}."
-    risk_focused = f"{statement}. {risk}"
-    action_focused = f"Ghi nhận {statement[0].lower() + statement[1:]}; đề nghị {action} để bảo đảm an toàn và tuân thủ yêu cầu HSE."
+    risk_focused = f"Phát hiện {statement[0].lower() + statement[1:]}; tiềm ẩn rủi ro mất an toàn lao động và PCCC khu vực."
+    action_focused = f"Yêu cầu đơn vị phụ trách khẩn trương chấn chỉnh tình trạng {statement[0].lower() + statement[1:]} và duy trì kiểm tra định kỳ."
     return [concise, risk_focused, action_focused]
 
 
 def translate_vi_to_zh(text: str, kind: str = "text") -> str:
-    text = normalize_space(text)
-    if not text:
+    """
+    Dịch thuật 2 chiều chuẩn xác giữa Tiếng Việt và Tiếng Trung chuyên ngành EHS.
+    Tuyệt đối không giữ lại tiền tố '问题: 现场问题:' hoặc trộn lẫn ngôn ngữ.
+    """
+    clean_text = normalize_space(text).strip()
+    if not clean_text:
         return ""
+
     if kind == "department":
-        key = text.casefold()
+        key = clean_text.casefold()
         if key in DEPARTMENT_TRANSLATIONS:
             return DEPARTMENT_TRANSLATIONS[key]
-    folded = text.casefold()
-    for keywords, translation in OFFLINE_HSE_PATTERNS:
-        if all(keyword in folded for keyword in keywords):
-            return translation
+
+    # Kiểm tra chiều dịch: Nếu văn bản phần lớn là chữ Hán -> Dịch sang Tiếng Việt
+    is_chinese_input = bool(re.search(r"[\u4e00-\u9fff]", clean_text)) and len(re.findall(r"[\u4e00-\u9fff]", clean_text)) > len(clean_text) * 0.3
+
+    # 1. Thử dùng AI LLM (Gemini, OpenAI, DeepSeek) để dịch thuật chuẩn chuyên ngành
     try:
+        from core.ai_text_engine import AITextEngine
+        creds = AITextEngine.get_ai_credentials()
+        if creds.get("api_key"):
+            if is_chinese_input:
+                sys_prompt = "Bạn là dịch giả chuyên nghiệp. Hãy dịch đoạn văn bản sau sang TIẾNG VIỆT chuẩn kỹ thuật EHS/PCCC nhà máy. Chỉ trả về bản dịch thuần túy, không thêm bất kỳ tiền tố hay giải thích."
+            else:
+                sys_prompt = "Bạn là dịch giả chuyên nghiệp. Hãy dịch đoạn văn bản sau sang TIẾNG TRUNG GIẢN THỂ (简体中文) chuẩn thuật ngữ an toàn sản xuất EHS/PCCC. Chỉ trả về bản dịch tiếng Trung thuần túy, TUYỆT ĐỐI KHÔNG thêm tiền tố '问题:' hay '现场问题:'."
+
+            res = AITextEngine.call_universal_chat(
+                messages=[{"role": "user", "content": clean_text}],
+                system_prompt=sys_prompt,
+                temperature=0.1,
+                timeout=15
+            )
+            if res and res.strip():
+                # Dọn dẹp tiền tố thừa nếu có
+                cleaned = re.sub(r"^(?:问题|现场问题|隐患|整改要求)\s*[:：]\s*", "", res.strip())
+                return cleaned
+    except Exception as e:
+        logger.warning(f"Lỗi gọi AI dịch ({e}), chuyển sang động cơ dịch trực tuyến...")
+
+    # 2. Dịch qua Google Translate API trực tuyến
+    try:
+        sl = "zh-CN" if is_chinese_input else "vi"
+        tl = "vi" if is_chinese_input else "zh-CN"
         query = urllib.parse.urlencode({
             "client": "gtx",
-            "sl": "vi",
-            "tl": "zh-CN",
+            "sl": sl,
+            "tl": tl,
             "dt": "t",
-            "q": text,
+            "q": clean_text,
         })
         request = urllib.request.Request(
             f"https://translate.googleapis.com/translate_a/single?{query}",
-            headers={"User-Agent": "Mozilla/5.0 HSE-Report-App/1.0"},
+            headers={"User-Agent": "Mozilla/5.0 HSE-Report-App/2.0"},
         )
-        with urllib.request.urlopen(request, timeout=3) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             data = json.loads(response.read().decode("utf-8"))
         translated = "".join(part[0] for part in data[0] if part and part[0])
-        if translated:
-            return translated
-    except Exception:
-        pass
-    return f"现场问题: {text}"
+        if translated and translated.strip():
+            cleaned = re.sub(r"^(?:问题|现场问题|隐患)\s*[:：]\s*", "", translated.strip())
+            return cleaned
+    except Exception as e:
+        logger.warning(f"Lỗi Google Translate: {e}")
+
+    # 3. Kiểm tra từ điển mẫu offline
+    if not is_chinese_input:
+        folded = clean_text.casefold()
+        for keywords, translation in OFFLINE_HSE_PATTERNS:
+            if all(keyword in folded for keyword in keywords):
+                return re.sub(r"^(?:问题|现场问题)\s*[:：]\s*", "", translation)
+
+    # Nếu hoàn toàn không thể dịch và không có mạng, báo lỗi rõ ràng chứ không ghép chuỗi giả!
+    raise ValueError(f"Không thể kết nối dịch vụ dịch thuật để dịch: '{clean_text[:40]}...'. Vui lòng kiểm tra lại kết nối mạng hoặc cấu hình API Key!")
 
 
 def analyze_image_ai(
     image_data: str,
     hint: str = "",
     context: str = "",
-    model: str = "DeepSeek-V4.1-Flash"
+    model: str = "gemini-2.5-flash"
 ) -> dict[str, str]:
-    dept_key, dept_vi, dept_zh = classify_department_from_text(hint)
-    hint_folded = (hint or "").casefold()
-    if any(k in hint_folded for k in ("bình chữa cháy", "pccc", "chữa cháy")):
-        issue_vi = "Bình chữa cháy bị che khuất lối tiếp cận."
-        issue_zh = "问题: 灭火器被遮挡，存在火灾发生时延误取用的安全隐患。"
-        suggestion = "Di dời vật cản và duy trì lối tiếp cận thiết bị PCCC thông thoáng."
-    elif any(k in hint_folded for k in ("thoát hiểm", "cửa thoát", "lối thoát")):
-        issue_vi = "Cửa thoát hiểm bị che khuất hoặc khóa then cài."
-        issue_zh = "问题: 安全出口被货物遮挡或上锁。"
-        suggestion = "Mở khóa và giải phóng lối thoát hiểm thông thoáng liên tục."
-    elif any(k in hint_folded for k in ("dây điện", "điện", "ổ cắm")):
-        issue_vi = "Dây điện câu móc tạm bợ, có dấu hiệu hư hỏng lớp vỏ bọc cách điện."
-        issue_zh = "问题: 电线绝缘破损裸露，存在触电及短路火灾隐患。"
-        suggestion = "Sửa chữa hoặc thay thế dây điện hỏng và luồn vào ống gen bảo vệ."
-    elif any(k in hint_folded for k in ("thùng", "hóa chất", "sơn", "nắp")):
-        issue_vi = "Thùng chứa hóa chất/sơn mở nắp không đậy kín."
-        issue_zh = "问题: 化学品/涂料容器未密封，存在挥发及火灾风险。"
-        suggestion = "Đậy kín nắp thùng hóa chất sau khi sử dụng và trang bị khay chống tràn."
-    elif any(k in hint_folded for k in ("bụi", "vệ sinh", "bẩn")):
-        issue_vi = "Khu vực làm việc tích tụ nhiều bụi bẩn, chưa được vệ sinh định kỳ."
-        issue_zh = "问题: 该区域积尘严重，未按时清洁。"
-        suggestion = "Tiến hành vệ sinh công nghiệp và duy trì tần suất dọn dẹp hàng ngày."
-    elif any(k in hint_folded for k in ("sắp xếp", "gọn gàng", "bừa bộn", "5s")):
-        issue_vi = "Vật tư, hàng hóa để bừa bộn, cản trở lối đi lại."
-        issue_zh = "问题: 物品摆放杂乱，影响通行。"
-        suggestion = "Sắp xếp lại vật tư theo phân khu và vạch kẻ layout 5S."
+    """
+    Phân tích ảnh hiện trường vi phạm bằng Multimodal Vision AI thực thụ (Google Gemini / OpenAI GPT-4o Vision).
+    TUYỆT ĐỐI KHÔNG DÙNG MOCK KEYWORD HAY CHUỖI GHÉP GIẢ.
+    """
+    if not image_data or not image_data.strip():
+        raise ValueError("Vui lòng tải ảnh hiện trường vi phạm lên trước khi bấm Đọc ảnh & Tự soạn!")
+
+    from core.ai_text_engine import AITextEngine
+    creds = AITextEngine.get_ai_credentials()
+    if not creds.get("api_key"):
+        raise ValueError(
+            "Hệ thống chưa được cấu hình API Key cho Vision AI. "
+            "Vui lòng vào 'Cài Đặt Quản Trị' -> 'Cấu Hình API Key & Trí Tuệ Nhân Tạo' "
+            "để nhập API Key Google Gemini (gemini-2.5-flash) hoặc OpenAI (gpt-4o-mini)!"
+        )
+
+    system_prompt = (
+        "Bạn là Chuyên gia Kiểm toán An toàn EHS & PCCC nhà máy hàng đầu thế giới.\n"
+        "Nhiệm vụ: Quan sát kỹ bức ảnh hiện trường vi phạm được cung cấp, kết hợp với ngữ cảnh hạng mục kiểm tra.\n"
+        "Suy luận nguyên nhân gốc rễ, chỉ ra điểm không phù hợp (Non-conformity), mức độ rủi ro theo tiêu chuẩn an toàn PCCC/EHS và hành động khắc phục (CAPA).\n\n"
+        "YÊU CẦU ĐỊNH DẠNG ĐẦU RA:\n"
+        "Trả về DUY NHẤT một chuỗi JSON hợp lệ không có markdown bọc ngoài, đúng cấu trúc sau:\n"
+        "{\n"
+        '  "departmentKey": "san-xuat" hoặc "kho-hang" hoặc "bao-tri" hoặc "ky-thuat" hoặc "hanh-chinh",\n'
+        '  "departmentVi": "Sản xuất | Kho hàng | Bảo trì | Kỹ thuật | Hành chính",\n'
+        '  "departmentZh": "生产部 | 仓储部 | 维修部 | 技术部 | 行政部",\n'
+        '  "issueVi": "Mô tả vi phạm hiện trường và kiến nghị khắc phục bằng tiếng Việt kỹ thuật chuyên nghiệp, sắc bén.",\n'
+        '  "issueZh": "现场不符合项及整改要求（规范简体中文，严禁包含任何越南文字符，不要加问题:或现场问题:前缀）",\n'
+        '  "suggestion": "Biện pháp khắc phục ngắn hạn và dài hạn"\n'
+        "}"
+    )
+
+    user_prompt = (
+        f"HẠNG MỤC KIỂM TRA:\n"
+        f"- Ngữ cảnh / Tiêu chuẩn kiểm tra: {context or 'Kiểm tra hiện trường An toàn PCCC & EHS'}\n"
+        f"- Ghi chú sơ bộ của kiểm tra viên: {hint or 'Không có ghi chú trước'}\n\n"
+        f"Hãy quan sát bức ảnh hiện trường vi phạm trên và trích xuất JSON theo đúng quy định."
+    )
+
+    # Gọi Vision AI thực tế
+    raw_ai_text = AITextEngine.call_vision_api(
+        image_data=image_data,
+        prompt=user_prompt,
+        system_prompt=system_prompt,
+        model=model or creds.get("model") or "gemini-2.5-flash"
+    )
+
+    # Bóc tách JSON từ phản hồi của AI
+    cleaned_text = re.sub(r"^```(?:json)?\s*", "", raw_ai_text.strip(), flags=re.IGNORECASE)
+    cleaned_text = re.sub(r"\s*```$", "", cleaned_text)
+    m_json = re.search(r"\{[\s\S]*\}", cleaned_text)
+    if not m_json:
+        raise RuntimeError(f"AI không trả về định dạng JSON hợp lệ: {raw_ai_text[:200]}")
+
+    try:
+        parsed = json.loads(m_json.group(0))
+    except Exception as exc:
+        raise RuntimeError(f"Không thể giải mã JSON từ Vision AI: {exc}\nNội dung AI: {raw_ai_text[:200]}")
+
+    # Chuẩn hóa dữ liệu trả về
+    dept_key = parsed.get("departmentKey") or "san-xuat"
+    if dept_key not in ("san-xuat", "kho-hang", "bao-tri", "ky-thuat", "hanh-chinh"):
+        dept_key, dept_vi_auto, dept_zh_auto = classify_department_from_text(parsed.get("departmentVi") or hint)
     else:
-        clean_hint = normalize_space(hint)
-        if clean_hint:
-            issue_vi = f"Ghi nhận tại hiện trường: {clean_hint}."
-            issue_zh = f"问题: {translate_vi_to_zh(clean_hint)}"
-        else:
-            issue_vi = "Ghi nhận vi phạm quy định an toàn tại hiện trường."
-            issue_zh = "问题: 现场记录违反安全规定隐患。"
-        suggestion = "Đề nghị phân xưởng khẩn trương khắc phục để đảm bảo an toàn lao động."
+        dept_vi_auto = DEPARTMENTS[dept_key]["vi"]
+        dept_zh_auto = DEPARTMENTS[dept_key]["zh"]
+
+    issue_vi = normalize_space(str(parsed.get("issueVi") or "")).strip()
+    issue_zh = normalize_space(str(parsed.get("issueZh") or "")).strip()
+
+    # Dọn dẹp tiền tố thừa trong tiếng Trung nếu AI có thêm vào
+    issue_zh = re.sub(r"^(?:问题|现场问题|隐患|整改要求)\s*[:：]\s*", "", issue_zh)
+
+    # Đảm bảo nếu issue_zh rỗng thì tự động dịch chuẩn xác từ issue_vi
+    if not issue_zh and issue_vi:
+        issue_zh = translate_vi_to_zh(issue_vi)
+
+    suggestion = normalize_space(str(parsed.get("suggestion") or "")).strip()
+
+    return {
+        "departmentKey": dept_key,
+        "departmentVi": parsed.get("departmentVi") or dept_vi_auto,
+        "departmentZh": parsed.get("departmentZh") or dept_zh_auto,
+        "issueVi": issue_vi,
+        "issueZh": issue_zh,
+        "suggestion": suggestion
+    }
 
     return {
         "departmentKey": dept_key,

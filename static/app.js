@@ -6069,20 +6069,28 @@ window.handleAiProviderChange = function () {
     const linkEl = document.getElementById("global-ai-provider-link");
     const modelSelect = document.getElementById("global-deepseek-model-select");
 
-    if (prov === "deepseek") {
-        if (baseInput && (!baseInput.value || baseInput.value.includes("openai.com"))) {
+    if (prov === "gemini") {
+        if (baseInput) {
+            baseInput.value = "https://generativelanguage.googleapis.com/v1beta";
+        }
+        if (linkEl) {
+            linkEl.innerHTML = 'Nhận API key miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#0284c7; text-decoration:underline;">aistudio.google.com</a> (Hỗ trợ Multimodal Vision đọc ảnh hiện trường EHS).';
+        }
+        if (modelSelect) modelSelect.value = "gemini-2.5-flash";
+    } else if (prov === "deepseek") {
+        if (baseInput && (!baseInput.value || baseInput.value.includes("openai.com") || baseInput.value.includes("googleapis.com"))) {
             baseInput.value = "https://api.deepseek.com/v1";
         }
         if (linkEl) {
             linkEl.innerHTML = 'Nhận API key tại <a href="https://platform.deepseek.com" target="_blank" style="color:#0284c7; text-decoration:underline;">platform.deepseek.com</a>.';
         }
-        if (modelSelect) modelSelect.value = "DeepSeek-V4.1-Flash";
+        if (modelSelect) modelSelect.value = "deepseek-chat";
     } else if (prov === "openai") {
-        if (baseInput && (!baseInput.value || baseInput.value.includes("deepseek.com"))) {
+        if (baseInput && (!baseInput.value || baseInput.value.includes("deepseek.com") || baseInput.value.includes("googleapis.com"))) {
             baseInput.value = "https://api.openai.com/v1";
         }
         if (linkEl) {
-            linkEl.innerHTML = 'Nhận API key tại <a href="https://platform.openai.com/api-keys" target="_blank" style="color:#0284c7; text-decoration:underline;">platform.openai.com</a>.';
+            linkEl.innerHTML = 'Nhận API key tại <a href="https://platform.openai.com/api-keys" target="_blank" style="color:#0284c7; text-decoration:underline;">platform.openai.com</a> (Hỗ trợ GPT-4o Multimodal Vision).';
         }
         if (modelSelect) modelSelect.value = "gpt-4o-mini";
     } else {

@@ -350,8 +350,13 @@ async def import_docx_endpoint(request: Request):
 @hse_router.post("/ai_analyze")
 def ai_analyze_endpoint(req: AIAnalyzeRequest):
     from core.hse_report_engine import analyze_image_ai
-    result = analyze_image_ai(req.get_image_data(), req.get_hint(), req.context, req.model)
-    return result
+    try:
+        result = analyze_image_ai(req.get_image_data(), req.get_hint(), req.context, req.model)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Lỗi AI Vision: {str(exc)}")
 
 
 @hse_router.post("/ai_batch_analyze")
@@ -360,8 +365,11 @@ def ai_batch_analyze_endpoint(req: AIBatchAnalyzeRequest):
     from core.hse_report_engine import analyze_image_ai
     results = []
     for item in req.items:
-        res = analyze_image_ai(item.get_image_data(), item.get_hint())
-        results.append({"id": item.id, **res})
+        try:
+            res = analyze_image_ai(item.get_image_data(), item.get_hint())
+            results.append({"id": item.id, **res})
+        except Exception as exc:
+            results.append({"id": item.id, "error": str(exc)})
     return {"results": results}
 
 
@@ -371,39 +379,49 @@ def polish_endpoint(req: PolishRequest):
     if not req.text or not req.text.strip():
         raise HTTPException(status_code=400, detail="Nội dung không được để trống.")
     try:
-        options = professionalize_hse(req.text)
+        context = getattr(req, "context", "") or ""
+        options = professionalize_hse(req.text, context)
+        return {"options": options}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"options": options}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Lỗi AI viết chuyên nghiệp: {str(exc)}")
 
 
 @hse_router.post("/translate")
 def translate_endpoint(req: TranslateRequest):
     from core.hse_report_engine import translate_vi_to_zh
-    translated = translate_vi_to_zh(req.text, req.kind or "text")
-    return {"translation": translated, "translated": translated}
+    if not req.text or not req.text.strip():
+        return {"translation": "", "translated": ""}
+    try:
+        translated = translate_vi_to_zh(req.text, req.kind or "text")
+        return {"translation": translated, "translated": translated}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Lỗi dịch thuật: {str(exc)}")
 
 
 @hse_router.get("/config")
 @hse_router.get("/ai_config")
 def get_ai_config(request: Request):
+    from core.ai_text_engine import AITextEngine
     role = get_current_role(request)
-    data = {}
-    if SETTINGS_FILE.exists():
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            pass
-    api_key = data.get("deepseek_api_key", "")
+    creds = AITextEngine.get_ai_credentials()
+    api_key = creds.get("api_key", "")
+    provider = creds.get("provider", "gemini")
+    model = creds.get("model", "gemini-2.5-flash")
+    base_url = creds.get("base_url", "")
+
     if role == "guest":
         return {
             "has_key": bool(api_key),
             "api_key": "",
             "deepseek_api_key_masked": "••••••••••••••••" if api_key else "",
-            "base_url": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
-            "model": data.get("deepseek_model", "DeepSeek-V4.1-Flash"),
-            "endpoint": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
+            "provider": provider,
+            "base_url": base_url,
+            "model": model,
+            "endpoint": base_url,
             "read_only": True
         }
     masked = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else ("***" if api_key else "")
@@ -411,9 +429,10 @@ def get_ai_config(request: Request):
         "has_key": bool(api_key),
         "api_key": api_key,
         "deepseek_api_key_masked": masked,
-        "base_url": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
-        "model": data.get("deepseek_model", "DeepSeek-V4.1-Flash"),
-        "endpoint": data.get("deepseek_base_url", "https://api.deepseek.com/v1"),
+        "provider": provider,
+        "base_url": base_url,
+        "model": model,
+        "endpoint": base_url,
         "read_only": False
     }
 

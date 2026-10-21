@@ -723,6 +723,124 @@ class MSDSDatabase:
 
         return deleted_count
 
+    @classmethod
+    def sanitize_catalog(cls) -> Dict[str, Any]:
+        """Tự động quét và chuẩn hóa toàn bộ Sổ CIL:
+        - Làm sạch tên nhà cung cấp (loại bỏ '- Product Name', 'Address:...').
+        - Điền tên hóa chất/thương phẩm thực tế thay cho 'Hóa chất FTU0005', 'Hóa chất A1935'...
+        - Quét bổ sung ngày ban hành revision_date nếu bị trống.
+        """
+        cls.init_db()
+        updated_items = []
+        with cls.get_connection() as conn:
+            cursor = conn.execute("SELECT * FROM chemicals")
+            rows = [dict(r) for r in cursor.fetchall()]
+
+            for item in rows:
+                chem_id = item["chemical_id"]
+                orig_name = item.get("product_name_vi") or ""
+                orig_supp = item.get("manufacturer") or ""
+                orig_date = item.get("revision_date") or ""
+                sfile = item.get("source_file") or ""
+
+                fpath = cls.resolve_msds_file_path(chem_id)
+                text = ""
+                if fpath and fpath.exists() and fpath.is_file():
+                    try:
+                        text = MSDSExtractorEngine.extract_text_from_file(str(fpath))
+                    except Exception:
+                        pass
+
+                # 1. Clean supplier
+                new_supp = orig_supp.strip()
+                new_supp = re.sub(r"^[\s:–—\-]+", "", new_supp).strip()
+                is_supp_dirty = (
+                    not new_supp or
+                    "- product name" in new_supp.lower() or
+                    new_supp.lower() == "product name" or
+                    new_supp.lower().startswith("address") or
+                    "township" in new_supp.lower() or
+                    "rd." in new_supp.lower() or
+                    "no. 1-" in new_supp.lower()
+                )
+                if is_supp_dirty and text:
+                    co_matches = re.findall(
+                        r'([A-Z0-9\s,\.\-—&]+(?:CO\.,\s*LTD|LIMITED|GMBH|INC\.|CORP|INDUSTRIES\s+AG|COMPANY\s+LIMITED|CORPORATION|S\.A\.|MATERIALS\s+CO\.,\s*LTD|CÔNG TY TNHH[^\n,]+))',
+                        text[:3500],
+                        re.I
+                    )
+                    for m in co_matches:
+                        cand = m.strip().strip(":-,")
+                        if len(cand) > 4 and not cand.lower().startswith("address") and "product name" not in cand.lower():
+                            new_supp = cand[:120]
+                            break
+
+                # 2. Clean product name
+                new_name = orig_name.strip()
+                is_name_generic = (
+                    not new_name or
+                    new_name == f"Hóa chất {chem_id}" or
+                    new_name == chem_id or
+                    new_name == "Hóa chất mới" or
+                    new_name.startswith("Hóa chất 0000")
+                )
+                if is_name_generic:
+                    cand_name = ""
+                    # Check text
+                    if text:
+                        m_th = re.search(r'Hóa chất:\s*([^|\n]+)', text[:500], re.I)
+                        if m_th and len(m_th.group(1).strip()) > 2:
+                            cand_name = m_th.group(1).strip().title()
+                        if not cand_name:
+                            m_pn = re.search(r'(?:Product Name|Trading name|SDS Name|Trade name)\s*[:：\n]+\s*([^\n\r]+)', text[:2000], re.I)
+                            if m_pn and len(m_pn.group(1).strip()) > 2:
+                                cp = m_pn.group(1).strip().strip(":- ")
+                                if cp and cp.lower() not in ("na", "none", "n/a"):
+                                    cand_name = cp
+                    # Check filename
+                    if not cand_name and sfile:
+                        base_fn = re.sub(r'^\d+_', '', sfile)
+                        base_fn = re.sub(r'-(?:MSDS|SDS)(?:-[A-Za-z0-9]+)?(?:\.pdf|\.docx|\.doc)$', '', base_fn, flags=re.I)
+                        base_fn = re.sub(r'(\.pdf|\.docx|\.doc)$', '', base_fn, flags=re.I)
+                        base_fn = re.sub(r'^[A-Z0-9]{3,8}-', '', base_fn).strip()
+                        if len(base_fn) > 2 and not base_fn.lower().startswith("msds"):
+                            cand_name = base_fn
+
+                    if cand_name:
+                        new_name = cand_name
+
+                # 3. Clean date
+                new_date = orig_date.strip()
+                if not new_date and text:
+                    m_d = re.search(r'(?:revision|issue|creation|date|ngày)[^\n:]{0,20}[:\s]+(\d{1,4}[./\-]\d{1,2}[./\-]\d{2,4}|\d{1,2}\s+[a-zA-Z]{3,9}\s+\d{4})', text[:3000], re.I)
+                    if m_d:
+                        new_date = m_d.group(1).strip()
+
+                # Check if changed
+                if new_name != orig_name or new_supp != orig_supp or new_date != orig_date:
+                    conn.execute("""
+                        UPDATE chemicals
+                        SET product_name_vi = ?, product_name_original = ?, manufacturer = ?, revision_date = ?
+                        WHERE chemical_id = ?
+                    """, (new_name, new_name, new_supp, new_date, chem_id))
+                    updated_items.append({
+                        "chemical_id": chem_id,
+                        "old_name": orig_name,
+                        "new_name": new_name,
+                        "old_supplier": orig_supp,
+                        "new_supplier": new_supp,
+                        "old_date": orig_date,
+                        "new_date": new_date
+                    })
+
+            conn.commit()
+
+        return {
+            "total": len(rows),
+            "updated_count": len(updated_items),
+            "updated_items": updated_items
+        }
+
 
 
 # ==============================================================================
@@ -1652,8 +1770,18 @@ class MSDSExtractorEngine:
                 "company name", "company", "manufacturer", "supplier", "distributor",
                 "企业名称", "公司名称", "制造商", "供应商", "生产企业"
             ]):
-                if not data["manufacturer"] and len(v_clean) > 2:
-                    data["manufacturer"] = v_clean[:120]
+                v_cand = re.sub(r"^[\s:–—\-]+", "", v_clean).strip()
+                is_dirty = (
+                    not v_cand or
+                    "- product name" in v_cand.lower() or
+                    v_cand.lower() == "product name" or
+                    v_cand.lower().startswith("address") or
+                    "township" in v_cand.lower() or
+                    "rd." in v_cand.lower() or
+                    "no. 1-" in v_cand.lower()
+                )
+                if not data["manufacturer"] and len(v_cand) > 2 and not is_dirty:
+                    data["manufacturer"] = v_cand[:120]
 
             # Sơ cứu 4 đường phơi nhiễm (Mục 4)
             elif any(w in kl for w in ["tiếp xúc với da", "dính vào da", "skin exposure", "skin contact", "after skin contact", "皮肤接触"]):
@@ -1726,6 +1854,24 @@ class MSDSExtractorEngine:
                     data["precautionary_statements"] = v_clean
 
         chosen_name = name_primary or name_desc
+        if chosen_name and (chosen_name.lower().startswith("na") or chosen_name.lower() in ("none", "n/a")):
+            chosen_name = ""
+
+        # Trích xuất tên sản phẩm từ filename nếu chưa có
+        if not chosen_name and filename:
+            base_fn = re.sub(r'^\d+_', '', filename)
+            base_fn = re.sub(r'-(?:MSDS|SDS)(?:-[A-Za-z0-9]+)?(?:\.pdf|\.docx|\.doc)$', '', base_fn, flags=re.I)
+            base_fn = re.sub(r'(\.pdf|\.docx|\.doc)$', '', base_fn, flags=re.I)
+            base_fn = re.sub(r'^[A-Z0-9]{3,8}-', '', base_fn).strip()
+            if len(base_fn) > 2 and not base_fn.lower().startswith("msds"):
+                chosen_name = base_fn
+
+        # Trích xuất từ thẻ an toàn 'Hóa chất: <tên>'
+        if not chosen_name and text:
+            m_th = re.search(r'Hóa chất:\s*([^|\n]+)', text[:500], re.I)
+            if m_th and len(m_th.group(1).strip()) > 2:
+                chosen_name = m_th.group(1).strip().title()
+
         if chosen_name:
             data["product_name_original"] = chosen_name
             data["product_name_vi"] = chosen_name
@@ -1735,6 +1881,19 @@ class MSDSExtractorEngine:
         elif lines:
             data["product_name_original"] = lines[0][:80]
             data["product_name_vi"] = lines[0][:80]
+
+        # Quét bổ sung tên công ty chuẩn quốc tế nếu chưa có hoặc bị dirty
+        if not data["manufacturer"] or any(k in data["manufacturer"].lower() for k in ["- product name", "address", "township"]):
+            co_matches = re.findall(
+                r'([A-Z0-9\s,\.\-—&]+(?:CO\.,\s*LTD|LIMITED|GMBH|INC\.|CORP|INDUSTRIES\s+AG|COMPANY\s+LIMITED|CORPORATION|S\.A\.|MATERIALS\s+CO\.,\s*LTD|CÔNG TY TNHH[^\n,]+))',
+                text[:3500],
+                re.I
+            )
+            for m in co_matches:
+                cand = m.strip().strip(":-,")
+                if len(cand) > 4 and not cand.lower().startswith("address") and "product name" not in cand.lower():
+                    data["manufacturer"] = cand[:120]
+                    break
 
         # 2. Bóc tách bảng Thành phần & Số CAS (Mục 3)
         parsed_cas_set = set()

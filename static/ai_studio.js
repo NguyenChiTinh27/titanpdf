@@ -1659,6 +1659,20 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
             ? `<span class="msds-mother-badge" title="Sản phẩm liên kết Mother MSDS: ${escapeHtml(item.mother_msds_id)}">🔗 Mother: <b>${escapeHtml(item.mother_msds_id)}</b></span>`
             : "";
 
+        let isExpired = false;
+        if (item.revision_date) {
+            const yMatch = String(item.revision_date).match(/\b(19\d\d|20\d\d)\b/);
+            if (yMatch) {
+                const docY = parseInt(yMatch[1], 10);
+                if (new Date().getFullYear() - docY >= 3) {
+                    isExpired = true;
+                }
+            }
+        }
+        const expiredBadge = isExpired
+            ? `<span class="msds-badge-expired" style="background:#fff7ed; color:#c2410c; border:1px solid #fdba74; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:6px; display:inline-block;" title="MSDS đã ban hành quá 3 năm, cần cập nhật!">⏳ Quá hạn (> 3 năm)</span>`
+            : "";
+
         const subInfoParts = [];
         if (item.product_code && item.product_code !== item.chem_id) {
             subInfoParts.push(`Mã SP: <b>${escapeHtml(item.product_code)}</b>`);
@@ -1671,6 +1685,7 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
         const downloadOriginalUrl = `/api/msds/download-original/${encodeURIComponent(item.chem_id || displayCode)}`;
         const exportWordDocxUrl = `/api/msds/export-safety-card/${encodeURIComponent(item.chem_id || displayCode)}`;
         const isSelected = SELECTED_MSDS_IDS.has(safeChemId);
+        const driveFileId = item.drive_file_id || "";
 
         html += `
             <tr class="msds-table-row ${isSelected ? 'row-selected' : ''}" ondblclick="openMsdsSafetyModal('${safeChemId}')">
@@ -1688,7 +1703,7 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
                     </div>
                 </td>
                 <td class="msds-col-name">
-                    <div class="msds-chem-title" onclick="openMsdsSafetyModal('${safeChemId}')">${escapeHtml(item.product_name || "N/A")}</div>
+                    <div class="msds-chem-title" onclick="openMsdsSafetyModal('${safeChemId}')">${escapeHtml(item.product_name || "N/A")}${expiredBadge}</div>
                     <div class="msds-chem-meta">${subInfoHtml}</div>
                 </td>
                 <td class="msds-col-cas">
@@ -1702,9 +1717,14 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
                     <div class="msds-ghs-wrap">${ghsBadges}</div>
                 </td>
                 <td class="msds-col-file">
-                    <a href="${downloadOriginalUrl}" download class="msds-dl-file-btn" title="Tải tệp MSDS gốc: ${escapeHtml(srcFileName)}">
-                        <span>📥 Tải MSDS Gốc</span>
-                    </a>
+                    <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+                        <a href="${downloadOriginalUrl}" download class="msds-dl-file-btn" title="Tải tệp MSDS gốc: ${escapeHtml(srcFileName)}">
+                            <span>📥 Tải MSDS Gốc</span>
+                        </a>
+                        <button type="button" class="msds-btn-preview-file" onclick="openMsdsDriveViewer('${safeChemId}', '${escapeHtml(driveFileId)}', '${escapeHtml(srcFileName)}')" title="Xem nhanh tệp MSDS gốc trực tiếp (Google Drive Preview)" style="display:inline-flex; align-items:center; gap:4px; padding:3px 7px; font-size:11px; font-weight:600; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; cursor:pointer;">
+                            <span>👁️ Xem File Gốc</span>
+                        </button>
+                    </div>
                     <div class="msds-file-caption" title="${escapeHtml(srcFileName)}">${escapeHtml(srcFileName)}</div>
                 </td>
                 <td class="msds-col-actions">
@@ -2341,14 +2361,27 @@ async function executeDeleteAllMsds() {
         return;
     }
 
-    if (pwd !== "270120") {
+    if (pwd !== "270120" && pwd.toUpperCase() !== "XOA") {
         if (errDiv) errDiv.classList.remove("hidden");
-        if (errTxt) errTxt.textContent = "Mật khẩu xác nhận không chính xác! Thao tác bị từ chối.";
+        if (errTxt) errTxt.textContent = "Vui lòng nhập đúng chữ 'XOA' hoặc mật khẩu 270120 để xác nhận!";
         if (pwdInp) {
             pwdInp.select();
             pwdInp.focus();
         }
         return;
+    }
+
+    // Tự động tải xuống 1 bản Sao lưu JSON dự phòng trước khi xóa vĩnh viễn CSDL
+    try {
+        const backupLink = document.createElement("a");
+        backupLink.href = "/api/msds/export-json";
+        backupLink.download = `Backup_CIL_Before_Delete_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(backupLink);
+        backupLink.click();
+        document.body.removeChild(backupLink);
+        await new Promise(r => setTimeout(r, 600));
+    } catch (_bErr) {
+        console.warn("Lỗi sao lưu JSON dự phòng trước khi xóa:", _bErr);
     }
 
     const btnConfirm = document.getElementById("btn-confirm-delete-all");
@@ -4097,3 +4130,37 @@ window.addEventListener("DOMContentLoaded", () => {
         }
     } catch (_) {}
 });
+
+
+async function sanitizeMsdsCatalogWithAi() {
+    if (isGuestUser()) {
+        alert("Chức năng chỉ dành cho Quản trị viên (Admin).");
+        return;
+    }
+    if (!confirm("Hệ thống AI sẽ quét toàn bộ Sổ CIL để sửa các tên hóa chất chung chung ('Hóa chất FTU0005', 'A1935'...) và làm sạch trường Nhà cung cấp (loại bỏ '- Product Name', 'Address:...').\n\nBạn có muốn tiếp tục?")) {
+        return;
+    }
+    try {
+        showMsdsLoading("Đang quét & chuẩn hóa Sổ CIL bằng AI...");
+        const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
+        const role = sessionStorage.getItem("luv_user_role") || "owner";
+        const resp = await fetch("/api/msds/sanitize-catalog", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Titan-Session": token,
+                "X-Titan-Role": role,
+                "Authorization": "Bearer " + token
+            }
+        });
+        const res = await resp.json();
+        if (!resp.ok || !res.success) throw new Error(res.detail || res.message || "Lỗi chuẩn hóa CIL.");
+        await loadMsdsChemicalsList();
+        alert("✅ " + (res.message || "Đã chuẩn hóa Sổ CIL thành công!"));
+    } catch (err) {
+        alert("❌ " + err.message);
+    } finally {
+        hideMsdsLoading();
+    }
+}
+window.sanitizeMsdsCatalogWithAi = sanitizeMsdsCatalogWithAi;

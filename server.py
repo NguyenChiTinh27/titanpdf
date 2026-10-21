@@ -2223,12 +2223,7 @@ def api_msds_upload_summarize(
                     parsed["drive_file_id"] = upload_res.get("fileId") or upload_res.get("file_id")
                     parsed["drive_view_url"] = upload_res.get("viewUrl") or upload_res.get("view_url")
                     parsed["drive_download_url"] = upload_res.get("downloadUrl") or upload_res.get("download_url")
-                    # Dọn dẹp tệp tạm thời cục bộ sau khi tải lên Google Drive thành công
-                    try:
-                        if os.path.exists(saved_path):
-                            os.remove(saved_path)
-                    except Exception as _del_err:
-                        logger.warning(f"Could not delete local temp upload file {saved_path}: {_del_err}")
+                    # Đã tải lên Google Drive thành công, giữ lại saved_path để lưu vào kho tệp local data/msds_files
         except Exception as _gas_upload_err:
             logger.warning(f"Lỗi tải file lên Google Drive qua GAS: {_gas_upload_err}")
 
@@ -2570,8 +2565,9 @@ def api_msds_delete_batch(payload: MSDSBatchDeleteRequest, _: str = Depends(requ
 def api_msds_delete_all(payload: MSDSDeleteAllRequest, _: str = Depends(require_owner)):
     """Xóa tất cả hóa chất khỏi CSDL CIL và Google Sheet (yêu cầu mật khẩu bảo mật: 270120)."""
     from core.msds_intelligence import MSDSDatabase
-    if (payload.password or "").strip() != "270120":
-        raise HTTPException(status_code=403, detail="Mật khẩu xác nhận không chính xác! Thao tác bị từ chối.")
+    raw_pwd = (payload.password or "").strip()
+    if raw_pwd != "270120" and raw_pwd.upper() != "XOA":
+        raise HTTPException(status_code=403, detail="Mật khẩu xác nhận không chính xác (yêu cầu gõ chữ 'XOA' hoặc mật khẩu 270120)! Thao tác bị từ chối.")
     try:
         count = MSDSDatabase.delete_all_chemicals()
         return {
@@ -2582,6 +2578,22 @@ def api_msds_delete_all(payload: MSDSDeleteAllRequest, _: str = Depends(require_
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi xóa toàn bộ cơ sở dữ liệu: {str(e)}")
 
+
+
+
+@app.post("/api/msds/sanitize-catalog")
+def api_msds_sanitize_catalog(_: str = Depends(require_owner)):
+    """Tự động quét và chuẩn hóa toàn bộ Sổ CIL: sửa lỗi nhà cung cấp, tên hóa chất, ngày ban hành."""
+    from core.msds_intelligence import MSDSDatabase
+    try:
+        result = MSDSDatabase.sanitize_catalog()
+        return {
+            "success": True,
+            "data": result,
+            "message": f"Đã quét và chuẩn hóa thành công {result.get('updated_count', 0)}/{result.get('total', 0)} hóa chất trong sổ CIL!"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi chuẩn hóa danh mục CIL: {str(e)}")
 
 
 @app.get("/api/msds/export-cil")
@@ -2672,17 +2684,28 @@ def api_msds_export_safety_card(chem_id: str):
 
 @app.get("/api/msds/download-original/{chem_id}")
 def api_msds_download_original(chem_id: str):
-    """Tải nhanh tệp MSDS gốc đã được đẩy lên và lưu trong kho data/msds_files."""
+    """Tải nhanh tệp MSDS gốc: Ưu tiên kho data/msds_files cục bộ; Tự động chuyển hướng tải từ Google Drive nếu ổ cứng Render bị xóa sau khởi động lại."""
     from core.msds_intelligence import MSDSDatabase
     try:
         file_path = MSDSDatabase.resolve_msds_file_path(chem_id)
-        if not file_path or not file_path.exists():
-            raise HTTPException(status_code=404, detail=f"Không tìm thấy tệp MSDS gốc của mã '{chem_id}'.")
-        return FileResponse(
-            str(file_path),
-            filename=file_path.name,
-            media_type="application/octet-stream"
-        )
+        if file_path and file_path.exists() and file_path.is_file() and file_path.stat().st_size > 0:
+            return FileResponse(
+                str(file_path),
+                filename=file_path.name,
+                media_type="application/octet-stream"
+            )
+
+        # Tự động chuyển hướng Google Drive nếu mất file cục bộ trên Render
+        chem = MSDSDatabase.get_chemical(chem_id)
+        if chem:
+            drive_download_url = chem.get("drive_download_url") or ""
+            drive_file_id = chem.get("drive_file_id") or ""
+            if drive_download_url:
+                return RedirectResponse(url=drive_download_url, status_code=302)
+            if drive_file_id:
+                return RedirectResponse(url=f"https://drive.google.com/uc?export=download&id={drive_file_id}", status_code=302)
+
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy tệp MSDS gốc của mã '{chem_id}'.")
     except HTTPException:
         raise
     except Exception as e:
