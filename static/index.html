@@ -747,6 +747,23 @@
                             <div style="font-size:12px; color:#94a3b8; text-align:center; padding:16px;">Đang tải danh sách thiết bị...</div>
                         </div>
                     </div>
+
+                    <!-- Section: Nhật Ký Hoạt Động Của Khách (Guest Audit Log) -->
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px; margin-top:16px;">
+                        <div style="font-weight:700; font-size:13.5px; color:#0f172a; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span>📜</span>
+                                <span>Nhật Ký Hoạt Động Gần Đây (Guest Audit Log)</span>
+                                <span id="guest-audit-count-badge" style="font-size:10.5px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:10px;">0 bản ghi</span>
+                            </div>
+                            <button type="button" id="btn-clear-audit-log" onclick="clearGuestAuditLog()" style="background:#f8fafc; border:1px solid #cbd5e1; color:#64748b; font-size:11.5px; font-weight:600; cursor:pointer; padding:3px 10px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">
+                                <span>🗑️</span> Xóa nhật ký
+                            </button>
+                        </div>
+                        <div id="guest-audit-log-list" style="max-height:180px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; padding:6px; font-family:monospace; font-size:11px;">
+                            <div style="font-size:11.5px; color:#94a3b8; text-align:center; padding:16px; font-family:sans-serif;">Chưa có hoạt động nào được ghi nhận</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- TAB 3: PHÂN QUYỀN CHI TIẾT 36 TOOLS -->
@@ -3000,6 +3017,22 @@
                                 <svg width="16" height="16"><use href="#icon-download"></use></svg>
                                 TẢI XUỐNG TỆP TIN
                             </a>
+                            <!-- One-Click Tool Chaining: Send output PDF directly into next tool -->
+                            <div class="chaining-actions-wrapper" style="margin-top: 8px; width: 100%;">
+                                <button type="button" id="btn-chain-tool" onclick="toggleChainToolMenu(event)" class="btn-secondary btn-block" style="background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">
+                                    <span>🔄</span>
+                                    <span>Chuyển tiếp xử lý... (Send to Tool)</span>
+                                </button>
+                                <div id="chain-tool-dropdown" class="chain-tool-dropdown hidden" style="position:relative; margin-top:6px; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.12); padding:6px; z-index:100; font-size:12px;">
+                                    <div style="font-size:11px; font-weight:700; color:#64748b; padding:4px 8px; text-transform:uppercase; letter-spacing:0.5px;">Chọn công cụ kế tiếp:</div>
+                                    <button type="button" onclick="chainForwardTo('sign')" class="chain-tool-item">✍️ Ký Số PDF (Sign)</button>
+                                    <button type="button" onclick="chainForwardTo('watermark')" class="chain-tool-item">💧 Đóng Dấu / Chèn Watermark</button>
+                                    <button type="button" onclick="chainForwardTo('compress')" class="chain-tool-item">🗜️ Nén Giảm Dung Lượng PDF</button>
+                                    <button type="button" onclick="chainForwardTo('protect')" class="chain-tool-item">🔒 Đặt Mật Khẩu Bảo Mật</button>
+                                    <button type="button" onclick="chainForwardTo('organize')" class="chain-tool-item">📑 Sắp Xếp &amp; Đổi Thứ Tự Trang</button>
+                                    <button type="button" onclick="chainForwardTo('vip-editor')" class="chain-tool-item">✏️ Chỉnh Sửa Trực Quan (VIP Editor)</button>
+                                </div>
+                            </div>
                             <div id="doctran-tri-downloads" class="doctran-tri-downloads hidden" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px; width:100%;">
                                 <a id="btn-tri-docx" href="#" class="btn-download-tri btn-tri-docx btn-block" download>
                                     <span>📝</span> Tải file Word (.docx)

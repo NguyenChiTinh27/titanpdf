@@ -308,6 +308,13 @@ async function runAiTranslation() {
         return;
     }
 
+    if (typeof checkGuestAiQuota === "function" && !checkGuestAiQuota()) {
+        return;
+    }
+    if (typeof logGuestActivity === "function") {
+        logGuestActivity("AI Studio: Dịch văn bản");
+    }
+
     const textToTranslate = input.value.trim();
     const srcLang = document.getElementById("ai-trans-src-lang")?.value || "auto";
     const tgtLang = document.getElementById("ai-trans-tgt-lang")?.value || "vi";
@@ -490,6 +497,13 @@ async function runAiDocumentSummarize() {
         alert("Vui lòng chọn hoặc kéo thả tệp tài liệu cần tóm tắt (.pdf, .docx, .doc, .txt, .pptx)!");
         document.getElementById("ai-sum-file-input")?.click();
         return;
+    }
+
+    if (typeof checkGuestAiQuota === "function" && !checkGuestAiQuota()) {
+        return;
+    }
+    if (typeof logGuestActivity === "function") {
+        logGuestActivity("AI Studio: Tóm tắt tài liệu");
     }
 
     const mode = document.getElementById("ai-sum-mode")?.value || "executive";

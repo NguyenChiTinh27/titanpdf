@@ -6646,13 +6646,52 @@ body.msds-studio-active {
 }
 
 /* ============================================================================== */
-/* ISOLATED PRINT STYLESHEET FOR GHS DECANTING LABELS (@media print)              */
+/* GLOBAL OFFICE PRINT STYLESHEET (@media print) - ZERO CLUTTER, STANDARD A4      */
 /* ============================================================================== */
 @media print {
-  body > * {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  /* 1. Hide all navigation, toolbars, buttons, headers, dark backgrounds */
+  header, .navbar, .vip-toolbar, .hse-topbar, .gp-action-bar,
+  .btn, button, .footer, .processing-video-backdrop,
+  #admin-security-modal, #security-gate, .sidebar, .studio-sidebar-column,
+  .navbar-status, .category-filter-wrapper, .dashboard-hero,
+  .main-nav-tabs, .navbar-auth-controls, .no-print, [data-no-print="true"],
+  .chaining-actions-wrapper, #chain-tool-dropdown {
     display: none !important;
   }
 
+  /* 2. Page & Background Reset */
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 3. Printable Document Elements: Clean standard A4 layout */
+  main, .main-content, .gatepass-slip-preview, .hse-report-container,
+  .hse-report-page, #canvas-viewport, #studio-container {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  /* 4. Isolated GHS Decanting Container Support */
   #ghs-print-isolated-container,
   #ghs-print-isolated-container * {
     display: block !important;
@@ -8066,4 +8105,39 @@ body[data-role="guest"] #gp-btn-add-proof {
   transform: translateY(-4px) scale(1.02) !important;
   box-shadow: 0 12px 28px rgba(2, 132, 199, 0.22) !important;
   outline: 2px dashed #0284c7;
+}
+
+/* Tool Chaining Dropdown & Send-to-Tool Items */
+.chain-tool-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  z-index: 1000;
+}
+.chain-tool-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+.chain-tool-item:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+  transform: translateX(3px);
 }

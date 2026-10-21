@@ -308,14 +308,20 @@ class PDFEngine:
         """Add diagonal watermark to all pages with full Vietnamese Unicode font support."""
         import math
 
-        # Tự động nhận diện font hệ thống hỗ trợ 100% tiếng Việt Unicode
-        font_path = None
-        for fp in [
+        # Tự động nhận diện font hệ thống hỗ trợ 100% tiếng Việt Unicode (ưu tiên font DejaVuSans tích hợp)
+        bundled_font = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "fonts", "DejaVuSans.ttf"))
+        font_candidates = [
+            bundled_font,
             r"C:\Windows\Fonts\arial.ttf",
             r"C:\Windows\Fonts\times.ttf",
             r"C:\Windows\Fonts\segoeui.ttf",
             r"C:\Windows\Fonts\tahoma.ttf",
-        ]:
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]
+        font_path = None
+        for fp in font_candidates:
             if os.path.exists(fp):
                 font_path = fp
                 break
@@ -354,13 +360,32 @@ class PDFEngine:
     @staticmethod
     def add_page_numbers(input_path: str, output_path: str, pattern: str = "Trang {page} / {total}") -> dict:
         """Insert footer page numbers on all pages."""
+        bundled_font = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "fonts", "DejaVuSans.ttf"))
+        font_candidates = [
+            bundled_font,
+            r"C:\Windows\Fonts\arial.ttf",
+            r"C:\Windows\Fonts\times.ttf",
+            r"C:\Windows\Fonts\segoeui.ttf",
+            r"C:\Windows\Fonts\tahoma.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        ]
+        font_path = None
+        for fp in font_candidates:
+            if os.path.exists(fp):
+                font_path = fp
+                break
         doc = fitz.open(input_path)
         total = len(doc)
         for i, page in enumerate(doc):
             rect = page.rect
             footer_text = pattern.format(page=i+1, total=total)
             point = fitz.Point(rect.width / 2 - 40, rect.height - 25)
-            page.insert_text(point, footer_text, fontsize=10, color=(0.4, 0.4, 0.4))
+            insert_kw = {"point": point, "text": footer_text, "fontsize": 10, "color": (0.4, 0.4, 0.4)}
+            if font_path:
+                insert_kw["fontname"] = "TitanUnicodeFont"
+                insert_kw["fontfile"] = font_path
+            page.insert_text(**insert_kw)
         doc.save(output_path, deflate=True)
         doc.close()
         return {"success": True, "output_size": os.path.getsize(output_path)}

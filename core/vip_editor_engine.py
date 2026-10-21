@@ -10,7 +10,23 @@ class VIPEditorEngine:
     trực tiếp vào trang PDF gốc với chất lượng Vector 100% siêu nét, không nén vỡ hạt.
     """
 
+    BUNDLED_FONT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "fonts", "DejaVuSans.ttf"))
     WINDOWS_FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+
+    @classmethod
+    def get_font_path(cls):
+        candidates = [
+            cls.BUNDLED_FONT_PATH,
+            cls.WINDOWS_FONT_PATH,
+            "C:/Windows/Fonts/times.ttf",
+            "C:/Windows/Fonts/tahoma.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return None
 
     @staticmethod
     def hex_to_rgb(hex_str):
@@ -32,7 +48,7 @@ class VIPEditorEngine:
         if not doc.is_pdf:
             pdf_bytes = doc.convert_to_pdf()
             doc = fitz.open("pdf", pdf_bytes)
-        font_path = cls.WINDOWS_FONT_PATH if os.path.exists(cls.WINDOWS_FONT_PATH) else None
+        font_path = cls.get_font_path()
 
         # Group annotations by page (1-indexed from client)
         page_annots = {}

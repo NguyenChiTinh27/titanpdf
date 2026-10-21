@@ -1,3 +1,162 @@
+// ==============================================================================
+// 1. ONE-CLICK TOOL CHAINING & GUEST AUDIT LOG & GUEST AI QUOTA ENGINE
+// ==============================================================================
+
+function toggleChainToolMenu(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const menu = document.getElementById("chain-tool-dropdown");
+    if (menu) {
+        menu.classList.toggle("hidden");
+    }
+}
+window.toggleChainToolMenu = toggleChainToolMenu;
+
+document.addEventListener("click", (e) => {
+    const menu = document.getElementById("chain-tool-dropdown");
+    const btn = document.getElementById("btn-chain-tool");
+    if (menu && !menu.classList.contains("hidden")) {
+        if (!e.target.closest("#chain-tool-dropdown") && !e.target.closest("#btn-chain-tool")) {
+            menu.classList.add("hidden");
+        }
+    }
+});
+
+async function chainForwardTo(targetToolId) {
+    const menu = document.getElementById("chain-tool-dropdown");
+    if (menu) menu.classList.add("hidden");
+
+    if (!lastResultUrl) {
+        alert("Chưa có tệp kết quả để chuyển tiếp!");
+        return;
+    }
+
+    showSafetyToast("⏳ Đang chuẩn bị và chuyển tiếp tệp PDF vào bộ nhớ...", 3000);
+
+    try {
+        const resp = await fetch(lastResultUrl);
+        if (!resp.ok) throw new Error("Không thể tải tệp PDF kết quả để chuyển tiếp.");
+        const blob = await resp.blob();
+
+        const defaultName = lastResultFilename || "chain_output.pdf";
+        const file = new File([blob], defaultName, { type: blob.type || "application/pdf" });
+
+        if (targetToolId === "vip-editor") {
+            if (typeof switchMainTab === "function") {
+                switchMainTab("editor");
+                setTimeout(() => {
+                    if (typeof loadVipPdfDocument === "function") {
+                        loadVipPdfDocument(file);
+                    }
+                }, 200);
+            }
+            showSafetyToast(`✓ Đã nạp tệp [${defaultName}] vào VIP Editor thành công!`, 4000);
+            return;
+        }
+
+        await openTool(targetToolId);
+        setTimeout(() => {
+            if (typeof handleFileSelection === "function") {
+                handleFileSelection([file]);
+            }
+            showSafetyToast(`✓ Đã chuyển tiếp tệp [${defaultName}] sang công cụ [${targetToolId.toUpperCase()}]!`, 4000);
+        }, 180);
+    } catch (err) {
+        console.error("Lỗi chuyển tiếp tệp:", err);
+        alert("Lỗi khi chuyển tiếp tệp: " + err.message);
+    }
+}
+window.chainForwardTo = chainForwardTo;
+
+// Guest Audit Log Engine
+function logGuestActivity(actionName) {
+    try {
+        const role = document.body.getAttribute("data-role") || sessionStorage.getItem("luv_user_role") || "guest";
+        const devId = (typeof getDeviceId === "function") ? getDeviceId() : "dev_unknown";
+        const shortDev = devId.length > 12 ? devId.substring(0, 12) + "..." : devId;
+        const now = new Date();
+        const timeStr = now.toLocaleDateString("vi-VN") + " " + now.toLocaleTimeString("vi-VN");
+
+        let logs = [];
+        try {
+            logs = JSON.parse(localStorage.getItem("luv_guest_audit_log") || "[]");
+        } catch(_e) { logs = []; }
+
+        const entry = {
+            time: timeStr,
+            role: role === "owner" ? "👑 Chính chủ" : "👤 Khách",
+            device: shortDev,
+            action: actionName
+        };
+
+        logs.unshift(entry);
+        if (logs.length > 50) logs = logs.slice(0, 50);
+        localStorage.setItem("luv_guest_audit_log", JSON.stringify(logs));
+        renderGuestAuditLogs();
+    } catch(err) {
+        console.warn("Audit log error:", err);
+    }
+}
+window.logGuestActivity = logGuestActivity;
+
+function renderGuestAuditLogs() {
+    const listEl = document.getElementById("guest-audit-log-list");
+    const countBadge = document.getElementById("guest-audit-count-badge");
+    if (!listEl) return;
+
+    let logs = [];
+    try {
+        logs = JSON.parse(localStorage.getItem("luv_guest_audit_log") || "[]");
+    } catch(_e) { logs = []; }
+
+    if (countBadge) countBadge.innerText = logs.length + " bản ghi";
+
+    if (!logs || logs.length === 0) {
+        listEl.innerHTML = '<div style="font-size:11.5px; color:#94a3b8; text-align:center; padding:16px; font-family:sans-serif;">Chưa có hoạt động nào được ghi nhận</div>';
+        return;
+    }
+
+    let html = "";
+    logs.forEach(log => {
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:5px 8px; border-bottom:1px solid #e2e8f0; font-size:11px; line-height:1.4;">
+            <div>
+                <span style="color:#64748b; font-size:10px;">[${log.time}]</span>
+                <span style="font-weight:600; color:#1e293b; margin-left:4px;">${log.action}</span>
+            </div>
+            <div style="font-size:10px; color:#0284c7; background:#eff6ff; padding:1px 6px; border-radius:4px; border:1px solid #bfdbfe;">
+                ${log.role} (${log.device})
+            </div>
+        </div>`;
+    });
+    listEl.innerHTML = html;
+}
+window.renderGuestAuditLogs = renderGuestAuditLogs;
+
+function clearGuestAuditLog() {
+    if (!confirm("Bạn có chắc chắn muốn xóa toàn bộ nhật ký hoạt động gần đây?")) return;
+    localStorage.removeItem("luv_guest_audit_log");
+    renderGuestAuditLogs();
+}
+window.clearGuestAuditLog = clearGuestAuditLog;
+
+// Guest AI Quota Protection Engine
+function checkGuestAiQuota() {
+    const role = document.body.getAttribute("data-role") || sessionStorage.getItem("luv_user_role");
+    if (role === "guest") {
+        const MAX_GUEST_AI_CALLS = 3;
+        let currentCalls = parseInt(sessionStorage.getItem("luv_guest_ai_calls") || "0");
+        if (currentCalls >= MAX_GUEST_AI_CALLS) {
+            alert(`⚠️ Hạn mức AI đã hết: Chế độ Khách chỉ được phép sử dụng tối đa ${MAX_GUEST_AI_CALLS} lượt gọi AI mỗi phiên để bảo vệ hạn mức của Chủ sở hữu.\nVui lòng đăng nhập tài khoản Chính chủ để tiếp tục sử dụng không giới hạn.`);
+            return false;
+        }
+        sessionStorage.setItem("luv_guest_ai_calls", (currentCalls + 1).toString());
+    }
+    return true;
+}
+window.checkGuestAiQuota = checkGuestAiQuota;
+
 // ============================================================
 // TitanPDF Private Suite - Complete Controller (26 Tools Parity)
 // With Full Side-by-Side Interactive Studio & Advanced Mechanics
@@ -1170,6 +1329,9 @@ function openTool(toolId) {
             return;
         }
     }
+
+    const toolObj = typeof TOOLS !== "undefined" ? TOOLS.find(t => t.id === toolId) : null;
+    logGuestActivity(`Mở công cụ: ${(toolObj ? toolObj.title : toolId)}`);
 
     if (toolId === "vip-editor") {
         if (typeof switchMainTab === "function") {
@@ -4552,6 +4714,14 @@ async function executeProcess() {
             formData.append("clean_hf", wmCleanHf ? "true" : "false");
             break;
     }
+
+    // AI Tools: Enforce Guest Session Quota Protection
+    if (currentTool && (currentTool.category === "ai" || ["ocr", "interlinear-translate", "ai-translator", "ai-summarizer"].includes(currentTool.id))) {
+        if (!checkGuestAiQuota()) {
+            return;
+        }
+    }
+    logGuestActivity(`Thực thi xử lý: ${currentTool.title}`);
 
     // Non-blocking progress indicator: activate shimmer bar and status pill
     const shimmerBar = document.getElementById("canvas-shimmer-bar");
