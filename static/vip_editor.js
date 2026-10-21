@@ -150,15 +150,32 @@ function switchMainTab(tab, subTab = null) {
     if (navGatepass) navGatepass.classList.remove("active");
     if (navLicense) navLicense.classList.remove("active");
 
+    // 1. Luôn cuộn trang lên đỉnh (0, 0) ngay lập tức để thanh Header/Navbar không bị trôi/lỗi đè
+    try {
+        window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    } catch (_e) {
+        window.scrollTo(0, 0);
+    }
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+
+    // 2. Danh sách toàn bộ 10 view chính trong hệ thống
+    const allViews = [
+        homeView, wsView, editorView, aiView, msdsView,
+        hseView, legalView, monthlyView, gatepassView, licenseView
+    ];
+
+    // 3. Ẩn toàn bộ tất cả các view trước khi bật view được chọn
+    allViews.forEach(v => {
+        if (v) {
+            v.classList.add("hidden");
+            if (v === licenseView) {
+                v.style.setProperty("display", "none", "important");
+            }
+        }
+    });
+
     if (tab === 'editor') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
         if (editorView) editorView.classList.remove("hidden");
         if (footer) footer.classList.add("hidden");
         document.body.classList.add("vip-editor-active");
@@ -171,14 +188,6 @@ function switchMainTab(tab, subTab = null) {
             loadVipPdfDocument(selectedFiles[0]);
         }
     } else if (tab === 'msds') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (editorView) editorView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
         if (msdsView) msdsView.classList.remove("hidden");
         if (footer) footer.classList.add("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -190,14 +199,6 @@ function switchMainTab(tab, subTab = null) {
             loadMsdsChemicalsList();
         }
     } else if (tab === 'monthly-inventory') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (editorView) editorView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
         if (monthlyView) monthlyView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -209,14 +210,6 @@ function switchMainTab(tab, subTab = null) {
             window.initMonthlyInventory();
         }
     } else if (tab === 'ai') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (editorView) editorView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
         if (aiView) aiView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -228,14 +221,6 @@ function switchMainTab(tab, subTab = null) {
             switchAiSubTab(subTab);
         }
     } else if (tab === 'hse') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (editorView) editorView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
         if (hseView) hseView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -247,14 +232,6 @@ function switchMainTab(tab, subTab = null) {
             window.initHseStudio();
         }
     } else if (tab === 'legal') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (editorView) editorView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
         if (legalView) legalView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -266,14 +243,6 @@ function switchMainTab(tab, subTab = null) {
             window.initLegalCatalog();
         }
     } else if (tab === 'gatepass') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (editorView) editorView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
         if (gatepassView) gatepassView.classList.remove("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
@@ -291,16 +260,10 @@ function switchMainTab(tab, subTab = null) {
             window.initGatePassStudio();
         }
     } else if (tab === 'license') {
-        if (homeView) homeView.classList.add("hidden");
-        if (wsView) wsView.classList.add("hidden");
-        if (editorView) editorView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
-        if (licenseView) licenseView.classList.remove("hidden");
+        if (licenseView) {
+            licenseView.style.removeProperty("display");
+            licenseView.classList.remove("hidden");
+        }
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
@@ -317,16 +280,7 @@ function switchMainTab(tab, subTab = null) {
             window.initLicenseManager();
         }
     } else {
-        if (editorView) editorView.classList.add("hidden");
-        if (aiView) aiView.classList.add("hidden");
-        if (msdsView) msdsView.classList.add("hidden");
-        if (hseView) hseView.classList.add("hidden");
-        if (legalView) legalView.classList.add("hidden");
-        if (monthlyView) monthlyView.classList.add("hidden");
-        if (gatepassView) gatepassView.classList.add("hidden");
-        if (licenseView) licenseView.classList.add("hidden");
         if (homeView) homeView.classList.remove("hidden");
-        if (wsView) wsView.classList.add("hidden");
         if (footer) footer.classList.remove("hidden");
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");

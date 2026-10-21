@@ -5313,7 +5313,7 @@ window.AdminAuth = {
         const tpl = document.getElementById("license-manager-template");
         if (view && tpl) {
             view.innerHTML = tpl.innerHTML;
-            view.style.setProperty("display", "block", "important");
+            view.style.removeProperty("display");
             view.classList.remove("hidden");
             view.removeAttribute("aria-hidden");
         }
