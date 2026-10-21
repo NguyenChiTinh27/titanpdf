@@ -8058,3 +8058,12 @@ body[data-role="guest"] #gp-btn-add-proof {
 }
 
 
+
+/* Smart Drag & Drop Glow on Tool Cards */
+.tool-card.drag-over-active {
+  border-color: #0284c7 !important;
+  background: rgba(2, 132, 199, 0.08) !important;
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.22) !important;
+  outline: 2px dashed #0284c7;
+}

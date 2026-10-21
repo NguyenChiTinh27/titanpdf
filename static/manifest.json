@@ -1,0 +1,63 @@
+{
+  "name": "LUV-PDF Private Suite — Hệ Sinh Thái Xử Lý Tài Liệu Cục Bộ",
+  "short_name": "LUV-PDF",
+  "description": "Hệ sinh thái xử lý PDF, bóc tách MSDS, hóa chất và báo cáo an toàn hiện trường 100% cục bộ trên thiết bị của bạn.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0284c7",
+  "lang": "vi",
+  "categories": ["utilities", "productivity", "business"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/hse_avatar.jpg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Bộ 36 Công Cụ PDF",
+      "short_name": "Công Cụ",
+      "description": "Mở danh mục 36 công cụ xử lý PDF",
+      "url": "./#tools",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "VIP PDF Editor",
+      "short_name": "Editor",
+      "description": "Mở trình chỉnh sửa PDF VIP Pro",
+      "url": "./#editor",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Sổ Hóa Chất CIL & MSDS",
+      "short_name": "MSDS & CIL",
+      "description": "Tra cứu và bóc tách MSDS hóa chất",
+      "url": "./#msds",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "HSE Report Studio",
+      "short_name": "HSE Report",
+      "description": "Lập báo cáo an toàn hiện trường",
+      "url": "./#hse",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

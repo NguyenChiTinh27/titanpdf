@@ -987,6 +987,33 @@ function renderToolCards() {
                     openTool(tool.id);
                 }
             };
+
+            // Smart Drag & Drop: Drag files directly onto tool cards to open and process instantly
+            card.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                card.classList.add("drag-over-active");
+            });
+            card.addEventListener("dragleave", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                card.classList.remove("drag-over-active");
+            });
+            card.addEventListener("drop", async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                card.classList.remove("drag-over-active");
+                const dt = e.dataTransfer;
+                if (dt && dt.files && dt.files.length > 0) {
+                    const dropped = Array.from(dt.files);
+                    await openTool(tool.id);
+                    setTimeout(() => {
+                        if (typeof handleFileSelection === "function") {
+                            handleFileSelection(dropped);
+                        }
+                    }, 180);
+                }
+            });
         } else {
             card.onclick = () => alert(`Công cụ [${tool.title}] đã bị khóa đối với Chế độ Khách bởi Quản trị viên.`);
             card.onkeydown = (e) => {
@@ -1041,17 +1068,37 @@ function setupKeyboardNavigation() {
     const searchInput = document.getElementById("search-input");
 
     window.addEventListener("keydown", (e) => {
-        // 1. Ctrl+K or Cmd+K: Focus search input
+        // 1. Ctrl+K or Cmd+K: Focus search input or reveal quick search
         if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
             e.preventDefault();
+            const searchContainer = document.querySelector(".navbar-search");
+            if (searchContainer && searchContainer.style.display === "none") {
+                searchContainer.style.display = "block";
+            }
             if (searchInput) {
                 searchInput.focus();
                 searchInput.select();
             }
         }
 
-        // 2. Escape: Blur active input field first; return home only if no field is focused
+        // 2. Escape: Close active modals, cancel tasks or return home
         if (e.key === "Escape") {
+            // Check processing modal
+            const procModal = document.getElementById("processing-video-modal");
+            if (procModal && !procModal.classList.contains("hidden")) {
+                e.preventDefault();
+                if (typeof cancelProcessing === "function") cancelProcessing();
+                return;
+            }
+
+            // Check security settings modal
+            const secModal = document.getElementById("security-settings-modal");
+            if (secModal && !secModal.classList.contains("hidden")) {
+                e.preventDefault();
+                if (typeof closeSecurityModal === "function") closeSecurityModal();
+                return;
+            }
+
             const activeEl = document.activeElement;
             const isInputActive = activeEl && (
                 activeEl.tagName === "INPUT" ||
@@ -1068,8 +1115,8 @@ function setupKeyboardNavigation() {
                 return;
             }
 
-            // Only close workspace when no input is focused
-            if (!workspaceView.classList.contains("hidden")) {
+            // Close workspace view if active
+            if (workspaceView && !workspaceView.classList.contains("hidden")) {
                 goHome();
             }
         }
@@ -1300,6 +1347,14 @@ async function handleFileSelection(files) {
     if (!currentTool) return;
     const incoming = Array.from(files || []);
     if (incoming.length === 0) return;
+
+    // Safety Warning: Files larger than 100MB
+    const MAX_SAFE_SIZE = 100 * 1024 * 1024; // 100MB
+    const oversizedFiles = incoming.filter(f => f.size > MAX_SAFE_SIZE);
+    if (oversizedFiles.length > 0) {
+        const names = oversizedFiles.map(f => `${f.name} (${(f.size / (1024 * 1024)).toFixed(1)} MB)`).join(", ");
+        showSafetyToast(`⚠️ Cảnh báo tệp lớn: Tệp [${names}] có dung lượng trên 100MB. Trình duyệt có thể tiêu tốn nhiều RAM khi giải nén. Vui lòng kiên nhẫn trong quá trình xử lý cục bộ.`, 7000, true);
+    }
 
     if (currentTool.id === "compare") {
         selectedFiles = [...selectedFiles, ...incoming].slice(0, 2);
@@ -2682,6 +2737,15 @@ function attachImageCardDragListeners(card, idx) {
 }
 
 function renderImagesGrid() {
+    // Revoke previous object URLs to prevent RAM memory leaks
+    if (window._IMAGE_PREVIEW_URLS && window._IMAGE_PREVIEW_URLS.length > 0) {
+        window._IMAGE_PREVIEW_URLS.forEach(u => {
+            try { URL.revokeObjectURL(u); } catch(_e) {}
+        });
+        window._IMAGE_PREVIEW_URLS = [];
+    }
+    window._IMAGE_PREVIEW_URLS = window._IMAGE_PREVIEW_URLS || [];
+
     pagesGrid.innerHTML = "";
     selectedFiles.forEach((file, idx) => {
         const card = document.createElement("div");
@@ -2690,6 +2754,7 @@ function renderImagesGrid() {
         attachImageCardDragListeners(card, idx);
 
         const imgUrl = URL.createObjectURL(file);
+        window._IMAGE_PREVIEW_URLS.push(imgUrl);
         card.innerHTML = `
             <div class="page-card-header">
                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -3103,6 +3168,9 @@ function handleSignaturePosChange(pos) {
 function handleSignatureFileChange(input) {
     if (!input.files || input.files.length === 0) return;
     const file = input.files[0];
+    if (currentSignatureUrl) {
+        try { URL.revokeObjectURL(currentSignatureUrl); } catch(_e) {}
+    }
     currentSignatureUrl = URL.createObjectURL(file);
     const box = document.querySelector(".sign-preview-box");
     if (box) {
@@ -4498,14 +4566,16 @@ async function executeProcess() {
     }
     resultPanel.classList.add("hidden");
 
-    // Kích hoạt hoạt ảnh động trực quan sinh động to ở giữa màn hình
+    // Kích hoạt hoạt ảnh động trực quan sinh động to ở giữa màn hình kèm AbortController
     const toolTitle = (currentTool && currentTool.title) ? currentTool.title : "Tài liệu";
+    window.currentAbortController = new AbortController();
     showProcessingAnimation(`Đang xử lý ${toolTitle}...`);
 
     try {
         const response = await fetch(currentTool.endpoint, {
             method: "POST",
-            body: formData
+            body: formData,
+            signal: window.currentAbortController.signal
         });
 
         let data;
@@ -4608,6 +4678,56 @@ const PROC_STATUS_MESSAGES = [
     "Đang xuất tài liệu đầu ra an toàn tuyệt đối..."
 ];
 
+let procPercentInterval = null;
+
+function showSafetyToast(msg, duration = 5000, isWarning = false) {
+    let toast = document.getElementById("app-safety-toast");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "app-safety-toast";
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            color: #ffffff;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.88rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            z-index: 100000;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            max-width: 420px;
+            line-height: 1.4;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        `;
+        document.body.appendChild(toast);
+    }
+    toast.style.background = isWarning ? "linear-gradient(135deg, #d97706, #b45309)" : "linear-gradient(135deg, #0284c7, #0369a1)";
+    toast.innerHTML = msg;
+    toast.style.opacity = "1";
+    toast.style.transform = "translateY(0)";
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(10px)";
+    }, duration);
+}
+window.showSafetyToast = showSafetyToast;
+
+function cancelProcessing() {
+    if (window.currentAbortController) {
+        try { window.currentAbortController.abort(); } catch(_e) {}
+        window.currentAbortController = null;
+    }
+    clearInterval(procPercentInterval);
+    hideProcessingAnimation();
+    showSafetyToast("Đã hủy tác vụ xử lý theo yêu cầu.");
+}
+window.cancelProcessing = cancelProcessing;
+
 function showProcessingAnimation(titleText) {
     const modal = document.getElementById("processing-video-modal");
     const video = document.getElementById("processing-video-player");
@@ -4640,10 +4760,32 @@ function showProcessingAnimation(titleText) {
         msgIdx = (msgIdx + 1) % PROC_STATUS_MESSAGES.length;
         if (descEl) descEl.innerText = PROC_STATUS_MESSAGES[msgIdx];
     }, 2000);
+
+    // Dynamic Progress Percentage (12% -> 92%)
+    let currentPct = 12;
+    const progressFill = document.getElementById("processing-progress-fill");
+    const progressText = document.getElementById("processing-progress-text");
+    if (progressFill) progressFill.style.width = `${currentPct}%`;
+    if (progressText) progressText.innerText = `Đang xử lý: ${currentPct}%`;
+
+    clearInterval(procPercentInterval);
+    procPercentInterval = setInterval(() => {
+        if (currentPct < 92) {
+            currentPct += Math.floor(Math.random() * 6) + 3;
+            if (currentPct > 92) currentPct = 92;
+            if (progressFill) progressFill.style.width = `${currentPct}%`;
+            if (progressText) progressText.innerText = `Đang xử lý: ${currentPct}%`;
+        }
+    }, 500);
 }
 
 function hideProcessingAnimation() {
     clearInterval(procStatusInterval);
+    clearInterval(procPercentInterval);
+    const progressFill = document.getElementById("processing-progress-fill");
+    const progressText = document.getElementById("processing-progress-text");
+    if (progressFill) progressFill.style.width = "100%";
+    if (progressText) progressText.innerText = "Hoàn tất: 100%";
     const modal = document.getElementById("processing-video-modal");
     const video = document.getElementById("processing-video-player");
 
