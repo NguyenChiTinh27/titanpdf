@@ -1646,15 +1646,23 @@ def process_unlock(file: UploadFile = File(...), password: str = Form("")):
 # 15. OCR PDF (DeepSeek Vision AI & Tesseract Hybrid)
 @app.get("/api/settings/deepseek")
 def get_deepseek_settings(request: Request):
-    """Lấy trạng thái cấu hình DeepSeek API (Che giấu đối với Chế độ Khách)."""
+    """Lấy trạng thái cấu hình AI Toàn Cục (Che giấu đối với Chế độ Khách)."""
     role = get_current_role(request)
-    saved_key = DeepSeekOCR.get_saved_api_key() or ""
+    cfg = DeepSeekOCR.get_settings()
+    saved_key = cfg.get("api_key") or ""
+    model = cfg.get("model") or DeepSeekOCR.DEFAULT_MODEL
+    provider = cfg.get("provider") or "deepseek"
+    base_url = cfg.get("base_url") or "https://api.deepseek.com/v1"
+
     if role == "guest":
         return {
             "has_key": bool(saved_key),
             "key": "",
             "masked_key": "••••••••••••••••" if saved_key else "",
-            "default_model": DeepSeekOCR.DEFAULT_MODEL,
+            "default_model": model,
+            "model": model,
+            "provider": provider,
+            "base_url": base_url,
             "read_only": True
         }
     masked = ""
@@ -1664,38 +1672,57 @@ def get_deepseek_settings(request: Request):
         "has_key": bool(saved_key),
         "key": saved_key,
         "masked_key": masked,
-        "default_model": DeepSeekOCR.DEFAULT_MODEL,
+        "default_model": model,
+        "model": model,
+        "provider": provider,
+        "base_url": base_url,
         "read_only": False
     }
 
 
 @app.post("/api/settings/deepseek")
-def save_deepseek_settings(api_key: str = Form(...), model: Optional[str] = Form(None), _: str = Depends(require_owner)):
-    """Lưu DeepSeek API Key vào cấu hình toàn cục (Chỉ Quản trị viên)."""
+def save_deepseek_settings(
+    api_key: str = Form(...),
+    model: Optional[str] = Form(None),
+    provider: Optional[str] = Form(None),
+    base_url: Optional[str] = Form(None),
+    _: str = Depends(require_owner)
+):
+    """Lưu API Key và cấu hình AI vào hệ thống toàn cục (Chỉ Quản trị viên)."""
     key = api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="API Key không được để trống.")
-    success = DeepSeekOCR.save_api_key(key, model=model)
+    success = DeepSeekOCR.save_api_key(key, model=model, provider=provider, base_url=base_url)
     if success:
-        return {"success": True, "message": "Đã lưu DeepSeek API Key toàn cục thành công!"}
+        return {"success": True, "message": "Đã lưu Cấu hình AI toàn cục thành công!"}
     raise HTTPException(status_code=500, detail="Không thể ghi file cấu hình settings.json.")
 
 
 @app.post("/api/settings/deepseek/test")
-def test_deepseek_settings(api_key: Optional[str] = Form(None), _: str = Depends(require_owner)):
-    """Kiểm tra kết nối DeepSeek API thực tế."""
+def test_deepseek_settings(
+    api_key: Optional[str] = Form(None),
+    model: Optional[str] = Form(None),
+    provider: Optional[str] = Form(None),
+    base_url: Optional[str] = Form(None),
+    _: str = Depends(require_owner)
+):
+    """Kiểm tra kết nối DeepSeek / OpenAI AI API thực tế."""
     from core.ai_text_engine import AITextEngine
     key_to_test = (api_key or "").strip() or DeepSeekOCR.get_saved_api_key() or os.getenv("DEEPSEEK_API_KEY", "")
     if not key_to_test:
         raise HTTPException(status_code=400, detail="Chưa có API Key để kiểm tra.")
+    
+    target_model = (model or "").strip() or "DeepSeek-V4.1-Flash"
+    target_base = (base_url or "").strip() or None
     try:
         res = AITextEngine.chat_completion(
             messages=[{"role": "user", "content": "ping"}],
             api_key=key_to_test,
-            model="DeepSeek-V4.1-Flash",
+            model=target_model,
+            base_url=target_base,
             max_tokens=5
         )
-        return {"success": True, "message": "Kết nối DeepSeek AI thành công!", "model": "DeepSeek-V4.1-Flash"}
+        return {"success": True, "message": f"Kết nối AI thành công! Phản hồi từ mô hình {target_model}.", "model": target_model}
     except Exception as e:
         return {"success": False, "message": f"Kết nối thất bại: {str(e)}"}
 

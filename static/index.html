@@ -620,7 +620,7 @@
                     <span>🛠️</span> Phân Quyền Chi Tiết (36 Tools)
                 </button>
                 <button type="button" class="sec-tab-btn" id="sec-tab-btn-ai" role="tab" aria-selected="false" onclick="switchSecTab('ai')">
-                    <span>🤖</span> DeepSeek AI Toàn Cục
+                    <span>🔑</span> Cấu Hình API Key &amp; Trí Tuệ Nhân Tạo
                 </button>
             </div>
 
@@ -1188,45 +1188,78 @@
                     </div>
                 </div>
 
-                <!-- TAB 4: DEEPSEEK AI TOÀN CỤC (GLOBAL AI CONFIG) -->
+                <!-- TAB 4: CẤU HÌNH API KEY & TRÍ TUỆ NHÂN TẠO TOÀN CỤC (GLOBAL AI CONFIG) -->
                 <div class="sec-tab-panel" id="sec-panel-ai">
                     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:18px; margin-bottom:16px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #e2e8f0;">
                             <div style="font-weight:700; font-size:14px; color:#0f172a; display:flex; align-items:center; gap:8px;">
-                                <span style="font-size:20px;">⚡</span>
+                                <span style="font-size:22px;">🔑</span>
                                 <div>
-                                    <div>Cấu Hình Khóa API DeepSeek Toàn Cục</div>
-                                    <div style="font-size:11.5px; font-weight:400; color:#64748b; margin-top:2px;">Nhập 1 lần — Tự động chia sẻ cho MSDS, HSE, OCR, Dịch thuật & Tóm tắt</div>
+                                    <div style="font-size:14.5px;">Cấu Hình API Key &amp; Trí Tuệ Nhân Tạo (AI Global Settings)</div>
+                                    <div style="font-size:11.5px; font-weight:400; color:#64748b; margin-top:2px;">Cấu hình tập trung một nơi duy nhất — Tự động chia sẻ cho MSDS, HSE, OCR, Dịch thuật &amp; Tóm tắt</div>
                                 </div>
                             </div>
                             <span id="global-deepseek-badge" style="font-size:11px; font-weight:700; padding:4px 10px; border-radius:12px; background:#fef3c7; color:#92400e; border:1px solid #fde68a;">⏳ Đang kiểm tra...</span>
                         </div>
 
-                        <!-- API Key Input -->
+                        <!-- Provider Selection -->
                         <div style="margin-bottom:14px;">
                             <label style="font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:6px;">
-                                DeepSeek API Key (sk-...):
+                                Nhà Cung Cấp Trí Tuệ Nhân Tạo (AI Provider):
                             </label>
+                            <select id="global-ai-provider-select" class="select-box" onchange="handleAiProviderChange()" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;">
+                                <option value="deepseek" selected>⚡ DeepSeek AI (Khuyên dùng: Siêu tốc 0.5s, Tối ưu chi phí &amp; Chuẩn kỹ thuật)</option>
+                                <option value="openai">🤖 OpenAI ChatGPT (GPT-4o / GPT-4o-mini)</option>
+                                <option value="custom">🛠️ Tùy Chỉnh (OpenAI-Compatible / Cloudflare AI Gateway / Proxy)</option>
+                            </select>
+                        </div>
+
+                        <!-- API Key Input -->
+                        <div style="margin-bottom:14px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <label style="font-size:12px; font-weight:600; color:#334155;">
+                                    API Key Chính (sk-...):
+                                </label>
+                                <span id="global-ai-key-hint" style="font-size:11px; color:#64748b;">Khóa dùng chung trên toàn hệ thống</span>
+                            </div>
                             <div style="position:relative; display:flex; align-items:center;">
                                 <input type="password" id="global-deepseek-key-input" class="input-text" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" style="width:100%; font-family:Consolas, monospace; font-size:13px; padding:9px 40px 9px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;" />
                                 <button type="button" onclick="toggleGlobalDeepSeekKeyVisibility()" style="position:absolute; right:8px; background:none; border:none; cursor:pointer; font-size:15px; color:#64748b; padding:4px;" title="Hiện / Ẩn Key">
                                     <span id="global-deepseek-eye">👁️</span>
                                 </button>
                             </div>
-                            <div style="font-size:11px; color:#64748b; margin-top:4px;">
-                                Chưa có khóa API? Đăng ký nhận key tại <a href="https://platform.deepseek.com" target="_blank" style="color:#0284c7; text-decoration:underline;">platform.deepseek.com</a>.
+                            <div id="global-ai-provider-link" style="font-size:11px; color:#64748b; margin-top:4px;">
+                                Nhận API key tại <a href="https://platform.deepseek.com" target="_blank" style="color:#0284c7; text-decoration:underline;">platform.deepseek.com</a>.
                             </div>
                         </div>
 
                         <!-- Model Selection -->
-                        <div style="margin-bottom:16px;">
+                        <div style="margin-bottom:14px;">
                             <label style="font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:6px;">
-                                Mô hình Trí tuệ Nhân tạo Mặc định:
+                                Mô hình Trí Tuệ Nhân Tạo (AI Model):
                             </label>
-                            <select id="global-deepseek-model-select" class="select-box" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;">
-                                <option value="DeepSeek-V4.1-Flash" selected>⚡ DeepSeek-V4.1-Flash (Khuyên dùng: Siêu tốc 0.5s, nhận diện 16 mục GHS chuẩn xác)</option>
-                                <option value="deepseek-chat">💬 deepseek-chat (DeepSeek V3: Chuyên dịch thuật & phân tích văn bản dài)</option>
+                            <select id="global-deepseek-model-select" class="select-box" onchange="handleAiModelChange()" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;">
+                                <option value="DeepSeek-V4.1-Flash" selected>⚡ DeepSeek-V4.1-Flash (Mặc định: Siêu tốc 0.5s, nhận diện 16 mục GHS chuẩn xác)</option>
+                                <option value="deepseek-chat">💬 deepseek-chat (DeepSeek V3: Chuyên dịch thuật &amp; phân tích văn bản dài)</option>
+                                <option value="deepseek-reasoner">🧠 deepseek-reasoner (DeepSeek R1: Suy luận logic chuyên sâu)</option>
+                                <option value="gpt-4o-mini">🤖 gpt-4o-mini (OpenAI: Nhanh &amp; Tiết kiệm token)</option>
+                                <option value="gpt-4o">🚀 gpt-4o (OpenAI: Đa phương thức thông minh)</option>
+                                <option value="custom">✍️ Nhập mã Model tùy chỉnh...</option>
                             </select>
+                            <div id="global-ai-custom-model-box" class="hidden" style="margin-top:8px;">
+                                <input type="text" id="global-ai-custom-model-input" class="input-text" placeholder="Nhập tên model (ví dụ: qwen-max, claude-3-haiku...)" style="width:100%; font-size:12.5px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:6px;" />
+                            </div>
+                        </div>
+
+                        <!-- Base URL (Optional) -->
+                        <div style="margin-bottom:16px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <label style="font-size:12px; font-weight:600; color:#334155;">
+                                    API Endpoint / Base URL (Tùy chọn):
+                                </label>
+                                <span style="font-size:11px; color:#64748b;">Mặc định: https://api.deepseek.com/v1</span>
+                            </div>
+                            <input type="text" id="global-ai-base-url-input" class="input-text" placeholder="https://api.deepseek.com/v1" style="width:100%; font-family:Consolas, monospace; font-size:12.5px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;" />
                         </div>
 
                         <div id="global-deepseek-feedback" class="hidden" style="padding:10px 14px; border-radius:6px; font-size:12px; margin-bottom:14px; line-height:1.4;"></div>
@@ -3318,9 +3351,9 @@
                         </select>
                     </div>
 
-                    <div id="ai-deepseek-key-box" class="ai-key-box hidden">
-                        <input type="password" id="ai-deepseek-key" class="input-text input-sm" placeholder="Nhập DeepSeek API Key..." />
-                        <button type="button" onclick="saveAiDeepSeekKey()" class="btn-secondary btn-xs">Lưu</button>
+                    <div id="ai-trans-global-badge-container" class="hidden" style="display:inline-flex; align-items:center; margin-left:auto;"></div>
+                    <div id="ai-deepseek-key-box" class="hidden" style="display:none;">
+                        <input type="hidden" id="ai-deepseek-key" />
                     </div>
                 </div>
 
@@ -3438,12 +3471,9 @@
                                 </select>
                             </div>
 
-                            <div id="ai-sum-key-group" class="ai-form-group" style="margin-top:12px;">
-                                <label class="form-label">Khóa API DeepSeek (Tùy chọn):</label>
-                                <div style="display:flex; gap:8px;">
-                                    <input type="password" id="ai-sum-key" class="input-text" placeholder="Tự động dùng key đã lưu..." />
-                                    <button type="button" class="btn-secondary btn-sm" onclick="saveAiSumKey()">Lưu</button>
-                                </div>
+                            <div id="ai-sum-global-badge-container" style="margin-top:12px;"></div>
+                            <div id="ai-sum-key-group" class="hidden" style="display:none;">
+                                <input type="hidden" id="ai-sum-key" />
                             </div>
 
                             <button type="button" id="btn-run-ai-summarize" class="btn-primary btn-block" style="margin-top:18px; padding:12px;" onclick="runAiDocumentSummarize()">
@@ -5829,6 +5859,7 @@
     </div>
 
     <!-- Controller Scripts -->
+    <script src="ai_service.js"></script>
     <script src="app.js"></script>
     <script src="vip_editor.js"></script>
     <script src="ai_studio.js"></script>

@@ -84,6 +84,52 @@ class AITextEngine:
         return resp.json()
 
     @classmethod
+    def chat_completion(
+        cls,
+        messages: List[Dict[str, Any]],
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
+        base_url: Optional[str] = None,
+        timeout: int = 60
+    ) -> Dict[str, Any]:
+        """
+        Thực thi Chat Completion tương thích DeepSeek & OpenAI API, hỗ trợ kiểm tra kết nối (Test connection).
+        """
+        actual_key = cls.get_deepseek_key(api_key)
+        if not actual_key:
+            raise ValueError("Chưa có API Key. Vui lòng cấu hình API Key!")
+
+        target_model = model or cls.PRIMARY_MODEL
+        endpoint = (base_url or "").strip() or cls.DEEPSEEK_API_URL
+        if not endpoint.endswith("/chat/completions"):
+            endpoint = endpoint.rstrip("/") + "/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {actual_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": target_model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": False
+        }
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+
+        resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
+        if resp.status_code != 200 and target_model != cls.FALLBACK_MODEL and "deepseek" in endpoint.lower():
+            payload["model"] = cls.FALLBACK_MODEL
+            resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
+
+        if resp.status_code != 200:
+            raise RuntimeError(f"AI API lỗi (HTTP {resp.status_code}): {resp.text}")
+
+        return resp.json()
+
+    @classmethod
     def get_deepseek_key(cls, explicit_key: Optional[str] = None) -> Optional[str]:
         if explicit_key and explicit_key.strip():
             return explicit_key.strip()

@@ -43,7 +43,38 @@ class DeepSeekOCR:
         return None
 
     @staticmethod
-    def save_api_key(key: str, model: Optional[str] = None) -> bool:
+    def get_settings() -> Dict[str, Any]:
+        """Lấy toàn bộ cấu hình AI: api_key, model, provider, base_url."""
+        saved_key = DeepSeekOCR.get_saved_api_key() or ""
+        result = {
+            "api_key": saved_key,
+            "model": DeepSeekOCR.DEFAULT_MODEL,
+            "provider": "deepseek",
+            "base_url": "https://api.deepseek.com/v1"
+        }
+        for s_file in [SETTINGS_FILE, DATA_SETTINGS_FILE]:
+            if os.path.exists(s_file):
+                try:
+                    with open(s_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if data.get("deepseek_model"):
+                            result["model"] = data["deepseek_model"]
+                        if data.get("ai_provider"):
+                            result["provider"] = data["ai_provider"]
+                        if data.get("deepseek_base_url"):
+                            result["base_url"] = data["deepseek_base_url"]
+                        break
+                except Exception:
+                    pass
+        return result
+
+    @staticmethod
+    def save_api_key(
+        key: str,
+        model: Optional[str] = None,
+        provider: Optional[str] = None,
+        base_url: Optional[str] = None
+    ) -> bool:
         """Lưu API key vào file settings.json và data/settings.json."""
         try:
             clean_key = key.strip()
@@ -59,6 +90,10 @@ class DeepSeekOCR:
                 data["deepseek_api_key"] = clean_key
                 if model and model.strip():
                     data["deepseek_model"] = model.strip()
+                if provider and provider.strip():
+                    data["ai_provider"] = provider.strip()
+                if base_url and base_url.strip():
+                    data["deepseek_base_url"] = base_url.strip()
                 os.makedirs(os.path.dirname(s_file), exist_ok=True)
                 with open(s_file, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)

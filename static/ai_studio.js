@@ -106,6 +106,12 @@ function initAiStudio() {
         }
     }
 
+    // Tự động gắn kết Badge trạng thái AI toàn cục vào Tab Dịch & Tab Tóm tắt
+    if (window.LuvAIService) {
+        window.LuvAIService.renderBadge("ai-trans-global-badge-container");
+        window.LuvAIService.renderBadge("ai-sum-global-badge-container");
+    }
+
     // Attach Ctrl+Enter keyboard shortcut to translation input
     const inputArea = document.getElementById("ai-input-text");
     if (inputArea) {
@@ -247,12 +253,15 @@ function swapAiLanguages() {
 
 function toggleAiKeyInput() {
     const engine = document.getElementById("ai-trans-engine-select")?.value;
-    const keyBox = document.getElementById("ai-deepseek-key-box");
-    if (keyBox) {
+    const badgeContainer = document.getElementById("ai-trans-global-badge-container");
+    if (badgeContainer) {
         if (engine === "deepseek") {
-            keyBox.classList.remove("hidden");
+            badgeContainer.classList.remove("hidden");
+            if (window.LuvAIService) {
+                window.LuvAIService.renderBadge("ai-trans-global-badge-container");
+            }
         } else {
-            keyBox.classList.add("hidden");
+            badgeContainer.classList.add("hidden");
         }
     }
 }
@@ -385,7 +394,14 @@ async function runAiTranslation() {
     const srcLang = document.getElementById("ai-trans-src-lang")?.value || "auto";
     const tgtLang = document.getElementById("ai-trans-tgt-lang")?.value || "vi";
     const engine = document.getElementById("ai-trans-engine-select")?.value || "google";
-    const apiKey = document.getElementById("ai-deepseek-key")?.value.trim() || localStorage.getItem("deepseek_api_key") || "";
+
+    if (engine === "deepseek" && window.LuvAIService) {
+        if (!window.LuvAIService.requireReady({ contextName: "Dịch thuật AI DeepSeek" })) {
+            return;
+        }
+    }
+
+    const apiKey = (window.LuvAIService ? window.LuvAIService.getRawApiKey() : "") || document.getElementById("ai-deepseek-key")?.value.trim() || localStorage.getItem("deepseek_api_key") || "";
 
     // Set loading state
     if (btn) {
@@ -424,6 +440,9 @@ async function runAiTranslation() {
         }
         if (engineBadge) {
             engineBadge.innerText = data.engine || "Google Translate";
+        }
+        if (engine === "deepseek" && window.LuvAIService) {
+            window.LuvAIService.recordGuestCall();
         }
 
     } catch (err) {
@@ -530,12 +549,15 @@ function clearAiSumFile() {
 
 function toggleAiSumKeyInput() {
     const engine = document.getElementById("ai-sum-engine")?.value;
-    const keyGrp = document.getElementById("ai-sum-key-group");
-    if (keyGrp) {
+    const badgeContainer = document.getElementById("ai-sum-global-badge-container");
+    if (badgeContainer) {
         if (engine === "deepseek") {
-            keyGrp.classList.remove("hidden");
+            badgeContainer.classList.remove("hidden");
+            if (window.LuvAIService) {
+                window.LuvAIService.renderBadge("ai-sum-global-badge-container");
+            }
         } else {
-            keyGrp.classList.add("hidden");
+            badgeContainer.classList.add("hidden");
         }
     }
 }
@@ -575,7 +597,14 @@ async function runAiDocumentSummarize() {
     const mode = document.getElementById("ai-sum-mode")?.value || "executive";
     const length = document.getElementById("ai-sum-length")?.value || "medium";
     const engine = document.getElementById("ai-sum-engine")?.value || "deepseek";
-    const apiKey = document.getElementById("ai-sum-key")?.value.trim() || localStorage.getItem("deepseek_api_key") || "";
+
+    if (engine === "deepseek" && window.LuvAIService) {
+        if (!window.LuvAIService.requireReady({ contextName: "Tóm tắt tài liệu AI DeepSeek" })) {
+            return;
+        }
+    }
+
+    const apiKey = (window.LuvAIService ? window.LuvAIService.getRawApiKey() : "") || document.getElementById("ai-sum-key")?.value.trim() || localStorage.getItem("deepseek_api_key") || "";
 
     const btn = document.getElementById("btn-run-ai-summarize");
     const btnText = document.getElementById("txt-run-ai-sum");
@@ -644,6 +673,9 @@ async function runAiDocumentSummarize() {
         // Show result box
         if (loadingState) loadingState.classList.add("hidden");
         if (resultBox) resultBox.classList.remove("hidden");
+        if (engine === "deepseek" && window.LuvAIService) {
+            window.LuvAIService.recordGuestCall();
+        }
 
     } catch (err) {
         console.error("Lỗi tóm tắt tài liệu:", err);
@@ -1023,38 +1055,14 @@ async function runMsdsAnalysis() {
     }
 
     const engine = document.getElementById("msds-ai-engine")?.value || "deepseek";
-    let apiKey = (localStorage.getItem("deepseek_api_key") || "").trim();
 
-    // Tự động kiểm tra và đồng bộ key toàn cục từ máy chủ nếu chưa có trong localStorage
-    if (engine === "deepseek" && !apiKey) {
-        try {
-            const checkResp = await fetch("/api/settings/deepseek");
-            if (checkResp.ok) {
-                const checkData = await checkResp.json();
-                if (checkData.key) {
-                    apiKey = checkData.key.trim();
-                    localStorage.setItem("deepseek_api_key", apiKey);
-                }
-            }
-        } catch (e) {
-            console.warn("Chưa tải được cấu hình DeepSeek:", e);
-        }
-    }
-
-    if (engine === "deepseek" && !apiKey) {
-        const confirmSetup = confirm(
-            "Hệ thống chưa tìm thấy DeepSeek API Key toàn cục!\n\n" +
-            "Bạn có muốn mở ngay phần Cài Đặt để nhập và lưu khóa API DeepSeek không?\n" +
-            "(Khóa này sẽ dùng chung cho toàn bộ các công cụ AI bao gồm cả bóc tách MSDS)."
-        );
-        if (confirmSetup) {
-            if (typeof openSecurityModal === "function") {
-                openSecurityModal();
-                if (typeof switchSecTab === "function") switchSecTab("ai");
-            }
+    if (engine === "deepseek" && window.LuvAIService) {
+        if (!window.LuvAIService.requireReady({ contextName: "Bóc tách & Phân tích MSDS bằng AI DeepSeek" })) {
             return;
         }
     }
+
+    let apiKey = (window.LuvAIService ? window.LuvAIService.getRawApiKey() : "") || (localStorage.getItem("deepseek_api_key") || "").trim();
 
     const btn = document.getElementById("btn-run-msds-analyze");
     const txtBtn = document.getElementById("txt-run-msds-analyze");
