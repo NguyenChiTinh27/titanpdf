@@ -8,6 +8,20 @@
  * ===================================================================================
  */
 
+/**
+ * HÀM KIỂM TRA & CẤP QUYỀN TRUY CẬP (Bấm '▶ Chạy' hàm này trên thanh công cụ để cấp quyền Google Drive & Sheets)
+ */
+function testAuth() {
+  Logger.log("Đang kiểm tra quyền Google Drive và Google Sheets...");
+  var ss = getOrCreateSpreadsheet();
+  Logger.log("✓ Google Sheet CSDL: " + ss.getUrl());
+  var folder = getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER);
+  Logger.log("✓ Thư mục Google Drive: " + folder.getUrl());
+  var ping = handlePing();
+  Logger.log("✓ Kết quả kiểm tra kết nối: " + JSON.stringify(ping));
+  return ping;
+}
+
 // CẤU HÌNH HỆ THỐNG
 var CONFIG = {
   SECRET_TOKEN: "LUV_MSDS_SECURE_TOKEN_2026",
@@ -93,13 +107,14 @@ function doPost(e) {
       return jsonResponse({ status: "error", error: "Dữ liệu JSON không hợp lệ: " + parseErr.toString() }, 400);
     }
 
-    var token = payload.token || (e.parameter && e.parameter.token);
+    var action = payload.action || "";
+    var token = String(payload.token || (e.parameter && e.parameter.token) || "").trim();
     var configuredToken = getActiveSecretToken();
-    if (configuredToken && token && token !== configuredToken) {
-      return jsonResponse({ status: "error", error: "Xác thực thất bại: Sai Secret Token!" }, 403);
+    if (action !== "ping" && action !== "test_connection") {
+      if (configuredToken && token && token !== "******" && token !== configuredToken && token !== CONFIG.SECRET_TOKEN) {
+        return jsonResponse({ status: "error", error: "Xác thực thất bại: Sai Secret Token!" }, 403);
+      }
     }
-
-    var action = payload.action;
 
     // 1. Tải tệp lên Google Drive
     if (action === "uploadFile") {

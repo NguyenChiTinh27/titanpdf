@@ -3263,7 +3263,10 @@ async function saveMsdsGasConfig() {
     const btnSave = document.getElementById("btn-save-gas-config");
 
     const webhookUrl = (urlInput ? urlInput.value : "").trim();
-    const secretToken = (tokenInput ? tokenInput.value : "").trim();
+    let secretToken = (tokenInput ? tokenInput.value : "").trim();
+    if (secretToken === "******" || secretToken.indexOf("•") !== -1) {
+        secretToken = "";
+    }
     const autoSync = autoSyncInput ? autoSyncInput.checked : true;
 
     try {
@@ -3314,7 +3317,10 @@ async function testMsdsGasConnection() {
     const btnTest = document.getElementById("btn-gas-test-conn");
 
     const webhookUrl = (urlInput ? urlInput.value : "").trim();
-    const secretToken = (tokenInput ? tokenInput.value : "").trim();
+    let secretToken = (tokenInput ? tokenInput.value : "").trim();
+    if (secretToken === "******" || secretToken.indexOf("•") !== -1) {
+        secretToken = "";
+    }
 
     if (!webhookUrl) {
         alert("Vui lòng nhập Google Apps Script Webhook URL trước khi kiểm tra!");

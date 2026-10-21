@@ -98,7 +98,13 @@ class MSDSGASSyncService:
         """Lưu cấu hình Webhook URL và Secret Token vào data/msds_gas_config.json."""
         current = cls.get_config()
         clean_url = str(webhook_url or "").strip()
-        clean_token = str(secret_token if secret_token is not None else current.get("secret_token") or DEFAULT_SECRET_TOKEN).strip()
+        incoming_token = str(secret_token if secret_token is not None else "").strip()
+        if not incoming_token or incoming_token in ("******", "••••••••••••••••") or "•" in incoming_token:
+            clean_token = current.get("secret_token") or DEFAULT_SECRET_TOKEN
+            if not clean_token or clean_token in ("******", "••••••••••••••••") or "•" in clean_token:
+                clean_token = DEFAULT_SECRET_TOKEN
+        else:
+            clean_token = incoming_token
 
         cfg_to_save = {
             "webhook_url": clean_url,
@@ -131,7 +137,11 @@ class MSDSGASSyncService:
         if not url:
             return {"status": "error", "error": "Chưa cấu hình Google Apps Script Webhook URL."}
 
-        token = payload.get("token") or cfg.get("secret_token") or DEFAULT_SECRET_TOKEN
+        raw_token = payload.get("token") or cfg.get("secret_token") or DEFAULT_SECRET_TOKEN
+        if not raw_token or raw_token in ("******", "••••••••••••••••") or "•" in str(raw_token):
+            token = DEFAULT_SECRET_TOKEN
+        else:
+            token = str(raw_token).strip()
         payload["token"] = token
 
         try:
@@ -169,7 +179,11 @@ class MSDSGASSyncService:
         """Kiểm tra kết nối tới Google Apps Script Webhook."""
         cfg = cls.get_config()
         target_url = (url or cfg.get("webhook_url") or "").strip()
-        target_token = (token or cfg.get("secret_token") or DEFAULT_SECRET_TOKEN).strip()
+        raw_token = token or cfg.get("secret_token") or DEFAULT_SECRET_TOKEN
+        if not raw_token or raw_token in ("******", "••••••••••••••••") or "•" in str(raw_token):
+            target_token = DEFAULT_SECRET_TOKEN
+        else:
+            target_token = str(raw_token).strip()
 
         if not target_url:
             return {
