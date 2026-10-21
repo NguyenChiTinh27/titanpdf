@@ -1,102 +1,125 @@
-# Project: Gate Pass & Material Dispatch Studio (Quản Lý Phiếu Xuất Hàng & Vật Tư)
+# Project: TitanPDF Comprehensive Upgrade (Stealth License RBAC, Google Sheets/Drive Persistence & Anti-Crash)
 
 ## Architecture
-- **Overview**: A professional Gate Pass & Material Dispatch Studio integrated as a first-class tab into TitanPDF (`#gatepass-studio`, `nav-tab-gatepass`).
-- **Frontend Layer**:
-  - Main tab on navbar: `nav-tab-gatepass` (`static/index.html`, `static/vip_editor.js:switchMainTab`).
-  - Viewport container: `#gatepass-studio-view` containing 4 functional areas:
-    1. KPI Dashboard & Analytics (`#gp-dashboard-section`): Metric cards (Total slips, Total KG, Cartons/Packages, Clients/Vehicles) and Chart.js visualizations (Timeline area/bar chart and Customer doughnut chart).
-    2. Scan & Vision AI Studio (`#gp-scan-studio-section`): Dual-column layout. Left: Interactive canvas with zoom, pan, rotate (0/90/180/270), queue strip, and proof drawer. Right: Dispatch type selector, metadata form, and dynamic bilingual CN-VN item table with inline editing and auto-summation.
-    3. Audit & Match Engine (`#gp-audit-section`): Upload proof photos (vehicle, license plate, packages) and run AI cross-matching (plate matching, signature validation).
-    4. History & Export (`#gp-history-section`): Filterable history table, Split-view detail modal with zoomable slip preview, A4/A5 formatted printing, and Google Drive open links.
-  - Offline-first vendored Chart.js library: `static/libs/chart.umd.min.js`.
-  - Dedicated modular styling: `static/gatepass_studio.css`.
-  - Dedicated controller script: `static/gatepass_studio.js`.
-- **Backend Layer**:
-  - REST Router: `core/gatepass_router.py` mounted at `/api/gatepass` in `server.py`.
-  - Service Layer: `core/gatepass_service.py` handling:
-    1. DeepSeek Vision OCR extraction (`DeepSeek-V4.1-Flash` with `deepseek-chat` fallback, `temperature: 0.1`).
-    2. Proof audit and cross-matching logic.
-    3. Local-First SQLite WAL cache (`data/gatepass_slips.db`) for instant queries (<15ms).
-    4. Secure proxy bridge to Google Apps Script Web App (`AKfycbzo5YQiI5DM0KEDRpTIbxDDY_2Nwfs4NP1Vfa5MyuJPNqb8x4EkhVzZD5pso7ueAWiS5w`) syncing to Google Sheet (`15Z3HA7Lm2pJU3GmfzdDq4ZfOKVYJoYJ_SYIT3pAM_ug`) and Google Drive storage.
-- **Security & RBAC Layer**:
-  - Registered as Tool #36 in `data/guest_permissions.json`, `core/auth_rbac.py`, `static/index.html` (Security Modal Tab 3, Group 6), and `static/app.js`.
-  - Guest mode: Read-only access to Dashboard, History, Split Detail Modal, and Print. Mutation actions (Scan, Save, Edit, Delete, Sync) disabled and protected with `require_owner` (HTTP 403). API Key masked (`••••••••••••••••`).
-  - Owner mode: Unrestricted access.
+- **Overview**: A multi-faceted architectural upgrade transforming TitanPDF into a resilient, memory-optimized, stateless cloud-first application on Render (`https://tinh-of-2m9j.onrender.com/`).
+- **R1: Stealth License Tab & RBAC Architecture**:
+  - Hidden by default: `#nav-tab-license` is completely absent from DOM for unauthenticated guests (`display: none !important; aria-hidden="true"`), and `#license-manager-view` is an empty uninitialized shell.
+  - Dual Secret Triggers: Global `Ctrl + Shift + L` (and `Cmd + Shift + L` on macOS) OR 5 consecutive clicks on the brand logo within 3 seconds opens `#admin-auth-modal`.
+  - Master Admin Authentication: `POST /api/admin/auth/login` validating against `os.getenv("ADMIN_MASTER_KEY", "258079")`. Upon success, issues session token stored in `sessionStorage.getItem("luv_admin_token")` and mounts License Tab in navbar.
+  - Admin Logout: Clears token, invalidates session on server, and removes tab and view from DOM.
+  - API RBAC Middleware: `require_admin` dependency applied to `/api/admin/*`, `/api/admin/licenses/*`, and administrative `/api/license/*` routes. Unauthenticated or guest calls rejected with `401 Unauthorized` or `403 Forbidden`. External verification endpoint `/api/license/verify` remains public for client apps.
+  - Pastel Glassmorphism UI: Modern redesign with 4 KPI cards (Total Licenses, Active Devices, Cloud Sync Status, Revenue/Tier breakdown), key issuance form with package selection (Enterprise, Lifetime, Pro, Trial), search filter, and action buttons (Copy, Handover, Reset Machine, Revoke, Delete).
+- **R2: Persistent Cloud Storage via Google Sheets & Google Drive (GAS)**:
+  - Eliminates "Render Ephemeral Reset": The 13 seed chemicals in git-committed `data/msds_chemical_inventory.db` no longer revive after restart.
+  - Google Sheets as SSOT: 38-column schema `CIL_Chemical_Inventory` synchronized via Google Apps Script Webhook API (`gas_msds_drive_sync.gs`).
+  - Permanent Deletion: Deleting a chemical or clicking "Delete All" immediately issues `deleteChemical` / `deleteAllChemicals` to Google Sheet (`sheet.deleteRow`) and purges local cache. On server startup, TitanPDF reconciles with Google Sheets so deleted chemicals never revive.
+  - Google Drive Offloading: Uploaded original MSDS PDFs, exported Word/PDF files, and GHS label images are streamed directly to user's Google Drive (`LUV_PDF_Exports/MSDS_Originals`) via GAS `uploadFile`, returning public Drive file ID and view/download URLs.
+  - Settings UI: Modern modal in MSDS tab with GAS Webhook URL input, secret token, Test Connection button, and live sync status.
+- **R3: Memory Optimization & Anti-Crash Architecture**:
+  - Smart Pagination: `/api/msds/list` upgraded with `page` and `page_size` (20 / 50 / 100), SQLite `LIMIT/OFFSET`, and batch composition lookup to eliminate N+1 queries.
+  - Frontend Pagination HUD: In `static/index.html` and `static/ai_studio.js`, renders only the active page of 20/50/100 records with instant search and filtering by chemical name, CAS, and GHS hazard class.
+  - Instant Temp Cleanup: Middleware automatically tracks and unlinks temporary upload files post-request.
+  - Background Task Cleanup: `BackgroundTask(safe_remove_file)` attached to `/api/download/{filename}`.
+  - Watchdog Temp Cleaner: Periodic cleaner running every 10 minutes purges orphaned files in `temp/` and `output/` older than 15 minutes and executes explicit `gc.collect()`.
+  - Memory Budget: Keeps Python process RAM strictly < 200MB (safe ceiling < 300MB on Render's 512MB limit), eliminating OOM crashes (502 Bad Gateway).
+
+---
 
 ## Code Layout
-- `core/gatepass_service.py` - Core business logic, SQLite cache, DeepSeek Vision OCR, and GAS proxy.
-- `core/gatepass_router.py` - FastAPI endpoints for Gate Pass Studio.
-- `static/gatepass_studio.css` - Custom styling for Gate Pass UI, dual-column studio, HUD, and print media.
-- `static/gatepass_studio.js` - Client-side state manager, CanvasRotator, QueueManager, Chart.js binder, and inline editor.
-- `static/libs/chart.umd.min.js` - Vendored Chart.js library for offline operation.
-- `data/gatepass_slips.db` - SQLite WAL cache for instant dashboard and history responses.
-- `tests/test_gatepass_service_suite.py` - Python backend unit and integration test suite.
-- `tests/test_gatepass_e2e_suite.py` - Playwright browser E2E test suite.
-- Modified existing files:
-  - `server.py`: Mount `/api/gatepass` router.
-  - `core/auth_rbac.py`: Register tool `gatepass-studio` in `DEFAULT_GUEST_PERMISSIONS`.
-  - `data/guest_permissions.json`: Register tool `gatepass-studio` as tool #36.
-  - `static/index.html`: Add `#nav-tab-gatepass`, `#gatepass-studio-view`, and Tool #36 checkbox in Security Modal Tab 3.
-  - `static/vip_editor.js`: Support tab switching for `gatepass` / `gatepass-studio` and hash routing.
-  - `static/app.js`: Register in `TOOLS` array, canonical map, and guest permissions styling.
-  - `tests/test_frontend_rbac_suite.py`: Update assertion `assert tool_count == 36`.
+- `core/auth_rbac.py` — Role extraction, `require_owner`, and `require_admin` dependency.
+- `core/license_manager.py` — License key generation, verification, and database management.
+- `core/msds_gas_sync.py` — FastAPI service proxy for Google Apps Script Webhook API (Sheets CRUD & Drive offload).
+- `core/msds_intelligence.py` — MSDS extraction engine, SQLite local cache, and paginated query helper.
+- `server.py` — FastAPI application, API routes, RBAC protection, file cleanup middleware, and temp cleaner daemon.
+- `gas_msds_drive_sync.gs` — Production Google Apps Script Webhook for Google Sheets & Google Drive.
+- `static/index.html` — Navbar stealth, Admin Auth Modal, Pastel Glassmorphism License tab, MSDS Pagination HUD, and GAS Settings Modal.
+- `static/app.js` — Dual secret triggers (`Ctrl+Shift+L` + 5-click logo), Admin session manager, and API token interceptor.
+- `static/ai_studio.js` — MSDS client state, smart pagination controller, permanent delete handler, and GAS settings controller.
+- `static/license_manager.css` — Modern Glassmorphism / Pastel Kawaii Pro styling for License Manager.
+- `tests/test_upgrade_orch19_suite.py` — Comprehensive unit and integration test suite (Tiers 1-4).
+- `tests/test_playwright_stealth_rbac.py` — Playwright E2E browser test verifying DOM stealth, secret triggers, and UI interactions.
+
+---
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Navigation Bar Tab | `#nav-tab-gatepass` with icon, label `Phiếu Xuất & Vật Tư`, badge `#nav-gatepass-count-badge` | M3 | survey |
-| 2 | Hash Router & Switching | `switchMainTab('gatepass')` showing `#gatepass-studio-view` and `#gatepass-studio` URL hash bridge | M3 | survey |
-| 3 | KPI Dashboard Cards | Total slips, total weight KG, cartons/packages, active clients & vehicles | M3 | survey |
-| 4 | KPI Chart.js Visualizations | Timeline area/bar chart (KG/Passes/Units modes) & Customer doughnut chart | M3 | survey |
-| 5 | Dual-Column Scan Studio | Split-screen: Left interactive canvas & Queue strip, Right metadata form & items table | M3 | survey |
-| 6 | Interactive Canvas HUD | Zoom in/out/reset, rotate (0/90/180/270), high-contrast text filter, clipboard paste | M3 | survey |
-| 7 | Multi-Slip Queue Strip | Horizontal scroll strip with thumbnail previews, status badges, and sequential navigation | M3 | survey |
-| 8 | Proof Photos Drawer | Attach vehicle, license plate, and cargo proof photos with preview | M3 | survey |
-| 9 | Dispatch Type Selector | "Xuất hàng thành phẩm" vs "Xuất vật tư ra công" with automatic rule adjustment | M3 | survey |
-| 10 | Bilingual CN-VN Items Table | STT, bilingual item name, specs, packages/boxes, notes with inline edit and row addition/deletion | M3 | survey |
-| 11 | Auto-Summation Engine | Dynamic recalculation of total KG, total cartons/packages, and live formula display | M3 | survey |
-| 12 | DeepSeek Vision OCR Engine | Structured JSON extraction of header, footer signatures, and bilingual items table (`DeepSeek-V4.1-Flash`) | M2 | survey |
-| 13 | Audit & Match Engine | AI verification of signature validity and license plate matching between proof image and slip | M2 | survey |
-| 14 | SQLite WAL Local Cache | Instant responses (<15ms) for dashboard KPI and history queries in `data/gatepass_slips.db` | M1 | survey |
-| 15 | Google Apps Script Bridge | Secure FastAPI proxy to GAS Web App (`AKfycbzo...`) with timeout and error handling | M1 | survey |
-| 16 | Google Sheet Synchronization | Sync 19 standard columns to Google Sheet `15Z3HA7Lm2pJU3GmfzdDq4ZfOKVYJoYJ_SYIT3pAM_ug` | M1 | survey |
-| 17 | Google Drive Image Upload | Upload original slip and proof images to dedicated Drive folder and store URLs | M1 | survey |
-| 18 | History Table & Filters | Date presets (Today, 7 days, Month, Custom), instant search by slip number, plate, or customer | M3 | survey |
-| 19 | Split-View Detail Modal | Modal showing zoomable slip photo on left and full metadata/items on right with fullscreen mode | M3 | survey |
-| 20 | A4/A5 Print Engine | Clean print window / `@media print` formatting for A4 dispatch slips and A5 material pass | M3 | survey |
-| 21 | Granular RBAC Registration | Tool #36 in `data/guest_permissions.json`, `auth_rbac.py`, and Security Modal Tab 3 | M4 | survey |
-| 22 | Guest Mode Protection | Read-only access to Dashboard/History/Detail/Print; mutation actions locked; API key masked | M4 | survey |
-| 23 | Owner Mode Privileges | Full permissions to scan, edit, delete, and sync with cloud | M4 | survey |
-| 24 | Automated E2E & Unit Test Suite | Comprehensive Playwright E2E and Python test suites (Tiers 1-5) verifying full lifecycle | M5 | survey |
+| 1 | Navbar & DOM Stealth | Tab `#nav-tab-license` completely hidden from unauthenticated guests (`display: none !important`) | M1 | ORIGINAL_REQUEST §R1 |
+| 2 | Secret Trigger Keyboard | `Ctrl + Shift + L` (and `Cmd + Shift + L`) opens Admin Login Modal | M1 | ORIGINAL_REQUEST §R1 |
+| 3 | Secret Trigger Logo Click | 5 consecutive clicks on brand logo within 3 seconds opens Admin Login Modal | M1 | ORIGINAL_REQUEST §R1 |
+| 4 | Admin Master Auth Endpoint | `POST /api/admin/auth/login` validates against `ADMIN_MASTER_KEY` / `258079` | M1 | ORIGINAL_REQUEST §R1 |
+| 5 | Admin Session & Logout | Session token storage in client and Admin Logout button to instantly re-hide tab | M1 | ORIGINAL_REQUEST §R1 |
+| 6 | API RBAC Protection | `require_admin` middleware rejects unauthorized `/api/admin/*` calls with 401/403 | M1 | ORIGINAL_REQUEST §R1 |
+| 7 | Pastel Glassmorphism UI | Modern UI redesign with 4 KPI cards, status badges, and search filtering | M1 | ORIGINAL_REQUEST §R1 |
+| 8 | License Key Issuance Form | Form with package selection (Enterprise, Lifetime, Pro, Trial), duration, and device limits | M1 | ORIGINAL_REQUEST §R1 |
+| 9 | License Action Buttons | Copy, Handover, Reset Machine, Revoke, and Delete actions with live feedback | M1 | ORIGINAL_REQUEST §R1 |
+| 10 | Google Apps Script Script | `gas_msds_drive_sync.gs` handling Google Sheets CRUD + Google Drive file upload | M2 | ORIGINAL_REQUEST §R2 |
+| 11 | Google Sheets 38-Col SSOT | 38-column `CIL_Chemical_Inventory` schema covering all 16 GHS sections and CAS | M2 | ORIGINAL_REQUEST §R2 |
+| 12 | Two-Way Sync Backend Proxy | `core/msds_gas_sync.py` proxying requests between FastAPI and GAS Webhook | M2 | ORIGINAL_REQUEST §R2 |
+| 13 | Permanent Deletion Protocol | Deletion removes row from Google Sheet and purges cache; restart never revives deleted items | M2 | ORIGINAL_REQUEST §R2 |
+| 14 | Create/Update Sheet Sync | New chemicals or edits immediately append/update rows on Google Sheet | M2 | ORIGINAL_REQUEST §R2 |
+| 15 | Google Drive File Offload | Original MSDS files and exports uploaded to `LUV_PDF_Exports/MSDS_Originals` in Drive | M2 | ORIGINAL_REQUEST §R2 |
+| 16 | MSDS Cloud Settings Modal | Modal in MSDS tab: GAS Webhook URL, Secret Token, Test Connection, sync status | M2 | ORIGINAL_REQUEST §R2 |
+| 17 | Smart Backend Pagination | `/api/msds/list` supports `page` and `page_size` (20/50/100) with SQLite LIMIT/OFFSET | M3 | ORIGINAL_REQUEST §R3 |
+| 18 | Batch Composition Resolver | Single batch query for compositions, eliminating N+1 database queries | M3 | ORIGINAL_REQUEST §R3 |
+| 19 | Frontend Pagination HUD | Pagination bar in MSDS tab rendering only current page of 20/50/100 items | M3 | ORIGINAL_REQUEST §R3 |
+| 20 | Instant Search & Filter | Client/server instant search by name, CAS, and GHS classification on paginated data | M3 | ORIGINAL_REQUEST §R3 |
+| 21 | Upload Temp Cleaner | Middleware tracking upload files and unlinking immediately post-request | M3 | ORIGINAL_REQUEST §R3 |
+| 22 | Download Cleanup Task | `BackgroundTask` cleaning served files from `output/` after download | M3 | ORIGINAL_REQUEST §R3 |
+| 23 | Periodic Watchdog Cleaner | Daemon task purging orphaned files > 15 mins in `temp/` and `output/` every 10 mins | M3 | ORIGINAL_REQUEST §R3 |
+| 24 | Explicit Garbage Collection | Invoking `gc.collect()` and closing PyMuPDF contexts to keep RAM < 200MB | M3 | ORIGINAL_REQUEST §R3 |
+| 25 | Tier 1-4 Automated Test Suite | Comprehensive unit, integration, and E2E tests verifying all requirements | M4 | ORIGINAL_REQUEST §AC |
+
+---
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | M1: Backend Service & Cloud Proxy | `core/gatepass_service.py`, `core/gatepass_router.py`, SQLite WAL cache, GAS Web App proxy, Sheet sync | none | DONE |
-| 2 | M2: DeepSeek Vision AI Engine | Header/footer extraction, bilingual CN-VN table parser, proof audit & plate cross-matching | M1 | PLANNED |
-| 3 | M3: Gate Pass Studio Frontend UI | `#nav-tab-gatepass`, `#gatepass-studio-view`, CSS, JS controller, Chart.js, Split-screen, print engine | M1, M2 | PLANNED |
-| 4 | M4: RBAC & Guest Mode Integration | Register Tool #36 in RBAC files, enforce Guest read-only vs Owner full access, update tests | M1, M3 | PLANNED |
-| 5 | M5: Automated Verification & E2E Testing | Playwright E2E test suite + Python integration tests, 100% PASS on all suites | M1, M2, M3, M4 | PLANNED |
+| 1 | M1: Stealth RBAC & License Tab Redesign | Features 1–9: Navbar/DOM stealth, dual triggers, Admin auth, API middleware, Pastel Glassmorphism UI | none | DONE |
+| 2 | M2: Google Sheets & Drive Persistence (GAS) | Features 10–16: `gas_msds_drive_sync.gs`, 38-col Sheet SSOT, permanent delete, Drive offload, settings UI | none | IN_PROGRESS |
+| 3 | M3: Memory Optimization & Anti-Crash | Features 17–24: Smart pagination (20/50/100), N+1 query elimination, temp cleaners, RAM < 200MB | none | PLANNED |
+| 4 | M4: Dual-Track E2E Test Pass & Hardening | Feature 25: Tiers 1-4 automated test suite, E2E browser tests, zero regressions | M1, M2, M3 | PLANNED |
+
+---
 
 ## Interface Contracts
-### `core/gatepass_service.py` ↔ `core/gatepass_router.py`
-- `GatePassService.get_dashboard_stats(period: Optional[str] = None) -> Dict[str, Any]`
-- `GatePassService.list_passes(filter_query: Optional[str], date_from: Optional[str], date_to: Optional[str], page: int = 1, page_size: int = 50) -> Dict[str, Any]`
-- `GatePassService.get_pass_detail(so_phieu: str) -> Optional[Dict[str, Any]]`
-- `GatePassService.save_pass(pass_data: Dict[str, Any], sync_cloud: bool = True) -> Dict[str, Any]`
-- `GatePassService.delete_pass(so_phieu: str) -> bool`
-- `GatePassService.extract_from_image(image_bytes: bytes, filename: str) -> Dict[str, Any]`
-- `GatePassService.audit_proof_match(slip_data: Dict[str, Any], proof_images: List[bytes]) -> Dict[str, Any]`
-- `GatePassService.sync_to_google_sheet(pass_data: Dict[str, Any]) -> Dict[str, Any]`
-- `GatePassService.upload_image_to_drive(image_bytes: bytes, filename: str) -> str`
 
-### Backend REST API ↔ Frontend JavaScript
-- `GET /api/gatepass/dashboard`: Returns summary stats (`total_passes`, `total_weight_kg`, `total_packages`, `total_cartons`, `active_customers`, `active_vehicles`) and Chart.js datasets (`timeline`, `top_customers`).
-- `GET /api/gatepass/history`: Returns paginated list of dispatch slips with search and date filters.
-- `GET /api/gatepass/detail/{so_phieu}`: Returns full slip details, line items, audit logs, and image URLs.
-- `POST /api/gatepass/ocr-scan`: Accepts multipart image file, returns extracted JSON structure.
-- `POST /api/gatepass/audit-match`: Accepts slip metadata + proof image files, returns match evaluation.
-- `POST /api/gatepass/save`: Accepts complete slip object, writes to SQLite WAL cache and dispatches GAS sync. Protected by `require_owner` for mutations.
-- `DELETE /api/gatepass/{so_phieu}`: Deletes slip from local cache and syncs deletion. Protected by `require_owner`.
-- `GET /api/gatepass/print/{so_phieu}`: Returns optimized printable HTML view (A4/A5).
+### M1: Admin Authentication & License RBAC
+- `POST /api/admin/auth/login`:
+  - Request: `{"master_key": string}`
+  - Response: `{"success": true, "token": string, "role": "admin"}` or `401 Unauthorized`
+- `POST /api/admin/auth/logout`:
+  - Headers: `Authorization: Bearer <token>`
+  - Response: `{"success": true}`
+- `GET /api/admin/licenses/list`:
+  - Headers: `Authorization: Bearer <token>`
+  - Response: `{"success": true, "licenses": [...], "stats": {"total": int, "active": int, "online": int}}`
+  - Rejection: `401 Unauthorized` / `403 Forbidden` if missing or invalid token.
+
+### M2: Google Apps Script Webhook API (`gas_msds_drive_sync.gs`)
+- `POST <gas_webhook_url>`:
+  - Header/Body: `{"token": string, "action": string, ...}`
+  - Actions supported:
+    - `ping`: Returns `{"status": "ok", "sheet_id": string, "total_rows": int}`
+    - `getAllChemicals`: Returns `{"status": "ok", "chemicals": [...]}`
+    - `saveChemical`: Accepts chemical object, upserts row into `CIL_Chemical_Inventory`.
+    - `deleteChemical`: Accepts `{"chemical_id": string}`, deletes matching row from Google Sheet.
+    - `deleteAllChemicals`: Clears all data rows (retaining header row).
+    - `uploadFile`: Accepts `{"filename": string, "base64Data": string, "mimeType": string}`, saves to `LUV_PDF_Exports/MSDS_Originals`, returns `{"fileId": string, "viewUrl": string, "downloadUrl": string}`.
+
+### M3: Smart Paginated MSDS API
+- `GET /api/msds/list`:
+  - Query params: `page: int = 1`, `page_size: int = 20` (or `50`, `100`, `all`), `q: Optional[str] = None`, `item_type: Optional[str] = None`, `ghs_filter: Optional[str] = None`.
+  - Response:
+    ```json
+    {
+      "success": true,
+      "data": [...],
+      "pagination": {
+        "page": 1,
+        "page_size": 20,
+        "total_records": 150,
+        "total_pages": 8
+      }
+    }
+    ```

@@ -1,0 +1,90 @@
+[
+  {
+    "id": "cc73f701-c16c-474c-b6d8-981e9e47b746",
+    "license_key": "LUV-DJT36-327EV-JDUVF-UYFDZ",
+    "registered_to": "Client B",
+    "tier": "Pro",
+    "expires_at": "1 Tháng",
+    "max_devices": 1,
+    "active_devices": 0,
+    "devices": "0/1 máy",
+    "created_at": "20/10/2026 23:12",
+    "status": "active",
+    "notes": "",
+    "handover_message": "🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 Khách hàng / Đơn vị       : Client B\n📦 Gói bản quyền             : Pro\n⏳ Thời hạn sử dụng          : 1 Tháng\n📱 Giới hạn thiết bị         : 1 máy (Quá số lượng sẽ bị từ chối)\n🔑 MÃ BẢN QUYỀN (LICENSE KEY): LUV-DJT36-327EV-JDUVF-UYFDZ\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n2. Bấm vào nút 'Key Kích Hoạt' ở góc trên bên phải màn hình.\n3. Dán chính xác Mã Key ở trên và bấm 'XÁC NHẬN KEY KÍCH HOẠT'.\n4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!"
+  },
+  {
+    "id": "201902cf-538b-4372-917e-a963b1830686",
+    "license_key": "LUV-SMUSY-LXQ7Z-KXPZ5-HV8ND",
+    "registered_to": "Client A",
+    "tier": "Pro",
+    "expires_at": "1 Tháng",
+    "max_devices": 1,
+    "active_devices": 0,
+    "devices": "0/1 máy",
+    "created_at": "20/10/2026 23:12",
+    "status": "revoked",
+    "notes": "",
+    "handover_message": "🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 Khách hàng / Đơn vị       : Client A\n📦 Gói bản quyền             : Pro\n⏳ Thời hạn sử dụng          : 1 Tháng\n📱 Giới hạn thiết bị         : 1 máy (Quá số lượng sẽ bị từ chối)\n🔑 MÃ BẢN QUYỀN (LICENSE KEY): LUV-SMUSY-LXQ7Z-KXPZ5-HV8ND\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n2. Bấm vào nút 'Key Kích Hoạt' ở góc trên bên phải màn hình.\n3. Dán chính xác Mã Key ở trên và bấm 'XÁC NHẬN KEY KÍCH HOẠT'.\n4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!",
+    "revoked_at": "20/10/2026 23:12"
+  },
+  {
+    "id": "41d95d72-5cb8-4bae-8487-e9ce2894c5ba",
+    "license_key": "LUV-VNYL4-BJGJD-BYTNQ-W9BNV",
+    "registered_to": "External Client Corp",
+    "tier": "Enterprise Lifetime",
+    "expires_at": "Vĩnh viễn",
+    "max_devices": 1,
+    "active_devices": 0,
+    "devices": "0/1 máy",
+    "created_at": "20/10/2026 23:12",
+    "status": "active",
+    "notes": "",
+    "handover_message": "🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 Khách hàng / Đơn vị       : External Client Corp\n📦 Gói bản quyền             : Enterprise Lifetime\n⏳ Thời hạn sử dụng          : Vĩnh viễn\n📱 Giới hạn thiết bị         : 1 máy (Quá số lượng sẽ bị từ chối)\n🔑 MÃ BẢN QUYỀN (LICENSE KEY): LUV-VNYL4-BJGJD-BYTNQ-W9BNV\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n2. Bấm vào nút 'Key Kích Hoạt' ở góc trên bên phải màn hình.\n3. Dán chính xác Mã Key ở trên và bấm 'XÁC NHẬN KEY KÍCH HOẠT'.\n4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!"
+  },
+  {
+    "id": "cc176097-01a2-42fb-bb2e-465376750b65",
+    "license_key": "LUV-KHYUV-ND66Q-Q2KEL-BZ8NM",
+    "registered_to": "Test Org",
+    "tier": "Pro",
+    "expires_at": "30 Ngày",
+    "max_devices": 1,
+    "active_devices": 0,
+    "devices": "0/1 máy",
+    "created_at": "20/10/2026 23:08",
+    "status": "active",
+    "notes": "",
+    "handover_message": "🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 Khách hàng / Đơn vị       : Test Org\n📦 Gói bản quyền             : Pro\n⏳ Thời hạn sử dụng          : 30 Ngày\n📱 Giới hạn thiết bị         : 1 máy (Quá số lượng sẽ bị từ chối)\n🔑 MÃ BẢN QUYỀN (LICENSE KEY): LUV-KHYUV-ND66Q-Q2KEL-BZ8NM\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n2. Bấm vào nút 'Key Kích Hoạt' ở góc trên bên phải màn hình.\n3. Dán chính xác Mã Key ở trên và bấm 'XÁC NHẬN KEY KÍCH HOẠT'.\n4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!"
+  },
+  {
+    "license_key": "LUV-PRO-649B-F38C-9758",
+    "registered_to": "Render Client VIP",
+    "tier": "Professional Suite (Chuyên nghiệp)",
+    "expires_at": "1 Năm (1 Year)",
+    "created_at": "18/10/2026 20:17",
+    "status": "revoked",
+    "notes": "Test auto",
+    "handover_message": "🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 Khách hàng / Doanh nghiệp : Render Client VIP\n📦 Gói bản quyền             : Professional Suite (Chuyên nghiệp)\n⏳ Thời hạn sử dụng          : 1 Năm (1 Year)\n🔑 MÃ BẢN QUYỀN (LICENSE KEY): LUV-PRO-649B-F38C-9758\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n2. Bấm vào nút '🔑 Kích Hoạt Bản Quyền' ở góc trên bên phải màn hình.\n3. Dán chính xác Mã Bản Quyền ở trên và bấm 'Kích Hoạt Ngay'.\n4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!",
+    "revoked_at": "18/10/2026 20:17"
+  },
+  {
+    "license_key": "LUV-ENT-2A47-45D5-AAC7",
+    "registered_to": "Cong Ty Hoa Chat XYZ",
+    "tier": "Enterprise Lifetime (Vĩnh viễn)",
+    "expires_at": "Vĩnh viễn",
+    "created_at": "18/10/2026 20:12",
+    "status": "active",
+    "notes": "",
+    "handover_message": "🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 Khách hàng / Doanh nghiệp : Cong Ty Hoa Chat XYZ\n📦 Gói bản quyền             : Enterprise Lifetime (Vĩnh viễn)\n⏳ Thời hạn sử dụng          : Vĩnh viễn\n🔑 MÃ BẢN QUYỀN (LICENSE KEY): LUV-ENT-2A47-45D5-AAC7\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n2. Bấm vào nút '🔑 Kích Hoạt Bản Quyền' ở góc trên bên phải màn hình.\n3. Dán chính xác Mã Bản Quyền ở trên và bấm 'Kích Hoạt Ngay'.\n4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!"
+  },
+  {
+    "license_key": "LUV-PRO-DD06-0F06-84D4",
+    "registered_to": "Cong Ty Test ABC",
+    "tier": "Professional Suite",
+    "expires_at": "1 Năm",
+    "created_at": "18/10/2026 20:12",
+    "status": "active",
+    "notes": "Test note",
+    "handover_message": "🎉 CHÚC MỪNG QUÝ KHÁCH ĐÃ ĐĂNG KÝ BẢN QUYỀN LUV-DOC-TRAN THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 Khách hàng / Doanh nghiệp : Cong Ty Test ABC\n📦 Gói bản quyền             : Professional Suite\n⏳ Thời hạn sử dụng          : 1 Năm\n🔑 MÃ BẢN QUYỀN (LICENSE KEY): LUV-PRO-DD06-0F06-84D4\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 HƯỚNG DẪN KÍCH HOẠT NHANH (CHỈ 10 GIÂY):\n1. Mở ứng dụng LUV-DOC-TRAN trên trình duyệt.\n2. Bấm vào nút '🔑 Kích Hoạt Bản Quyền' ở góc trên bên phải màn hình.\n3. Dán chính xác Mã Bản Quyền ở trên và bấm 'Kích Hoạt Ngay'.\n4. Hệ thống sẽ mở khóa vĩnh viễn toàn bộ tính năng dịch song ngữ Word, PDF, Excel!\n\n✨ Xin trân trọng cảm ơn Quý khách đã tin tưởng và đồng hành cùng hệ sinh thái LUV!"
+  }
+]

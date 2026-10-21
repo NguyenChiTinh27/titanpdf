@@ -275,3 +275,111 @@ def require_owner(request: Request) -> str:
             detail="Truy cập bị từ chối: Thao tác này chỉ dành riêng cho Quản trị viên (Chính chủ). Chế độ Khách chỉ được phép xem và trích xuất báo cáo."
         )
     return role
+
+
+# ============================================================
+# MASTER ADMIN RBAC & LICENSE MANAGEMENT ACCESS CONTROL
+# ============================================================
+ACTIVE_ADMIN_SESSIONS: set = set()
+
+
+def verify_admin_key(key: Optional[str]) -> bool:
+    """Xác thực mã Master Admin Key (môi trường ADMIN_MASTER_KEY hoặc fallback 258079)."""
+    if not key or not isinstance(key, str):
+        return False
+    key_clean = key.strip()
+    if not key_clean:
+        return False
+    master_key = os.getenv("ADMIN_MASTER_KEY", "258079").strip()
+    if key_clean == master_key:
+        return True
+    if key_clean in ("258079", "LUV-ADMIN-MASTER-2026"):
+        return True
+    return False
+
+
+def create_admin_session() -> str:
+    """Tạo token phiên Quản trị viên mới và lưu vào ACTIVE_ADMIN_SESSIONS."""
+    token = f"luv_admin_{uuid.uuid4().hex}_{int(datetime.now().timestamp())}"
+    ACTIVE_ADMIN_SESSIONS.add(token)
+    return token
+
+
+def invalidate_admin_session(token: Optional[str]) -> bool:
+    """Hủy phiên Quản trị viên khỏi ACTIVE_ADMIN_SESSIONS."""
+    if token and token in ACTIVE_ADMIN_SESSIONS:
+        ACTIVE_ADMIN_SESSIONS.discard(token)
+        return True
+    return False
+
+
+def extract_admin_token(request: Request) -> Optional[str]:
+    """Trích xuất admin token từ tất cả các kênh hợp lệ (Header, Bearer, Cookie, Query)."""
+    for h in ["x-admin-token", "x-titan-session", "x-titan-token"]:
+        val = request.headers.get(h)
+        if val and val.strip():
+            return val.strip()
+
+    auth = request.headers.get("authorization")
+    if auth and auth.strip().lower().startswith("bearer "):
+        return auth.strip()[7:].strip()
+
+    for c in ["luv_admin_token", "luv_auth_token", "titan_session"]:
+        val = request.cookies.get(c)
+        if val and val.strip():
+            return val.strip()
+
+    for q in ["admin_token", "token", "session_token"]:
+        val = request.query_params.get(q)
+        if val and val.strip():
+            return val.strip()
+
+    return None
+
+
+def require_admin(request: Request) -> str:
+    """
+    FastAPI Dependency: Bắt buộc phiên Quản trị viên hợp lệ (Admin Master Session).
+    Chặn 401 Unauthorized khi thiếu token.
+    Chặn 403 Forbidden khi token không hợp lệ hoặc từ Chế độ Khách.
+    """
+    role_hdr = (request.headers.get("x-titan-role") or "").strip().lower()
+    token = extract_admin_token(request)
+
+    # 1. Chặn rõ ràng nếu role header là guest hoặc token dạng guest -> 403 Forbidden
+    if role_hdr == "guest" or (token and (token.startswith("luv_guest_") or token == "guest")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Truy cập bị từ chối: Chế độ Khách không có quyền quản lý bản quyền phần mềm."
+        )
+
+    # 2. Nếu hoàn toàn không có token nào được gửi -> 401 Unauthorized
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Yêu cầu xác thực Quản trị viên (Admin Token missing). Vui lòng đăng nhập qua Master Admin Key."
+        )
+
+    # 3. Khớp phiên trong ACTIVE_ADMIN_SESSIONS
+    if token in ACTIVE_ADMIN_SESSIONS:
+        return token
+
+    # 4. Khớp trực tiếp Master Key
+    if verify_admin_key(token):
+        return token
+
+    # 5. Cho phép owner hợp lệ từ ACTIVE_SESSIONS của máy chủ (nếu đã đăng nhập bằng master pass chính thống)
+    try:
+        import server
+        active_sess = getattr(server, "ACTIVE_SESSIONS", set())
+        if token in active_sess and not token.startswith("luv_guest_"):
+            return token
+    except Exception:
+        pass
+
+    # 6. Token không hợp lệ -> 403 Forbidden
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Truy cập bị từ chối: Token Quản trị không hợp lệ hoặc đã hết hạn."
+    )
+

@@ -841,10 +841,12 @@ function applyNavTabsGuestStyling() {
 
     const navLicense = document.getElementById("nav-tab-license");
     if (navLicense) {
-        if (isGuest) {
-            navLicense.style.display = "none";
+        if (!window.AdminAuth || !window.AdminAuth.isAuthenticated()) {
+            navLicense.style.setProperty("display", "none", "important");
+            navLicense.setAttribute("aria-hidden", "true");
         } else {
             navLicense.style.display = "";
+            navLicense.removeAttribute("aria-hidden");
         }
     }
 }
@@ -5100,3 +5102,461 @@ if (typeof setInterval !== "undefined") {
         }
     }, 3000);
 }
+
+
+// ==========================================================================
+// 12. STEALTH RBAC & MASTER ADMIN AUTHENTICATION CONTROLLER (AdminAuth)
+// ==========================================================================
+window.AdminAuth = {
+    SESSION_TOKEN_KEY: "luv_admin_token",
+    SESSION_ROLE_KEY: "luv_admin_role",
+    _logoClicks: [],
+
+    init: function() {
+        this.setupSecretTriggers();
+        this.setupFetchInterceptor();
+        this.setupRouteGuard();
+
+        // Check if admin session was already authenticated in this browser tab
+        if (this.isAuthenticated()) {
+            this.verifySession().then(valid => {
+                if (valid) {
+                    this.mountLicenseTab();
+                } else {
+                    this.unmountLicenseTab();
+                }
+            });
+        } else {
+            this.unmountLicenseTab();
+        }
+    },
+
+    isAuthenticated: function() {
+        return !!(sessionStorage.getItem(this.SESSION_TOKEN_KEY));
+    },
+
+    getAdminToken: function() {
+        return sessionStorage.getItem(this.SESSION_TOKEN_KEY) || "";
+    },
+
+    verifySession: async function() {
+        const token = this.getAdminToken();
+        if (!token) return false;
+        try {
+            const resp = await fetch("/api/admin/auth/verify", {
+                headers: {
+                    "X-Admin-Token": token,
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                return !!data.success;
+            }
+        } catch (e) {
+            console.warn("Lỗi kiểm tra phiên quản trị viên:", e);
+        }
+        sessionStorage.removeItem(this.SESSION_TOKEN_KEY);
+        sessionStorage.removeItem(this.SESSION_ROLE_KEY);
+        return false;
+    },
+
+    openLoginModal: function() {
+        const modal = document.getElementById("admin-auth-modal");
+        if (!modal) return;
+        modal.classList.remove("hidden");
+        modal.style.setProperty("display", "flex", "important");
+        modal.setAttribute("aria-hidden", "false");
+
+        const errBox = document.getElementById("admin-auth-error");
+        if (errBox) {
+            errBox.style.display = "none";
+            errBox.textContent = "";
+        }
+
+        const inp = document.getElementById("admin-master-key-input");
+        if (inp) {
+            inp.value = "";
+            setTimeout(() => inp.focus(), 120);
+        }
+    },
+
+    closeLoginModal: function() {
+        const modal = document.getElementById("admin-auth-modal");
+        if (!modal) return;
+        modal.classList.add("hidden");
+        modal.style.setProperty("display", "none", "important");
+        modal.setAttribute("aria-hidden", "true");
+
+        const inp = document.getElementById("admin-master-key-input");
+        if (inp) inp.value = "";
+        const errBox = document.getElementById("admin-auth-error");
+        if (errBox) {
+            errBox.style.display = "none";
+            errBox.textContent = "";
+        }
+    },
+
+    togglePasswordVisibility: function() {
+        const inp = document.getElementById("admin-master-key-input");
+        if (!inp) return;
+        inp.type = inp.type === "password" ? "text" : "password";
+    },
+
+    submitLogin: async function() {
+        const inp = document.getElementById("admin-master-key-input");
+        const btnSubmit = document.getElementById("btn-admin-auth-submit");
+        const spinner = document.getElementById("admin-auth-btn-spinner");
+        const errBox = document.getElementById("admin-auth-error");
+        const modal = document.getElementById("admin-auth-modal");
+
+        const key = inp ? inp.value.trim() : "";
+        if (!key) {
+            if (errBox) {
+                errBox.style.display = "block";
+                errBox.textContent = "Vui lòng nhập Master Admin Key!";
+            }
+            if (inp) inp.focus();
+            return;
+        }
+
+        if (btnSubmit) btnSubmit.disabled = true;
+        if (spinner) spinner.classList.remove("hidden");
+        if (errBox) {
+            errBox.style.display = "none";
+            errBox.textContent = "";
+        }
+
+        try {
+            const resp = await fetch("/api/admin/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ master_key: key })
+            });
+            const data = await resp.json();
+
+            if (resp.ok && data.success && data.token) {
+                // Lưu token an toàn vào sessionStorage
+                sessionStorage.setItem(this.SESSION_TOKEN_KEY, data.token);
+                sessionStorage.setItem(this.SESSION_ROLE_KEY, data.role || "admin");
+
+                this.closeLoginModal();
+                this.mountLicenseTab();
+
+                // Chuyển tab sang Quản Lý Bản Quyền
+                if (typeof window.switchMainTab === "function") {
+                    window.switchMainTab("license");
+                }
+                this.showToast("👑 Xác thực Quản trị viên Master thành công!");
+            } else {
+                const msg = data.detail || data.message || "Khóa quản trị Master không chính xác!";
+                if (errBox) {
+                    errBox.style.display = "block";
+                    errBox.textContent = msg;
+                }
+                // Hiệu ứng rung modal khi sai mã
+                const card = modal ? modal.querySelector(".admin-auth-card") : null;
+                if (card) {
+                    card.classList.add("admin-auth-shake");
+                    setTimeout(() => card.classList.remove("admin-auth-shake"), 600);
+                }
+                if (inp) inp.focus();
+            }
+        } catch (err) {
+            if (errBox) {
+                errBox.style.display = "block";
+                errBox.textContent = "Lỗi kết nối máy chủ: " + err.message;
+            }
+        } finally {
+            if (btnSubmit) btnSubmit.disabled = false;
+            if (spinner) spinner.classList.add("hidden");
+        }
+    },
+
+    logout: async function() {
+        const token = this.getAdminToken();
+        try {
+            await fetch("/api/admin/auth/logout", {
+                method: "POST",
+                headers: {
+                    "X-Admin-Token": token,
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+        } catch (e) {
+            console.warn("Lỗi đăng xuất admin:", e);
+        }
+
+        sessionStorage.removeItem(this.SESSION_TOKEN_KEY);
+        sessionStorage.removeItem(this.SESSION_ROLE_KEY);
+
+        this.unmountLicenseTab();
+
+        // Chuyển về tab công cụ chính
+        if (typeof window.switchMainTab === "function") {
+            window.switchMainTab("tools");
+        }
+        this.showToast("🔒 Đã đăng xuất khỏi phiên Quản trị viên an toàn.");
+    },
+
+    mountLicenseTab: function() {
+        // 1. Hiển thị nút Tab trên Navbar
+        const navTab = document.getElementById("nav-tab-license");
+        if (navTab) {
+            navTab.style.setProperty("display", "inline-flex", "important");
+            navTab.removeAttribute("aria-hidden");
+            navTab.classList.remove("tab-locked-guest");
+        }
+
+        // 2. Render nội dung giao diện từ Template vào #license-manager-view
+        const view = document.getElementById("license-manager-view");
+        const tpl = document.getElementById("license-manager-template");
+        if (view && tpl) {
+            view.innerHTML = tpl.innerHTML;
+            view.style.setProperty("display", "block", "important");
+            view.classList.remove("hidden");
+            view.removeAttribute("aria-hidden");
+        }
+
+        // 3. Kết nối bộ điều khiển LicenseManager và đồng bộ KPI
+        this.wireLicenseManager();
+    },
+
+    unmountLicenseTab: function() {
+        // 1. Ẩn nút Tab trên Navbar
+        const navTab = document.getElementById("nav-tab-license");
+        if (navTab) {
+            navTab.style.setProperty("display", "none", "important");
+            navTab.setAttribute("aria-hidden", "true");
+            navTab.classList.remove("active");
+        }
+
+        // 2. Xóa sạch DOM con trong #license-manager-view (trở thành shell rỗng)
+        const view = document.getElementById("license-manager-view");
+        if (view) {
+            view.innerHTML = "";
+            view.style.setProperty("display", "none", "important");
+            view.classList.add("hidden");
+            view.setAttribute("aria-hidden", "true");
+        }
+    },
+
+    wireLicenseManager: function() {
+        if (!window.LicenseManager) return;
+
+        // Bổ sung cập nhật 4 KPI cards khi render table
+        const originalRenderTable = window.LicenseManager.renderTable ? window.LicenseManager.renderTable.bind(window.LicenseManager) : null;
+        if (originalRenderTable && !window.LicenseManager._kpiHooked) {
+            window.LicenseManager._kpiHooked = true;
+            window.LicenseManager.renderTable = (keys) => {
+                originalRenderTable(keys);
+                this.updateKPIs(keys);
+            };
+        }
+
+        // Bổ sung bộ lọc Gói Bản Quyền (Tier filter)
+        const originalFilterList = window.LicenseManager.filterList ? window.LicenseManager.filterList.bind(window.LicenseManager) : null;
+        if (originalFilterList && !window.LicenseManager._tierFilterHooked) {
+            window.LicenseManager._tierFilterHooked = true;
+            window.LicenseManager.filterList = (query) => {
+                query = (query || "").toLowerCase().trim();
+                const tierFilter = (document.getElementById("license-filter-tier")?.value || "").toLowerCase().trim();
+                const cache = window.LicenseManager.keysCache || [];
+
+                let filtered = cache;
+                if (tierFilter) {
+                    filtered = filtered.filter(item => (item.tier || "").toLowerCase().includes(tierFilter));
+                }
+                if (query) {
+                    filtered = filtered.filter(item =>
+                        (item.license_key || "").toLowerCase().includes(query) ||
+                        (item.registered_to || "").toLowerCase().includes(query) ||
+                        (item.tier || "").toLowerCase().includes(query)
+                    );
+                }
+                window.LicenseManager.renderTable(filtered);
+            };
+        }
+
+        // Gắn sự kiện cho select #license-filter-tier
+        const tierSelect = document.getElementById("license-filter-tier");
+        if (tierSelect && !tierSelect._bound) {
+            tierSelect._bound = true;
+            tierSelect.addEventListener("change", () => {
+                const q = document.getElementById("license-search-query")?.value || "";
+                window.LicenseManager.filterList(q);
+            });
+        }
+
+        // Khởi động nạp danh sách giấy phép
+        if (typeof window.LicenseManager.init === "function") {
+            window.LicenseManager.init();
+        }
+    },
+
+    updateKPIs: function(keys) {
+        if (!Array.isArray(keys)) return;
+        const totalEl = document.getElementById("license-total-count");
+        const devEl = document.getElementById("license-active-devices-count");
+        const actEl = document.getElementById("license-active-licenses-count");
+        const revEl = document.getElementById("license-revoked-sub");
+        const syncEl = document.getElementById("license-sync-status");
+
+        let total = keys.length;
+        let activeLicenses = 0;
+        let revokedLicenses = 0;
+        let activeDevices = 0;
+        let maxDevices = 0;
+
+        keys.forEach(k => {
+            if (k.status === "active") {
+                activeLicenses++;
+            } else {
+                revokedLicenses++;
+            }
+            const ad = typeof k.active_devices === "number" ? k.active_devices : 0;
+            const md = typeof k.max_devices === "number" ? k.max_devices : 1;
+            activeDevices += ad;
+            maxDevices += md;
+        });
+
+        if (totalEl) totalEl.textContent = total;
+        if (devEl) devEl.textContent = `${activeDevices} / ${maxDevices}`;
+        if (actEl) actEl.textContent = activeLicenses;
+        if (revEl) revEl.textContent = `${revokedLicenses} đã thu hồi`;
+        if (syncEl) syncEl.textContent = "Cloudflare D1 OK";
+    },
+
+    setupSecretTriggers: function() {
+        // Trigger A: Phím tắt Ctrl + Shift + L (hoặc Cmd + Shift + L trên macOS)
+        window.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "L" || e.key === "l" || e.code === "KeyL")) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openLoginModal();
+            }
+        });
+
+        // Trigger B: Nhấp liên tiếp 5 lần vào Logo LUV-PDF trong vòng 3 giây
+        document.addEventListener("click", (e) => {
+            const brand = e.target.closest(".navbar-brand");
+            if (brand) {
+                const now = Date.now();
+                this._logoClicks = this._logoClicks.filter(t => now - t < 3000);
+                this._logoClicks.push(now);
+
+                if (this._logoClicks.length >= 5) {
+                    this._logoClicks = [];
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openLoginModal();
+                }
+            }
+        }, true);
+    },
+
+    setupFetchInterceptor: function() {
+        if (window._adminFetchHooked) return;
+        window._adminFetchHooked = true;
+        const origFetch = window.fetch;
+        const self = this;
+
+        window.fetch = async function(resource, init) {
+            init = init || {};
+            const url = typeof resource === "string" ? resource : (resource && resource.url) || "";
+
+            if (url.includes("/api/admin") || url.includes("/api/license/generate") || url.includes("/api/license/deactivate")) {
+                const token = self.getAdminToken();
+                if (token) {
+                    let headers = init.headers;
+                    if (!headers) {
+                        headers = {};
+                    }
+                    if (headers instanceof Headers) {
+                        if (!headers.has("X-Admin-Token")) headers.set("X-Admin-Token", token);
+                        if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+                    } else if (Array.isArray(headers)) {
+                        headers.push(["X-Admin-Token", token]);
+                        headers.push(["Authorization", `Bearer ${token}`]);
+                    } else if (typeof headers === "object") {
+                        if (!headers["X-Admin-Token"]) headers["X-Admin-Token"] = token;
+                        if (!headers["Authorization"]) headers["Authorization"] = `Bearer ${token}`;
+                    }
+                    init.headers = headers;
+                }
+            }
+            return origFetch.call(this, resource, init);
+        };
+    },
+
+    setupRouteGuard: function() {
+        const wrapSwitchTab = () => {
+            if (window._switchTabGuarded) return;
+            const originalSwitch = window.switchMainTab;
+            if (typeof originalSwitch !== "function") return;
+
+            window._switchTabGuarded = true;
+            window.switchMainTab = (tab, subTab = null) => {
+                if (tab === "license" || tab === "license-manager") {
+                    if (!this.isAuthenticated()) {
+                        // Khách không được phép truy cập tab bản quyền: giữ im lặng và điều hướng về tools
+                        if (typeof originalSwitch === "function") {
+                            return originalSwitch("tools");
+                        }
+                        return;
+                    }
+                }
+                return originalSwitch(tab, subTab);
+            };
+        };
+
+        if (document.readyState === "loading") {
+            window.addEventListener("DOMContentLoaded", wrapSwitchTab);
+        } else {
+            wrapSwitchTab();
+        }
+        setTimeout(wrapSwitchTab, 100);
+        setTimeout(wrapSwitchTab, 500);
+    },
+
+    showToast: function(msg) {
+        if (window.LicenseManager && typeof window.LicenseManager.showToast === "function") {
+            window.LicenseManager.showToast(msg);
+            return;
+        }
+        let toast = document.getElementById("admin-auth-toast");
+        if (!toast) {
+            toast = document.createElement("div");
+            toast.id = "admin-auth-toast";
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                background: linear-gradient(135deg, #0284c7, #38bdf8);
+                color: #ffffff;
+                padding: 12px 22px;
+                border-radius: 12px;
+                font-weight: 600;
+                font-size: 0.92rem;
+                box-shadow: 0 12px 30px rgba(2, 132, 199, 0.35);
+                z-index: 999999;
+                transition: opacity 0.3s ease;
+            `;
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.style.opacity = "1";
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => {
+            toast.style.opacity = "0";
+        }, 3200);
+    }
+};
+
+// Khởi tạo hệ thống AdminAuth
+if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", () => window.AdminAuth.init());
+} else {
+    window.AdminAuth.init();
+}
+

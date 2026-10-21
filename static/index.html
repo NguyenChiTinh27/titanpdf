@@ -2258,7 +2258,7 @@
                     <span class="tab-label">Phiếu Xuất & Vật Tư</span>
                     <span class="nav-tab-pill-badge badge-gatepass" id="nav-gatepass-count-badge"><span class="pulse-dot"></span>XUẤT</span>
                 </button>
-                <button id="nav-tab-license" class="main-nav-tab nav-tab-license" onclick="switchMainTab('license')" title="Quản Lý Bản Quyền LUV Trực Tuyến (License Manager)" role="tab" aria-selected="false">
+                <button id="nav-tab-license" class="main-nav-tab nav-tab-license" onclick="switchMainTab('license')" title="Quản Lý Bản Quyền LUV Trực Tuyến (License Manager)" role="tab" aria-selected="false" style="display:none !important;" aria-hidden="true">
                     <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="7.5" cy="15.5" r="5.5"></circle>
                         <path d="m21 2-9.6 9.6"></path>
@@ -3255,6 +3255,9 @@
                         <button type="button" id="btn-export-annual-report" class="msds-btn-report-annual" onclick="exportAnnualChemicalReport()" title="Xuất Báo Cáo Hóa Chất Hàng Năm nộp Sở Công Thương (Thông tư 02/2026/TT-BCT)">
                             <span>📊 Báo Cáo Sở Công Thương</span>
                         </button>
+                        <button type="button" id="btn-open-msds-gas-modal" class="msds-btn-cloud-config" onclick="openMsdsGasSettingsModal()" title="Cấu hình kết nối Google Apps Script & Google Drive">
+                            <span>⚙️ Cài Đặt Cloud (GAS)</span>
+                        </button>
                         <button type="button" id="btn-msds-gdrive-sync" class="msds-btn-gdrive" onclick="syncMsdsToGoogleDrive()" title="Đồng bộ Sổ CIL và file MSDS lên Google Drive">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
                             <span id="txt-msds-gdrive-sync">☁️ Lưu Drive</span>
@@ -3393,6 +3396,31 @@
                             <div class="msds-empty-icon">🧪</div>
                             <div class="msds-empty-title">Chưa có hóa chất nào khớp với bộ lọc hiện tại</div>
                             <div class="msds-empty-sub">Hãy kéo thả tệp MSDS / SDS vào khung nạp ở cột bên trái hoặc thử từ khóa tìm kiếm khác.</div>
+                        </div>
+
+                        <!-- MSDS SMART PAGINATION HUD (M3 Anti-Crash & Fast Rendering) -->
+                        <div id="msds-pagination-hud" class="msds-pagination-container" style="display:flex; justify-content:space-between; align-items:center; padding:12px 18px; margin-top:12px; background:rgba(255,255,255,0.85); backdrop-filter:blur(8px); border-radius:12px; border:1px solid rgba(226,232,240,0.9); font-size:13px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+                            <div style="display:flex; align-items:center; gap:14px;">
+                                <span id="msds-pagination-info" style="color:#64748b; font-weight:600;">Hiển thị 1 - 20 trên tổng số 0 hóa chất</span>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <label for="msds-page-size-select" style="color:#64748b; font-weight:500;">Mỗi trang:</label>
+                                    <select id="msds-page-size-select" onchange="onMsdsPageSizeChange(this.value)" style="padding:4px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-size:12px; font-weight:600; cursor:pointer; outline:none;">
+                                        <option value="20" selected>20 dòng</option>
+                                        <option value="50">50 dòng</option>
+                                        <option value="100">100 dòng</option>
+                                        <option value="all">Tất cả</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <button type="button" id="msds-page-prev-btn" onclick="onMsdsPageChange(-1)" style="padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.2s; color:#334155;" disabled>
+                                    <span>« Trang trước</span>
+                                </button>
+                                <span id="msds-page-current-display" style="font-weight:700; color:#3b82f6; padding:0 8px; min-width:80px; text-align:center;">Trang 1 / 1</span>
+                                <button type="button" id="msds-page-next-btn" onclick="onMsdsPageChange(1)" style="padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.2s; color:#334155;" disabled>
+                                    <span>Trang sau »</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3666,6 +3694,96 @@
                     <button type="button" id="btn-confirm-delete-all" class="btn-primary" onclick="executeDeleteAllMsds()" style="background:linear-gradient(135deg, #ef4444, #dc2626); border-color:#dc2626; padding:9px 18px; font-size:13px; font-weight:700; box-shadow:0 4px 12px rgba(239,68,68,0.35);">
                         🗑️ Xác Nhận Xóa Sạch CSDL
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9C. MODAL CẤU HÌNH ĐỒNG BỘ GOOGLE APPS SCRIPT (GAS) & GOOGLE DRIVE -->
+    <div id="msds-gas-settings-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; background:rgba(15,23,42,0.7); backdrop-filter:blur(4px); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fff; border-radius:16px; max-width:680px; width:100%; box-shadow:0 25px 50px -12px rgba(15,23,42,0.35); border:1px solid #cbd5e1; overflow:hidden;">
+            <!-- Modal Header -->
+            <div style="background:linear-gradient(135deg, #1e3a8a, #2563eb); color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; background:rgba(255,255,255,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+                        ☁️
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:16px; font-weight:800; letter-spacing:0.3px;">CẤU HÌNH ĐỒNG BỘ GOOGLE APPS SCRIPT (GAS) &amp; DRIVE</h3>
+                        <div style="font-size:12px; color:#dbeafe; margin-top:2px;">Chống mất dữ liệu khi Render khởi động lại (Single Source of Truth)</div>
+                    </div>
+                </div>
+                <button type="button" onclick="closeMsdsGasSettingsModal()" style="border:none; background:transparent; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px; line-height:1;">✕</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div style="padding:22px; max-height:80vh; overflow-y:auto;">
+                <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:12px 14px; margin-bottom:18px; display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:20px; line-height:1.2;">ℹ️</span>
+                    <div style="font-size:13px; color:#1e40af; line-height:1.5;">
+                        <b>NGUỒN DỮ LIỆU GỐC (SSOT):</b><br/>
+                        Google Sheet (<b>CIL_Chemical_Inventory</b> - 38 cột) lưu trữ toàn bộ hóa chất, và Google Drive (<b>LUV_PDF_Exports/MSDS_Originals</b>) lưu file PDF gốc. Khi server Render khởi động lại, hệ thống sẽ tự động hòa giải và khôi phục dữ liệu chính xác từ Google Sheet.
+                    </div>
+                </div>
+
+                <!-- Webhook URL Input -->
+                <div style="margin-bottom:14px;">
+                    <label for="msds-gas-url-input" style="display:block; font-size:13px; font-weight:700; color:#334155; margin-bottom:6px;">
+                        Google Apps Script Webhook URL:
+                    </label>
+                    <input type="url" id="msds-gas-url-input" class="input-text w-full" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:10px 12px; font-size:13.5px; border:1.5px solid #cbd5e1; border-radius:8px; outline:none;" />
+                    <div style="font-size:11.5px; color:#64748b; margin-top:4px;">
+                        Được tạo sau khi triển khai script <code>gas_msds_drive_sync.gs</code> (Deploy as Web App, Access: Anyone).
+                    </div>
+                </div>
+
+                <!-- Secret Token Input -->
+                <div style="margin-bottom:14px;">
+                    <label for="msds-gas-token-input" style="display:block; font-size:13px; font-weight:700; color:#334155; margin-bottom:6px;">
+                        Secret Token (Bảo mật Webhook - Tùy chọn):
+                    </label>
+                    <input type="password" id="msds-gas-token-input" class="input-text w-full" placeholder="Để trống nếu không đặt token bảo mật..." autocomplete="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:10px 12px; font-size:13.5px; border:1.5px solid #cbd5e1; border-radius:8px; outline:none;" />
+                </div>
+
+                <!-- Auto-sync Checkbox -->
+                <div style="margin-bottom:18px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#334155;">
+                        <input type="checkbox" id="msds-gas-autosync-input" checked style="width:16px; height:16px; accent-color:#2563eb;" />
+                        <span>Tự động đồng bộ lên Google Sheet &amp; Google Drive khi trích xuất hoặc xóa hóa chất</span>
+                    </label>
+                </div>
+
+                <!-- Live Status Box -->
+                <div id="msds-gas-status-box" style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span id="msds-gas-live-badge" style="display:inline-block; padding:3px 10px; border-radius:12px; font-size:11.5px; font-weight:700; background:#e2e8f0; color:#475569;">Chưa kết nối</span>
+                        <span id="msds-gas-status-msg" style="font-size:12.5px; color:#475569;">Nhập Webhook URL và bấm &quot;Kiểm Tra Kết Nối&quot;.</span>
+                    </div>
+                </div>
+
+                <!-- Two-Way Sync Actions Grid -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+                    <button type="button" id="btn-gas-sync-to-sheet" class="btn-secondary" onclick="executeGasSyncToSheet()" style="padding:9px 12px; font-size:12.5px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; background:#f0fdf4; border:1px solid #86efac; color:#166534;" title="Đẩy toàn bộ hóa chất từ SQLite lên Google Sheet">
+                        <span>⬆️ Đẩy Lên Sheet (Backup)</span>
+                    </button>
+                    <button type="button" id="btn-gas-sync-from-sheet" class="btn-secondary" onclick="executeGasSyncFromSheet()" style="padding:9px 12px; font-size:12.5px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; background:#eff6ff; border:1px solid #93c5fd; color:#1e40af;" title="Kéo toàn bộ hóa chất từ Google Sheet về máy chủ">
+                        <span>⬇️ Tải Về Từ Sheet (Restore)</span>
+                    </button>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding-top:14px; border-top:1px solid #e2e8f0;">
+                    <button type="button" id="btn-gas-test-conn" class="btn-secondary" onclick="testMsdsGasConnection()" style="padding:9px 16px; font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px;">
+                        <span>🔌 Kiểm Tra Kết Nối</span>
+                    </button>
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" class="btn-secondary" onclick="closeMsdsGasSettingsModal()" style="padding:9px 16px; font-size:13px; font-weight:600;">
+                            Đóng
+                        </button>
+                        <button type="button" id="btn-save-gas-config" class="btn-primary" onclick="saveMsdsGasConfig()" style="background:linear-gradient(135deg, #2563eb, #1d4ed8); border-color:#1d4ed8; padding:9px 18px; font-size:13px; font-weight:700;">
+                            💾 Lưu Cài Đặt
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4992,28 +5110,68 @@
     </main>
 
     <!-- ========================================================================== -->
-    <!-- 4G. QUẢN LÝ BẢN QUYỀN LUV TRỰC TUYẾN (ONLINE LICENSE SUITE) -->
     <!-- ========================================================================== -->
-    <main id="license-manager-view" class="license-container hidden" role="region" aria-label="Quản lý bản quyền LUV trực tuyến">
-        <!-- 1. Header Card -->
+    <!-- 4G. QUẢN LÝ BẢN QUYỀN LUV TRỰC TUYẾN (ONLINE LICENSE SUITE - STEALTH RBAC) -->
+    <!-- ========================================================================== -->
+    <main id="license-manager-view" class="license-container hidden" style="display:none !important;" role="region" aria-label="Quản lý bản quyền LUV trực tuyến" aria-hidden="true"></main>
+
+    <!-- Template for Dynamic Mounting of License Manager upon Master Admin Authentication -->
+    <template id="license-manager-template">
         <header class="license-header-card">
             <div class="license-title-row">
-                <span class="license-title-icon">🔑</span>
+                <span class="license-title-icon">👑</span>
                 <div>
                     <h2 class="license-header-title">
-                        Quản Lý Bản Quyền LUV Trực Tuyến
+                        Quản Trị Bản Quyền LUV Trực Tuyến
                         <span class="license-admin-badge">👑 OWNER / ADMIN EXCLUSIVE</span>
                     </h2>
                     <div class="license-header-sub">
-                        Hệ thống tạo và quản lý khóa giấy phép SHA-256 đồng bộ tuyệt đối với LUV_License_Manager.exe &amp; LUV-DOC-TRAN
+                        Hệ thống tạo và quản trị khóa giấy phép SHA-256 đồng bộ tuyệt đối với Cloudflare D1 &amp; LUV-DOC-TRAN
                     </div>
                 </div>
             </div>
-            <div>
-                <span style="font-size:0.85rem; color:#94a3b8; margin-right:8px;">Tổng số bản quyền:</span>
-                <span id="license-total-count" style="font-size:1.1rem; font-weight:700; color:#38bdf8; background:#0f172a; padding:4px 12px; border-radius:999px; border:1px solid rgba(56,189,248,0.3);">0</span>
+            <div class="license-header-actions">
+                <button type="button" class="license-btn-logout" id="btn-admin-logout" onclick="window.AdminAuth.logout()" title="Đăng xuất khỏi phiên quản trị và khóa tab">
+                    <span>🚪 Đăng Xuất Quản Trị</span>
+                </button>
             </div>
         </header>
+
+        <!-- KPI Metrics Row (4 Glass Cards) -->
+        <div class="license-kpi-grid">
+            <div class="license-kpi-card">
+                <div class="license-kpi-icon-box" style="background:rgba(56,189,248,0.15); color:#0284c7;">🔑</div>
+                <div class="license-kpi-content">
+                    <span class="license-kpi-label">Tổng Số Bản Quyền</span>
+                    <span id="license-total-count" class="license-kpi-val">0</span>
+                    <span class="license-kpi-sub">Đã cấp phát trên hệ thống</span>
+                </div>
+            </div>
+            <div class="license-kpi-card">
+                <div class="license-kpi-icon-box" style="background:rgba(192,132,252,0.15); color:#9333ea;">💻</div>
+                <div class="license-kpi-content">
+                    <span class="license-kpi-label">Thiết Bị Đang Kích Hoạt</span>
+                    <span id="license-active-devices-count" class="license-kpi-val">0 / 0</span>
+                    <span class="license-kpi-sub">Số máy tính đang liên kết</span>
+                </div>
+            </div>
+            <div class="license-kpi-card">
+                <div class="license-kpi-icon-box" style="background:rgba(74,222,128,0.15); color:#16a34a;">✨</div>
+                <div class="license-kpi-content">
+                    <span class="license-kpi-label">Giấy Phép Đang Chạy</span>
+                    <span id="license-active-licenses-count" class="license-kpi-val">0</span>
+                    <span class="license-kpi-sub" id="license-revoked-sub">0 đã thu hồi</span>
+                </div>
+            </div>
+            <div class="license-kpi-card">
+                <div class="license-kpi-icon-box" style="background:rgba(251,146,60,0.15); color:#ea580c;">🌐</div>
+                <div class="license-kpi-content">
+                    <span class="license-kpi-label">Trạng Thái Đồng Bộ</span>
+                    <span id="license-sync-status" class="license-kpi-val" style="color:#10b981;">Cloudflare D1 OK</span>
+                    <span class="license-kpi-sub">Cập nhật thời gian thực</span>
+                </div>
+            </div>
+        </div>
 
         <!-- 2. Grid: Key Generator (Left) + License Registry Table (Right) -->
         <div class="license-grid-layout">
@@ -5031,9 +5189,10 @@
                     <div class="license-form-group">
                         <label class="license-form-label" for="license-ent-tier">Gói Bản Quyền (Tier):</label>
                         <select id="license-ent-tier" class="license-select">
-                            <option value="Enterprise Lifetime (Vĩnh viễn)" selected>👑 Doanh Nghiệp Vĩnh Viễn (Enterprise Lifetime)</option>
+                            <option value="Enterprise Lifetime (Vĩnh viễn)" selected>👑 Doanh Nghiệp (Enterprise Lifetime)</option>
+                            <option value="Lifetime Pro (Vĩnh viễn cá nhân)">♾️ Vĩnh Viễn Cá Nhân (Lifetime Pro)</option>
                             <option value="Professional Suite (Chuyên nghiệp)">⭐ Chuyên Nghiệp (Professional Suite)</option>
-                            <option value="Standard License (Tiêu chuẩn)">🔹 Tiêu Chuẩn (Standard License)</option>
+                            <option value="Trial Standard (Dùng thử 7 ngày)">🔹 Dùng Thử 7 Ngày (Trial Standard)</option>
                         </select>
                     </div>
 
@@ -5046,18 +5205,19 @@
                             <option value="6 Tháng (6 Months)">6 Tháng (6 Months)</option>
                             <option value="3 Tháng (3 Months)">3 Tháng (3 Months)</option>
                             <option value="1 Tháng (1 Month)">1 Tháng (1 Month)</option>
+                            <option value="7 Ngày (7-Day Trial)">7 Ngày (7-Day Trial)</option>
                         </select>
                     </div>
 
                     <div class="license-form-group">
                         <label class="license-form-label" for="license-ent-max-devices">Số Lượng Thiết Bị Cho Phép (Max Devices):</label>
-                        <input type="number" id="license-ent-max-devices" class="license-input font-mono" min="1" max="100" value="1" placeholder="Số thiết bị được dùng (mặc định 1)" required />
-                        <div style="font-size:0.75rem; color:#64748b; margin-top:4px;">Khi số thiết bị kích hoạt vượt quá giới hạn này, thiết bị mới sẽ tự động bị từ chối truy cập.</div>
+                        <input type="number" id="license-ent-max-devices" class="license-input font-mono" min="1" max="100" value="3" placeholder="Số thiết bị được dùng (mặc định 3)" required />
+                        <div class="license-helper-text">Khi số máy kích hoạt đạt giới hạn này, thiết bị tiếp theo sẽ tự động bị từ chối truy cập.</div>
                     </div>
 
                     <div class="license-form-group">
                         <label class="license-form-label" for="license-ent-notes">Ghi chú nội bộ (Tùy chọn):</label>
-                        <input type="text" id="license-ent-notes" class="license-input" placeholder="Ghi chú người phụ trách, mã hợp đồng..." />
+                        <input type="text" id="license-ent-notes" class="license-input" placeholder="Ghi chú người phụ trách, mã hợp đồng, email..." />
                     </div>
 
                     <button type="submit" id="btn-license-gen" class="license-btn-primary">
@@ -5096,6 +5256,13 @@
                         <option value="active">Đang hoạt động</option>
                         <option value="revoked">Đã thu hồi</option>
                     </select>
+                    <select id="license-filter-tier" class="license-select" style="width:160px;">
+                        <option value="">Tất cả các gói</option>
+                        <option value="Enterprise">Enterprise</option>
+                        <option value="Lifetime">Lifetime</option>
+                        <option value="Pro">Pro</option>
+                        <option value="Trial">Trial</option>
+                    </select>
                 </div>
 
                 <div class="license-table-wrapper">
@@ -5103,7 +5270,7 @@
                         <thead>
                             <tr>
                                 <th style="width:40px; text-align:center;">STT</th>
-                                <th>Mã Bản Quyền</th>
+                                <th>Mã Bản Quyền &amp; Thiết Bị</th>
                                 <th>Đăng Ký Cho</th>
                                 <th>Gói</th>
                                 <th>Thời Hạn</th>
@@ -5120,7 +5287,46 @@
                 </div>
             </section>
         </div>
-    </main>
+    </template>
+
+    <!-- ========================================================================== -->
+    <!-- 4H. MODAL ĐĂNG NHẬP QUẢN TRỊ VIÊN BẢN QUYỀN (STEALTH ADMIN AUTH MODAL)     -->
+    <!-- ========================================================================== -->
+    <div id="admin-auth-modal" class="admin-auth-modal-backdrop hidden" aria-hidden="true" style="display:none;">
+        <div class="admin-auth-card" role="dialog" aria-modal="true" aria-labelledby="admin-auth-modal-title">
+            <div class="admin-auth-header">
+                <div class="admin-auth-icon-badge">👑</div>
+                <div class="admin-auth-header-text">
+                    <h3 id="admin-auth-modal-title" class="admin-auth-title">Xác Thực Quản Trị Viên (Owner / Admin Exclusive)</h3>
+                    <p class="admin-auth-subtitle">Nhập Mã Khóa Master để truy cập trung tâm quản lý bản quyền phần mềm.</p>
+                </div>
+                <button type="button" class="admin-auth-close-btn" onclick="window.AdminAuth.closeLoginModal()" title="Đóng modal">✕</button>
+            </div>
+
+            <form id="admin-auth-form" onsubmit="event.preventDefault(); window.AdminAuth.submitLogin();">
+                <div class="admin-auth-body">
+                    <div class="admin-auth-field-group">
+                        <label for="admin-master-key-input" class="admin-auth-label">Mã Khóa Master Admin Key:</label>
+                        <div class="admin-auth-input-wrapper">
+                            <input type="password" id="admin-master-key-input" class="admin-auth-input font-mono" placeholder="Nhập Master Admin Key..." autocomplete="off" required spellcheck="false" />
+                            <button type="button" class="admin-auth-toggle-pwd" onclick="window.AdminAuth.togglePasswordVisibility()" title="Hiện/ẩn mật khẩu">👁️</button>
+                        </div>
+                        <div class="admin-auth-hint">Phím tắt kích hoạt: <code>Ctrl + Shift + L</code> hoặc nhấp 5 lần vào Logo LUV-PDF.</div>
+                    </div>
+
+                    <div id="admin-auth-error" class="admin-auth-error-box" style="display:none;" role="alert"></div>
+                </div>
+
+                <div class="admin-auth-footer">
+                    <button type="button" class="admin-auth-btn-secondary" onclick="window.AdminAuth.closeLoginModal()">Hủy Bỏ</button>
+                    <button type="submit" id="btn-admin-auth-submit" class="admin-auth-btn-primary">
+                        <span id="admin-auth-btn-spinner" class="spinner-sm hidden"></span>
+                        <span>Xác Nhận Mở Khóa</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- SPLIT-VIEW DETAIL MODAL -->
     <div id="gp-detail-modal" class="gatepass-modal-backdrop hidden" aria-hidden="true">

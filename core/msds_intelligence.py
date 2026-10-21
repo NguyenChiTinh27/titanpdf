@@ -166,6 +166,10 @@ class MSDSDatabase:
                 raw_summary_ai TEXT,
                 item_type TEXT DEFAULT 'raw_material',
                 mother_msds_id TEXT DEFAULT NULL,
+                drive_file_id TEXT DEFAULT NULL,
+                drive_view_url TEXT DEFAULT NULL,
+                drive_download_url TEXT DEFAULT NULL,
+                sync_status TEXT DEFAULT 'synced',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
@@ -179,6 +183,14 @@ class MSDSDatabase:
                 conn.execute("ALTER TABLE chemicals ADD COLUMN item_type TEXT DEFAULT 'raw_material'")
             if "mother_msds_id" not in existing_cols:
                 conn.execute("ALTER TABLE chemicals ADD COLUMN mother_msds_id TEXT DEFAULT NULL")
+            if "drive_file_id" not in existing_cols:
+                conn.execute("ALTER TABLE chemicals ADD COLUMN drive_file_id TEXT DEFAULT NULL")
+            if "drive_view_url" not in existing_cols:
+                conn.execute("ALTER TABLE chemicals ADD COLUMN drive_view_url TEXT DEFAULT NULL")
+            if "drive_download_url" not in existing_cols:
+                conn.execute("ALTER TABLE chemicals ADD COLUMN drive_download_url TEXT DEFAULT NULL")
+            if "sync_status" not in existing_cols:
+                conn.execute("ALTER TABLE chemicals ADD COLUMN sync_status TEXT DEFAULT 'synced'")
 
             # Tự động phân loại heuristic cho các hóa chất hiện hữu
             try:
@@ -354,7 +366,7 @@ class MSDSDatabase:
         return None
 
     @classmethod
-    def save_chemical(cls, data: Dict[str, Any]) -> str:
+    def save_chemical(cls, data: Dict[str, Any], sync_gas: bool = True) -> str:
         """Lưu hoặc cập nhật thông tin hóa chất vào CSDL (ưu tiên lấy Mã sản phẩm làm Mã hóa chất & Mã MSDS)."""
         cls.init_db()
         raw_code = (data.get("chemical_id") or data.get("product_code") or "").strip()
@@ -400,7 +412,8 @@ class MSDSDatabase:
                     storage_condition = ?, respiratory_protection = ?, hand_protection = ?,
                     eye_protection = ?, skin_protection = ?, first_aid_inhalation = ?, first_aid_skin = ?,
                     first_aid_eyes = ?, first_aid_ingestion = ?, fire_measures = ?, spill_measures = ?,
-                    source_file = ?, sha256 = ?, raw_summary_ai = ?, item_type = ?, mother_msds_id = ?
+                    source_file = ?, sha256 = ?, raw_summary_ai = ?, item_type = ?, mother_msds_id = ?,
+                    drive_file_id = ?, drive_view_url = ?, drive_download_url = ?, sync_status = ?
                 WHERE chemical_id = ?
                 """, (
                     product_code, data.get("product_name_vi", ""), data.get("product_name_original", ""), data.get("intended_use", ""),
@@ -412,6 +425,7 @@ class MSDSDatabase:
                     data.get("first_aid_eyes", ""), data.get("first_aid_ingestion", ""), data.get("fire_measures", ""), data.get("spill_measures", ""),
                     data.get("source_file", ""), data.get("sha256", ""), data.get("raw_summary_ai", "") or data.get("summary", ""),
                     raw_item_type, mother_msds_id,
+                    data.get("drive_file_id", ""), data.get("drive_view_url", ""), data.get("drive_download_url", ""), data.get("sync_status", "synced"),
                     chem_id
                 ))
                 # Xóa compositions và sections cũ để ghi lại mới
@@ -427,8 +441,9 @@ class MSDSDatabase:
                     storage_condition, respiratory_protection, hand_protection,
                     eye_protection, skin_protection, first_aid_inhalation, first_aid_skin,
                     first_aid_eyes, first_aid_ingestion, fire_measures, spill_measures,
-                    source_file, sha256, raw_summary_ai, item_type, mother_msds_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    source_file, sha256, raw_summary_ai, item_type, mother_msds_id,
+                    drive_file_id, drive_view_url, drive_download_url, sync_status
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     chem_id, product_code, data.get("product_name_vi", ""), data.get("product_name_original", ""), data.get("intended_use", ""),
                     data.get("manufacturer", ""), data.get("revision_date", ""), data.get("cas_primary", ""), data.get("un_no", ""), data.get("transport_class", ""),
@@ -438,7 +453,8 @@ class MSDSDatabase:
                     data.get("eye_protection", ""), data.get("skin_protection", ""), data.get("first_aid_inhalation", ""), data.get("first_aid_skin", ""),
                     data.get("first_aid_eyes", ""), data.get("first_aid_ingestion", ""), data.get("fire_measures", ""), data.get("spill_measures", ""),
                     data.get("source_file", ""), data.get("sha256", ""), data.get("raw_summary_ai", "") or data.get("summary", ""),
-                    raw_item_type, mother_msds_id
+                    raw_item_type, mother_msds_id,
+                    data.get("drive_file_id", ""), data.get("drive_view_url", ""), data.get("drive_download_url", ""), data.get("sync_status", "synced")
                 ))
 
             # Lưu danh sách thành phần / CAS
@@ -469,7 +485,23 @@ class MSDSDatabase:
                 ))
 
             conn.commit()
+
+        # Cloud persistence via GAS Webhook
+        if sync_gas:
+            try:
+                from core.msds_gas_sync import MSDSGASSyncService
+                if MSDSGASSyncService.is_configured():
+                    full_chem = cls.get_chemical(chem_id) or data
+                    MSDSGASSyncService.sync_to_sheet(full_chem)
+            except Exception as _gas_err:
+                pass
+
         return chem_id
+
+    @classmethod
+    def insert_chemical(cls, data: Dict[str, Any], sync_gas: bool = True) -> str:
+        """Thêm hoặc cập nhật hóa chất, hỗ trợ cờ sync_gas để ngăn chặn vòng lặp N+1 đồng bộ."""
+        return cls.save_chemical(data, sync_gas=sync_gas)
 
     @classmethod
     def list_chemicals(cls, query: Optional[str] = None, item_type: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -509,20 +541,39 @@ class MSDSDatabase:
             rows = conn.execute(sql, tuple(params)).fetchall()
 
             result = []
+            chem_ids = []
             for r in rows:
                 item = dict(r)
                 item["item_type"] = item.get("item_type") or "raw_material"
                 item["product_code"] = item.get("product_code") or item.get("chemical_id")
                 item["mother_msds_id"] = item.get("mother_msds_id")
-                # Bổ sung danh sách compositions
-                c_rows = conn.execute("SELECT * FROM compositions WHERE chemical_id = ?", (item["chemical_id"],)).fetchall()
-                item["composition"] = [dict(cr) for cr in c_rows]
+                chem_ids.append(item["chemical_id"])
                 # Parse GHS codes
                 try:
                     item["ghs_codes_list"] = json.loads(item["ghs_codes"]) if item["ghs_codes"] else []
                 except Exception:
                     item["ghs_codes_list"] = [item["ghs_codes"]] if item["ghs_codes"] else []
                 result.append(item)
+
+            # Feature 18: Batch Composition Resolver (Single batch query eliminating N+1)
+            if chem_ids:
+                comps_by_id = {}
+                chunk_size = 500
+                for i in range(0, len(chem_ids), chunk_size):
+                    chunk = chem_ids[i:i + chunk_size]
+                    placeholders = ",".join("?" for _ in chunk)
+                    c_rows = conn.execute(
+                        f"SELECT * FROM compositions WHERE chemical_id IN ({placeholders})",
+                        tuple(chunk)
+                    ).fetchall()
+                    for cr in c_rows:
+                        comps_by_id.setdefault(cr["chemical_id"], []).append(dict(cr))
+                for item in result:
+                    item["composition"] = comps_by_id.get(item["chemical_id"], [])
+            else:
+                for item in result:
+                    item["composition"] = []
+
             return result
 
     @classmethod
@@ -549,7 +600,7 @@ class MSDSDatabase:
 
     @classmethod
     def delete_chemical(cls, chem_id: str) -> bool:
-        """Xóa hóa chất khỏi CSDL."""
+        """Xóa hóa chất khỏi CSDL và đồng bộ xóa vĩnh viễn trên Google Sheet."""
         cls.init_db()
         with cls.get_connection() as conn:
             row = conn.execute("SELECT chemical_id FROM chemicals WHERE UPPER(chemical_id) = UPPER(?)", (chem_id,)).fetchone()
@@ -558,15 +609,25 @@ class MSDSDatabase:
             conn.execute("DELETE FROM compositions WHERE chemical_id = ?", (target_id,))
             conn.execute("DELETE FROM sections WHERE chemical_id = ?", (target_id,))
             conn.commit()
-            return True
+
+        # Đồng bộ xóa vĩnh viễn trên Google Sheet
+        try:
+            from core.msds_gas_sync import MSDSGASSyncService
+            if MSDSGASSyncService.is_configured():
+                MSDSGASSyncService.delete_from_sheet(target_id)
+        except Exception:
+            pass
+
+        return True
 
     @classmethod
     def delete_multiple_chemicals(cls, chem_ids: list[str]) -> int:
-        """Xóa hàng loạt hóa chất theo danh sách mã ID."""
+        """Xóa hàng loạt hóa chất theo danh sách mã ID và đồng bộ xóa trên Google Sheet."""
         cls.init_db()
         if not chem_ids:
             return 0
         deleted_count = 0
+        deleted_targets = []
         with cls.get_connection() as conn:
             for chem_id in chem_ids:
                 row = conn.execute("SELECT chemical_id FROM chemicals WHERE UPPER(chemical_id) = UPPER(?)", (chem_id,)).fetchone()
@@ -574,13 +635,24 @@ class MSDSDatabase:
                 cursor = conn.execute("DELETE FROM chemicals WHERE chemical_id = ?", (target_id,))
                 conn.execute("DELETE FROM compositions WHERE chemical_id = ?", (target_id,))
                 conn.execute("DELETE FROM sections WHERE chemical_id = ?", (target_id,))
-                deleted_count += cursor.rowcount
+                if cursor.rowcount > 0:
+                    deleted_count += cursor.rowcount
+                    deleted_targets.append(target_id)
             conn.commit()
+
+        # Đồng bộ xóa vĩnh viễn trên Google Sheet
+        try:
+            from core.msds_gas_sync import MSDSGASSyncService
+            if MSDSGASSyncService.is_configured() and deleted_targets:
+                MSDSGASSyncService.delete_multiple_from_sheet(deleted_targets)
+        except Exception:
+            pass
+
         return deleted_count
 
     @classmethod
     def delete_all_chemicals(cls) -> int:
-        """Xóa toàn bộ hóa chất và dữ liệu liên quan khỏi CSDL CIL."""
+        """Xóa toàn bộ hóa chất và dữ liệu liên quan khỏi CSDL CIL và Google Sheet."""
         cls.init_db()
         with cls.get_connection() as conn:
             cursor = conn.execute("DELETE FROM chemicals")
@@ -588,6 +660,15 @@ class MSDSDatabase:
             conn.execute("DELETE FROM compositions")
             conn.execute("DELETE FROM sections")
             conn.commit()
+
+        # Đồng bộ xóa sạch toàn bộ trên Google Sheet
+        try:
+            from core.msds_gas_sync import MSDSGASSyncService
+            if MSDSGASSyncService.is_configured():
+                MSDSGASSyncService.delete_all_from_sheet()
+        except Exception:
+            pass
+
         return deleted_count
 
 

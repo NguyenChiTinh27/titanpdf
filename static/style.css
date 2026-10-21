@@ -4968,6 +4968,26 @@ body.msds-studio-active {
   transform: translateY(-1px);
 }
 
+.msds-btn-cloud-config {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border: 1px solid #38bdf8;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+  transition: all 0.15s ease;
+}
+
+.msds-btn-cloud-config:hover {
+  background: linear-gradient(135deg, #0369a1, #075985);
+  transform: translateY(-1px);
+}
+
 .msds-btn-gdrive-open {
   display: inline-flex;
   align-items: center;
@@ -7163,6 +7183,9 @@ body[data-role="guest"] #msds-intake-drawer,
 body[data-role="guest"] #btn-run-msds-analyze,
 body[data-role="guest"] #msds-file-input,
 body[data-role="guest"] .msds-btn-folder,
+body[data-role="guest"] #btn-open-msds-gas-modal,
+body[data-role="guest"] .msds-btn-cloud-config,
+body[data-role="guest"] #msds-gas-settings-modal,
 body[data-role="guest"] #btn-msds-gdrive-sync,
 body[data-role="guest"] .msds-btn-gdrive-open,
 body[data-role="guest"] .msds-gdrive-box,

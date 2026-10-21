@@ -28,6 +28,11 @@ from starlette.background import BackgroundTask
 from core.auth_rbac import (
     get_current_role,
     require_owner,
+    require_admin,
+    verify_admin_key,
+    create_admin_session,
+    invalidate_admin_session,
+    ACTIVE_ADMIN_SESSIONS,
     load_guest_permissions,
     save_guest_permissions,
     reset_guest_permissions,
@@ -102,11 +107,13 @@ async def add_no_cache_headers(request, call_next):
     return response
 
 
-def cleanup_old_exports(max_age_seconds: int = 3600) -> int:
-    """Tự động dọn dẹp các tệp ZIP hoặc tệp tạm trong exports/ đã tồn tại quá max_age_seconds (mặc định 1 giờ)."""
+def cleanup_old_exports(max_age_seconds: int = 900) -> int:
+    """Tự động dọn dẹp các tệp ZIP hoặc tệp tạm trong exports/, temp/ và output/ đã tồn tại quá max_age_seconds (mặc định 15 phút), giải phóng RAM với gc.collect()."""
+    import gc
     from core.msds_intelligence import EXPORTS_DIR
     removed_count = 0
     now = time.time()
+    # 1. Dọn dẹp exports/
     try:
         if EXPORTS_DIR.exists():
             for p in EXPORTS_DIR.iterdir():
@@ -119,18 +126,42 @@ def cleanup_old_exports(max_age_seconds: int = 3600) -> int:
                         pass
     except Exception:
         pass
+
+    # 2. Dọn dẹp TEMP_DIR và OUTPUT_DIR
+    for dir_path in [TEMP_DIR, OUTPUT_DIR]:
+        try:
+            if os.path.exists(dir_path):
+                for fname in os.listdir(dir_path):
+                    fpath = os.path.join(dir_path, fname)
+                    if os.path.isfile(fpath) and not fname.startswith("."):
+                        try:
+                            if now - os.path.getmtime(fpath) > max_age_seconds:
+                                os.unlink(fpath)
+                                removed_count += 1
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    # Feature 24: Explicit Garbage Collection
+    gc.collect()
     return removed_count
 
 
 @app.on_event("startup")
 def app_startup_event():
-    """Khởi động ứng dụng: cấu hình DB và dọn dẹp thư mục exports/."""
+    """Khởi động ứng dụng: cấu hình DB, hòa giải Google Sheets qua GAS và dọn dẹp thư mục exports/."""
     from core.msds_intelligence import MSDSDatabase
     try:
         MSDSDatabase.init_db()
     except Exception:
         pass
     cleanup_old_exports()
+    try:
+        from core.msds_gas_sync import MSDSGASSyncService
+        MSDSGASSyncService.reconcile_on_startup()
+    except Exception as _e:
+        logger.warning(f"Lỗi hòa giải khởi động GAS: {_e}")
 
 
 @app.get("/api/health")
@@ -1057,7 +1088,82 @@ def serve_qr_auth():
     return HTMLResponse("<h1>Trang Xác Thực QR Không Tìm Thấy</h1>", status_code=404)
 
 
-# LICENSE MANAGEMENT ENDPOINTS
+# ============================================================
+# MASTER ADMIN AUTHENTICATION & LICENSE MANAGEMENT ENDPOINTS
+# ============================================================
+class AdminLoginRequest(BaseModel):
+    master_key: Optional[str] = None
+
+
+@app.post("/api/admin/auth/login")
+async def admin_auth_login(
+    request: Request,
+    response: Response,
+    payload: Optional[AdminLoginRequest] = Body(default=None),
+    master_key: Optional[str] = Form(None)
+):
+    """
+    Xác thực Quản trị viên Master Admin.
+    Kiểm tra mã với ADMIN_MASTER_KEY (hoặc fallback 258079).
+    Khi thành công: cấp token, lưu vào ACTIVE_ADMIN_SESSIONS, gắn cookie và trả về thông tin phiên.
+    Khi thất bại: trả về HTTP 401 Unauthorized.
+    """
+    key = None
+    if payload and payload.master_key:
+        key = payload.master_key
+    elif master_key:
+        key = master_key
+    else:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                key = body.get("master_key") or body.get("key") or body.get("pin")
+        except Exception:
+            pass
+
+    if not key or not verify_admin_key(key):
+        raise HTTPException(
+            status_code=401,
+            detail="Khóa quản trị Master không chính xác!"
+        )
+
+    token = create_admin_session()
+    response.set_cookie(
+        key="luv_admin_token",
+        value=token,
+        max_age=86400,
+        httponly=False,
+        samesite="lax",
+        path="/"
+    )
+    return {
+        "success": True,
+        "token": token,
+        "role": "admin",
+        "expires_in": 86400,
+        "message": "Xác thực Quản trị viên Master thành công."
+    }
+
+
+@app.post("/api/admin/auth/logout")
+async def admin_auth_logout(request: Request, response: Response):
+    """Đăng xuất khỏi phiên Quản trị viên và xóa bỏ token."""
+    token = request.headers.get("x-admin-token") or request.cookies.get("luv_admin_token")
+    if not token:
+        token = extract_token(request)
+    if token:
+        invalidate_admin_session(token)
+    response.delete_cookie(key="luv_admin_token", path="/")
+    return {"success": True, "message": "Đã đăng xuất khỏi phiên Quản trị viên an toàn."}
+
+
+@app.get("/api/admin/auth/verify")
+def admin_auth_verify(admin_token: str = Depends(require_admin)):
+    """Kiểm tra hiệu lực của phiên Quản trị viên hiện tại."""
+    return {"success": True, "role": "admin", "token": admin_token}
+
+
+# LICENSE MANAGEMENT ENDPOINTS (PUBLIC & PROTECTED)
 @app.get("/api/license/status")
 def get_license_status():
     """Retrieve current license details."""
@@ -1079,7 +1185,8 @@ def generate_license(
     registered_to: str = Form(...),
     tier: str = Form("Enterprise Lifetime"),
     expires: str = Form("Vĩnh viễn"),
-    notes: str = Form("")
+    notes: str = Form(""),
+    _: str = Depends(require_admin)
 ):
     """Generate new LUV license key (Admin tool)."""
     key_info = LUVLicenseManager.generate_key(registered_to, tier, expires, notes=notes, save_to_db=True)
@@ -1087,7 +1194,7 @@ def generate_license(
 
 
 @app.post("/api/license/deactivate")
-def deactivate_license():
+def deactivate_license(_: str = Depends(require_admin)):
     """Deactivate current license and return to login screen."""
     LUVLicenseManager.deactivate()
     return {"success": True, "message": "Đã hủy kích hoạt giấy phép thành công."}
@@ -1095,10 +1202,21 @@ def deactivate_license():
 
 @app.get("/api/admin/licenses")
 @app.get("/api/admin/licenses/list")
-def list_licenses(q: str = "", status: str = ""):
+def list_licenses(q: str = "", status: str = "", _: str = Depends(require_admin)):
     """List all registered LUV license keys."""
     keys = LUVLicenseManager.list_licenses(search=q, status=status)
-    return {"success": True, "data": keys, "total": len(keys)}
+    active_count = sum(1 for k in keys if k.get("status") == "active")
+    return {
+        "success": True,
+        "data": keys,
+        "licenses": keys,
+        "total": len(keys),
+        "stats": {
+            "total": len(keys),
+            "active": active_count,
+            "online": len(keys)
+        }
+    }
 
 get_admin_licenses = list_licenses
 
@@ -1109,7 +1227,8 @@ def create_admin_license(
     tier: str = Form("Enterprise Lifetime (Vĩnh viễn)"),
     expires: str = Form("Vĩnh viễn (Lifetime)"),
     notes: str = Form(""),
-    max_devices: int = Form(1)
+    max_devices: int = Form(1),
+    _: str = Depends(require_admin)
 ):
     """Create and record a new LUV license key online with device quota controls."""
     try:
@@ -1124,7 +1243,8 @@ async def revoke_admin_license(
     request: Request,
     key: Optional[str] = Form(None),
     license_id: Optional[str] = Form(None),
-    id: Optional[str] = Form(None)
+    id: Optional[str] = Form(None),
+    _: str = Depends(require_admin)
 ):
     """Revoke an active license key."""
     target = license_id or id or key
@@ -1147,7 +1267,8 @@ async def reset_admin_license_devices(
     request: Request,
     license_id: Optional[str] = Form(None),
     id: Optional[str] = Form(None),
-    key: Optional[str] = Form(None)
+    key: Optional[str] = Form(None),
+    _: str = Depends(require_admin)
 ):
     """Reset device bindings for a license in Cloudflare D1."""
     target_id = license_id or id or key
@@ -1170,7 +1291,8 @@ async def delete_admin_license(
     request: Request,
     key: Optional[str] = Form(None),
     license_id: Optional[str] = Form(None),
-    id: Optional[str] = Form(None)
+    id: Optional[str] = Form(None),
+    _: str = Depends(require_admin)
 ):
     """Permanently delete a license key."""
     target = license_id or id or key
@@ -1194,6 +1316,7 @@ def verify_license_online(key: str = ""):
     if not key:
         return {"valid": False, "reason": "Thiếu mã bản quyền (key param is required)"}
     return LUVLicenseManager.verify_key_online(key)
+
 
 
 
@@ -2030,6 +2153,31 @@ def api_msds_upload_summarize(
                 "message": f"Mã sản phẩm / MSDS '{dup_code}' đã tồn tại trong CSDL! Vui lòng chọn Ghi đè hoặc Lưu mã mới."
             }
 
+        # Tải tệp lên Google Drive nếu GAS đã cấu hình
+        try:
+            from core.msds_gas_sync import MSDSGASSyncService
+            if MSDSGASSyncService.is_configured() and os.path.exists(saved_path):
+                with open(saved_path, "rb") as _f:
+                    _fbytes = _f.read()
+                upload_res = MSDSGASSyncService.upload_file_to_drive(
+                    file_bytes=_fbytes,
+                    filename=file.filename or f"MSDS_{target_code}.pdf",
+                    mime_type="application/pdf",
+                    subfolder="MSDS_Originals"
+                )
+                if upload_res.get("fileId") or upload_res.get("file_id"):
+                    parsed["drive_file_id"] = upload_res.get("fileId") or upload_res.get("file_id")
+                    parsed["drive_view_url"] = upload_res.get("viewUrl") or upload_res.get("view_url")
+                    parsed["drive_download_url"] = upload_res.get("downloadUrl") or upload_res.get("download_url")
+                    # Dọn dẹp tệp tạm thời cục bộ sau khi tải lên Google Drive thành công
+                    try:
+                        if os.path.exists(saved_path):
+                            os.remove(saved_path)
+                    except Exception as _del_err:
+                        logger.warning(f"Could not delete local temp upload file {saved_path}: {_del_err}")
+        except Exception as _gas_upload_err:
+            logger.warning(f"Lỗi tải file lên Google Drive qua GAS: {_gas_upload_err}")
+
         chem_id = MSDSDatabase.save_chemical(parsed)
         parsed["chemical_id"] = chem_id
         parsed["chem_id"] = chem_id
@@ -2093,9 +2241,17 @@ def api_msds_confirm_save(payload: Dict[str, Any] = Body(...), _: str = Depends(
 
 @app.get("/api/msds/chemicals")
 @app.get("/api/msds/list")
-def api_msds_list(q: Optional[str] = None, item_type: Optional[str] = None):
+def api_msds_list(
+    q: Optional[str] = None,
+    item_type: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[str] = None,
+    ghs_filter: Optional[str] = None
+):
     """Lấy danh sách hoặc tra cứu nhanh hóa chất trong CSDL CIL theo từ khóa (CAS, tên, UN, NSX...) và loại hàng."""
     from core.msds_intelligence import MSDSDatabase, MSDSExtractorEngine
+    if page is not None and page <= 0:
+        raise HTTPException(status_code=400, detail="Trang (page) phải lớn hơn hoặc bằng 1.")
     try:
         chemicals = MSDSDatabase.list_chemicals(query=q, item_type=item_type)
         for c in chemicals:
@@ -2112,12 +2268,51 @@ def api_msds_list(q: Optional[str] = None, item_type: Optional[str] = None):
                 c["ghs_symbols"] = ", ".join(c["ghs_codes_list"])
             else:
                 c["ghs_symbols"] = c.get("ghs_codes", "")
+        total_records = len(chemicals)
+
+        if page is not None or page_size is not None:
+            raw_size = str(page_size or "20").strip().lower()
+            current_page = max(1, page or 1)
+
+            if raw_size == "all":
+                paged_data = chemicals
+                total_pages = 1
+                psize_val = "all"
+            else:
+                try:
+                    psize_int = int(raw_size)
+                    if psize_int <= 0:
+                        raise ValueError()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="page_size phải là số nguyên dương hoặc 'all'.")
+
+                psize_val = psize_int
+                total_pages = max(1, (total_records + psize_int - 1) // psize_int)
+                start_idx = (current_page - 1) * psize_int
+                end_idx = start_idx + psize_int
+                paged_data = chemicals[start_idx:end_idx] if start_idx < total_records else []
+
+            return {
+                "success": True,
+                "total": total_records,
+                "chemicals": paged_data,
+                "data": paged_data,
+                "pagination": {
+                    "page": current_page,
+                    "page_size": psize_val,
+                    "total_records": total_records,
+                    "total_pages": total_pages
+                }
+            }
+
         return {
             "success": True,
-            "total": len(chemicals),
+            "total": total_records,
             "chemicals": chemicals,
             "data": chemicals
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi tra cứu CSDL hóa chất: {str(e)}")
 
@@ -2263,13 +2458,13 @@ def api_msds_detail(chem_id: str):
 
 @app.delete("/api/msds/delete/{chem_id}")
 def api_msds_delete(chem_id: str, _: str = Depends(require_owner)):
-    """Xóa hóa chất khỏi Danh mục CIL."""
+    """Xóa hóa chất khỏi Danh mục CIL và đồng bộ xóa vĩnh viễn trên Google Sheet."""
     from core.msds_intelligence import MSDSDatabase
     try:
         MSDSDatabase.delete_chemical(chem_id)
         return {
             "success": True,
-            "message": f"Đã xóa thành công hóa chất {chem_id} khỏi danh mục CIL."
+            "message": f"Đã xóa vĩnh viễn hóa chất {chem_id} khỏi danh mục CIL và Google Sheet."
         }
     except HTTPException:
         raise
@@ -2287,7 +2482,7 @@ class MSDSDeleteAllRequest(BaseModel):
 
 @app.post("/api/msds/delete-batch")
 def api_msds_delete_batch(payload: MSDSBatchDeleteRequest, _: str = Depends(require_owner)):
-    """Xóa nhiều hóa chất khỏi danh mục CIL."""
+    """Xóa nhiều hóa chất khỏi danh mục CIL và Google Sheet."""
     from core.msds_intelligence import MSDSDatabase
     try:
         if not payload.ids:
@@ -2296,7 +2491,7 @@ def api_msds_delete_batch(payload: MSDSBatchDeleteRequest, _: str = Depends(requ
         return {
             "success": True,
             "deleted_count": count,
-            "message": f"Đã xóa thành công {count} hóa chất đã chọn khỏi danh mục CIL."
+            "message": f"Đã xóa vĩnh viễn {count} hóa chất đã chọn khỏi danh mục CIL và Google Sheet."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi xóa hàng loạt hóa chất: {str(e)}")
@@ -2304,7 +2499,7 @@ def api_msds_delete_batch(payload: MSDSBatchDeleteRequest, _: str = Depends(requ
 
 @app.post("/api/msds/delete-all")
 def api_msds_delete_all(payload: MSDSDeleteAllRequest, _: str = Depends(require_owner)):
-    """Xóa tất cả hóa chất khỏi CSDL CIL (yêu cầu mật khẩu bảo mật: 270120)."""
+    """Xóa tất cả hóa chất khỏi CSDL CIL và Google Sheet (yêu cầu mật khẩu bảo mật: 270120)."""
     from core.msds_intelligence import MSDSDatabase
     if (payload.password or "").strip() != "270120":
         raise HTTPException(status_code=403, detail="Mật khẩu xác nhận không chính xác! Thao tác bị từ chối.")
@@ -2313,7 +2508,7 @@ def api_msds_delete_all(payload: MSDSDeleteAllRequest, _: str = Depends(require_
         return {
             "success": True,
             "deleted_count": count,
-            "message": f"Đã xóa toàn bộ CSDL CIL ({count} hóa chất đã được xóa sạch)."
+            "message": f"Đã xóa toàn bộ CSDL CIL và Google Sheet ({count} hóa chất đã được xóa sạch vĩnh viễn)."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi xóa toàn bộ cơ sở dữ liệu: {str(e)}")
@@ -3243,6 +3438,106 @@ def api_msds_gdrive_open_folder(_: str = Depends(require_owner)):
             "web_url": web_url,
             "message": f"Đang mở Google Drive trên trình duyệt Web. ({str(e)})"
         }
+
+
+# ==============================================================================
+# MSDS GOOGLE APPS SCRIPT (GAS) CLOUD PERSISTENCE & DRIVE SYNC ENDPOINTS
+# ==============================================================================
+
+class MSDSGASConfigRequest(BaseModel):
+    webhook_url: str
+    secret_token: Optional[str] = None
+    auto_sync: Optional[bool] = True
+
+
+class MSDSGASTestRequest(BaseModel):
+    webhook_url: Optional[str] = None
+    secret_token: Optional[str] = None
+
+
+@app.get("/api/msds/gas/config")
+def api_msds_gas_get_config(request: Request):
+    """Lấy thông tin cấu hình Google Apps Script Webhook."""
+    from core.msds_gas_sync import MSDSGASSyncService
+    cfg = MSDSGASSyncService.get_config()
+    role = get_current_role(request)
+    raw_token = cfg.get("secret_token") or ""
+    masked_token = "••••••••••••••••" if role == "guest" else raw_token
+    return {
+        "success": True,
+        "configured": bool(cfg.get("webhook_url")),
+        "webhook_url": cfg.get("webhook_url", ""),
+        "secret_token": masked_token,
+        "auto_sync": cfg.get("auto_sync", True),
+        "drive_folder": cfg.get("drive_folder", "LUV_PDF_Exports/MSDS_Originals")
+    }
+
+
+@app.post("/api/msds/gas/config")
+def api_msds_gas_save_config(payload: MSDSGASConfigRequest, _: str = Depends(require_owner)):
+    """Lưu cấu hình Google Apps Script Webhook URL và Secret Token."""
+    from core.msds_gas_sync import MSDSGASSyncService
+    try:
+        saved = MSDSGASSyncService.save_config(
+            webhook_url=payload.webhook_url,
+            secret_token=payload.secret_token,
+            auto_sync=payload.auto_sync if payload.auto_sync is not None else True
+        )
+        return {
+            "success": True,
+            "message": "Đã lưu cấu hình Google Apps Script thành công.",
+            "config": {
+                "configured": bool(saved.get("webhook_url")),
+                "webhook_url": saved.get("webhook_url", ""),
+                "auto_sync": saved.get("auto_sync", True),
+                "drive_folder": saved.get("drive_folder", "")
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lưu cấu hình GAS: {str(e)}")
+
+
+@app.post("/api/msds/gas/test-connection")
+def api_msds_gas_test_connection(payload: Optional[MSDSGASTestRequest] = Body(None)):
+    """Kiểm tra kết nối tới Google Apps Script Webhook."""
+    from core.msds_gas_sync import MSDSGASSyncService
+    url = payload.webhook_url if payload else None
+    token = payload.secret_token if payload else None
+    res = MSDSGASSyncService.test_connection(url=url, token=token)
+    return res
+
+
+@app.post("/api/msds/gas/sync-to-sheet")
+def api_msds_gas_sync_to_sheet(_: str = Depends(require_owner)):
+    """Đồng bộ toàn bộ hóa chất từ SQLite lên Google Sheet (Push)."""
+    from core.msds_intelligence import MSDSDatabase
+    from core.msds_gas_sync import MSDSGASSyncService
+    try:
+        chemicals = MSDSDatabase.list_chemicals()
+        res = MSDSGASSyncService.batch_sync_to_sheet(chemicals)
+        return {
+            "success": True,
+            "total_local": len(chemicals),
+            "result": res,
+            "message": f"Đã đồng bộ {len(chemicals)} hóa chất lên Google Sheet thành công."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi đồng bộ lên Google Sheet: {str(e)}")
+
+
+@app.post("/api/msds/gas/sync-from-sheet")
+def api_msds_gas_sync_from_sheet(_: str = Depends(require_owner)):
+    """Kéo toàn bộ hóa chất từ Google Sheet về SQLite cục bộ (Pull / Reconcile)."""
+    from core.msds_gas_sync import MSDSGASSyncService
+    try:
+        res = MSDSGASSyncService.reconcile_on_startup()
+        return {
+            "success": True,
+            "result": res,
+            "message": res.get("message") or "Đã hòa giải dữ liệu từ Google Sheet thành công."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi hòa giải từ Google Sheet: {str(e)}")
 
 
 # ============================================================

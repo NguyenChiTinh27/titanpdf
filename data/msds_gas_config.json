@@ -1,0 +1,6 @@
+{
+  "webhook_url": "https://script.google.com/macros/s/AKtest/exec",
+  "secret_token": "mytoken123",
+  "auto_sync": true,
+  "drive_folder": "LUV_PDF_Exports/MSDS_Originals"
+}
