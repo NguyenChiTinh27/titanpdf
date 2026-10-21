@@ -2,31 +2,15 @@
  * ===================================================================================
  * TITANPDF & LUV-MSDS SUITE - GOOGLE CLOUD STORAGE & TWO-WAY SYNC GATEWAY
  * Kịch bản Google Apps Script Đồng Bộ Hai Chiều Sổ Hóa Chất CIL & Lưu Trữ Google Drive
- * Phiên bản: 3.2.0 Pro - Chuẩn 38 Cột GHS & Luật Hóa Chất 2026 (Fix Render Ephemeral Reset)
- * ===================================================================================
- *
- * HƯỚNG DẪN TRIỂN KHAI NHANH TRONG 1 PHÚT (DEPLOYMENT INSTRUCTIONS):
- * -----------------------------------------------------------------------------------
- * Bước 1: Mở Google Drive cá nhân (hoặc tạo Google Sheet mới).
- * Bước 2: Trên Google Sheet, bấm vào menu "Tiện ích mở rộng" (Extensions) > "Apps Script".
- *         (Hoặc truy cập https://script.google.com/ và tạo dự án mới).
- * Bước 3: Xóa toàn bộ mã mặc định trong tệp Code.gs và DÁN TOÀN BỘ nội dung file này vào.
- * Bước 4: (Tùy chọn) Đổi SECRET_TOKEN bên dưới nếu bạn muốn tùy biến mật khẩu bảo mật riêng.
- * Bước 5: Bấm nút "Triển khai" (Deploy) > "Quản lý bản triển khai mới" (New deployment).
- *         - Chọn loại: "Ứng dụng web" (Web app).
- *         - Mô tả: "TitanPDF MSDS Drive Sync Gateway".
- *         - Thực thi dưới dạng (Execute as): "Tôi" (Me - địa chỉ email Google của bạn).
- *         - Ai có quyền truy cập (Who has access): "Bất kỳ ai" (Anyone).
- * Bước 6: Bấm "Triển khai" (Deploy), cấp quyền truy cập tài khoản Google khi được hỏi.
- * Bước 7: Sao chép liên kết "URL ứng dụng web" (Web app URL có đuôi /exec).
- * Bước 8: Mở TitanPDF MSDS Studio > Bấm nút "⚙️ Cài Đặt Cloud (GAS)" > Dán URL và Token >
- *         Bấm "Kiểm Tra Kết Nối". Dữ liệu của bạn sẽ được lưu vĩnh viễn trên Google!
+ * Dự án Apps Script: 11pPMG0YZDYqOKLkncq8BEP2fX3HeK103u6rojjQVHS-t9uA3Z5AMvUoZ
+ * Phiên bản: 3.5.0 Pro - Chuẩn 38 Cột GHS & Luật Hóa Chất 2026
+ * Hỗ trợ đồng thời: Webhook API 2 Chiều Cho TitanPDF + Giao Diện Web App Trực Tiếp Trên GAS
  * ===================================================================================
  */
 
 // CẤU HÌNH HỆ THỐNG
 var CONFIG = {
-  SECRET_TOKEN: "LUV_MSDS_SECURE_TOKEN_2026", // Đổi mã bảo mật này nếu muốn
+  SECRET_TOKEN: "LUV_MSDS_SECURE_TOKEN_2026",
   DRIVE_ROOT_FOLDER: "LUV_PDF_Exports",
   DRIVE_SUB_FOLDER: "MSDS_Originals",
   SHEET_NAME_CIL: "CIL_Chemical_Inventory"
@@ -49,35 +33,45 @@ var CIL_HEADERS = [
 ];
 
 /**
- * Endpoint tiếp nhận yêu cầu GET (Kiểm tra kết nối, lấy dữ liệu nhanh)
+ * Endpoint tiếp nhận yêu cầu GET:
+ * - Khi gọi qua API (có tham số ?action=... hoặc ?format=json): Trả về JSON cho TitanPDF.
+ * - Khi mở trực tiếp trên trình duyệt web: Trả về Giao Diện Web App Pastel Kawaii Pro đầy đủ!
  */
 function doGet(e) {
-  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "ping";
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
   var token = (e && e.parameter && e.parameter.token) ? e.parameter.token : "";
+  var format = (e && e.parameter && e.parameter.format) ? e.parameter.format : "";
 
-  if (CONFIG.SECRET_TOKEN && token && token !== CONFIG.SECRET_TOKEN && action !== "ping") {
-    return jsonResponse({ status: "error", error: "Sai mã Secret Token bảo mật!" }, 403);
+  // 1. Phục vụ API Webhook nếu có action hoặc yêu cầu format=json
+  if (action || format === "json") {
+    var configuredToken = getActiveSecretToken();
+    if (configuredToken && token && token !== configuredToken && action !== "ping" && action !== "test_connection") {
+      return jsonResponse({ status: "error", error: "Sai mã Secret Token bảo mật!" }, 403);
+    }
+
+    if (action === "ping" || action === "test_connection") {
+      return jsonResponse(handlePing());
+    } else if (action === "getAllChemicals" || action === "list") {
+      return jsonResponse(handleGetAllChemicals());
+    } else if (action === "initHeaders") {
+      return jsonResponse(ensureSheetStructure());
+    }
+
+    return jsonResponse({
+      status: "ok",
+      service: "TitanPDF MSDS Google Apps Script Gateway",
+      version: "3.5.0",
+      total_columns: CIL_HEADERS.length,
+      timestamp: new Date().toISOString()
+    });
   }
 
-  if (action === "ping" || action === "test_connection") {
-    return jsonResponse(handlePing());
-  } else if (action === "getAllChemicals" || action === "list") {
-    return jsonResponse(handleGetAllChemicals());
-  } else if (action === "initHeaders") {
-    return jsonResponse(ensureSheetStructure());
-  }
-
-  return jsonResponse({
-    status: "ok",
-    service: "TitanPDF MSDS Google Apps Script Gateway",
-    version: "3.2.0",
-    total_columns: CIL_HEADERS.length,
-    timestamp: new Date().toISOString()
-  });
+  // 2. Mở trực tiếp trên trình duyệt: Render Giao diện Web App tương tác tuyệt đẹp
+  return renderWebAppUI();
 }
 
 /**
- * Endpoint tiếp nhận yêu cầu POST (CRUD Dữ liệu & Lưu trữ Tệp Google Drive)
+ * Endpoint tiếp nhận yêu cầu POST (CRUD Dữ liệu & Lưu trữ Tệp Google Drive từ TitanPDF)
  */
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -149,7 +143,7 @@ function doPost(e) {
       return jsonResponse(delMultiRes);
     }
 
-    // 8. Xóa toàn bộ dữ liệu Hóa chất (Clear All)
+    // 8. Xóa toàn bộ dữ liệu Hóa chất (Clear All - Xóa triệt để)
     if (action === "deleteAllChemicals") {
       var delAllRes = handleDeleteAllChemicals();
       return jsonResponse(delAllRes);
@@ -205,6 +199,7 @@ function handlePing() {
     message: "Kết nối Google Apps Script Webhook thành công!",
     userEmail: email,
     spreadsheetId: ss.getId(),
+    spreadsheetUrl: ss.getUrl(),
     spreadsheetName: ss.getName(),
     sheetName: sheet.getName(),
     total_rows: totalRows,
@@ -318,14 +313,12 @@ function handleGetAllChemicals() {
       deleted_at: r[37] || ""
     };
 
-    // Aliases cho tính tương thích với backend và frontend
     chemObj.chem_id = chemObj.chemical_id;
     chemObj.product_name = chemObj.product_name_vi || chemObj.product_name_original || chemObj.chemical_id;
     chemObj.cas_numbers = chemObj.cas_primary;
     chemObj.un_number = chemObj.un_no;
     chemObj.ghs_symbols = Array.isArray(chemObj.ghs_codes) ? chemObj.ghs_codes.join(", ") : String(chemObj.ghs_codes || "");
 
-    // Phân giải compositions JSON
     try {
       chemObj.composition = r[28] ? JSON.parse(r[28]) : [];
     } catch (e) {
@@ -432,7 +425,7 @@ function handleSaveChemical(chem) {
   var existingRowValues = null;
 
   if (lastRow > 1) {
-    var idColData = sheet.getRange(2, 1, lastRow - 1, 2).getValues(); // Cột 1: chemical_id, Cột 2: product_code
+    var idColData = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
     for (var i = 0; i < idColData.length; i++) {
       var rChem = String(idColData[i][0] || "").trim().toUpperCase();
       var rProd = String(idColData[i][1] || "").trim().toUpperCase();
@@ -555,7 +548,6 @@ function handleDeleteMultipleChemicals(idList) {
   var idColData = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
   var deletedCount = 0;
 
-  // Xóa ngược từ dưới lên để không làm lệch số thứ tự hàng bên dưới
   for (var i = idColData.length - 1; i >= 0; i--) {
     var rChem = String(idColData[i][0] || "").trim().toUpperCase();
     var rProd = String(idColData[i][1] || "").trim().toUpperCase();
@@ -673,4 +665,171 @@ function jsonResponse(data, statusCode) {
   var output = ContentService.createTextOutput(JSON.stringify(data));
   output.setMimeType(ContentService.MimeType.JSON);
   return output;
+}
+
+// ===================================================================================
+// GIAO DIỆN WEB APP PASTEL KAWAII PRO (HTML SERVICE CHO NGƯỜI DÙNG TRUY CẬP TRỰC TIẾP)
+// ===================================================================================
+
+function renderWebAppUI() {
+  var ss = getOrCreateSpreadsheet();
+  var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_CIL);
+  ensureSheetStructure();
+
+  var totalRows = Math.max(0, sheet.getLastRow() - 1);
+  var rootFolder = getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER);
+  var subFolder = getOrCreateSubFolder(rootFolder, CONFIG.DRIVE_SUB_FOLDER);
+  var ssUrl = ss.getUrl();
+  var driveUrl = subFolder.getUrl();
+  var webAppUrl = ScriptApp.getService().getUrl() || "";
+
+  var html = '<!DOCTYPE html>' +
+  '<html lang="vi">' +
+  '<head>' +
+  '  <meta charset="UTF-8">' +
+  '  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+  '  <title>LUV-MSDS Cloud Gateway & Sổ Hóa Chất CIL</title>' +
+  '  <link rel="preconnect" href="https://fonts.googleapis.com">' +
+  '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+  '  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+  '  <style>' +
+  '    :root {' +
+  '      --primary: #6366f1; --primary-hover: #4f46e5; --bg: #f8fafc;' +
+  '      --card-bg: rgba(255, 255, 255, 0.95); --border: #e2e8f0;' +
+  '      --text: #0f172a; --text-muted: #64748b; --success: #10b981;' +
+  '    }' +
+  '    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Plus Jakarta Sans", sans-serif; }' +
+  '    body { background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 50%, #fdf2f8 100%); min-height: 100vh; padding: 24px; color: var(--text); }' +
+  '    .container { max-width: 1100px; margin: 0 auto; }' +
+  '    .header-card { background: var(--card-bg); border-radius: 20px; padding: 28px 32px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.04); margin-bottom: 24px; }' +
+  '    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: #e0e7ff; color: #4338ca; border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; }' +
+  '    h1 { font-size: 26px; font-weight: 800; color: #1e1b4b; margin-bottom: 8px; }' +
+  '    p.desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; }' +
+  '    .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }' +
+  '    .stat-card { background: #ffffff; border-radius: 16px; padding: 18px 20px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.02); }' +
+  '    .stat-val { font-size: 24px; font-weight: 800; color: #4338ca; margin-top: 4px; }' +
+  '    .webhook-box { background: #0f172a; color: #f8fafc; border-radius: 14px; padding: 16px 20px; margin-top: 16px; }' +
+  '    .webhook-url { word-break: break-all; font-family: monospace; font-size: 13px; color: #38bdf8; margin: 8px 0; }' +
+  '    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; border: none; transition: all 0.2s; }' +
+  '    .btn-primary { background: var(--primary); color: #fff; }' +
+  '    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }' +
+  '    .btn-outline { background: #fff; color: #1e293b; border: 1px solid var(--border); }' +
+  '    .btn-outline:hover { background: #f8fafc; }' +
+  '    .table-card { background: var(--card-bg); border-radius: 20px; padding: 24px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.04); }' +
+  '    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }' +
+  '    th { background: #f1f5f9; padding: 12px 14px; text-align: left; font-weight: 700; color: #475569; border-bottom: 2px solid var(--border); }' +
+  '    td { padding: 12px 14px; border-bottom: 1px solid var(--border); }' +
+  '    tr:hover { background: rgba(248, 250, 252, 0.8); }' +
+  '    .search-input { width: 100%; max-width: 380px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border); font-size: 13px; outline: none; }' +
+  '  </style>' +
+  '</head>' +
+  '<body>' +
+  '  <div class="container">' +
+  '    <div class="header-card">' +
+  '      <span class="badge">🚀 Google Cloud Gateway v3.5.0 Pro</span>' +
+  '      <h1>LUV-MSDS Cloud Gateway &amp; Sổ Hóa Chất CIL</h1>' +
+  '      <p class="desc">Kịch bản đám mây Google Apps Script kết nối hai chiều với TitanPDF. Dữ liệu được lưu trữ trực tiếp trên Google Sheets và các tệp đính kèm được tải tự động vào Google Drive cá nhân của bạn.</p>' +
+  '      ' +
+  '      <div class="grid-stats">' +
+  '        <div class="stat-card">' +
+  '          <div style="font-size:12px; font-weight:600; color:#64748b;">Tổng Số Hóa Chất Trong Sheet</div>' +
+  '          <div class="stat-val">' + totalRows + ' Hóa chất</div>' +
+  '        </div>' +
+  '        <div class="stat-card">' +
+  '          <div style="font-size:12px; font-weight:600; color:#64748b;">Trạng Thái Đồng Bộ 38 Cột</div>' +
+  '          <div class="stat-val" style="color:#10b981; font-size:18px; margin-top:8px;">✓ Chuẩn GHS 2026</div>' +
+  '        </div>' +
+  '        <div class="stat-card">' +
+  '          <div style="font-size:12px; font-weight:600; color:#64748b;">Thư Mục Google Drive</div>' +
+  '          <div class="stat-val" style="color:#0284c7; font-size:16px; margin-top:8px;">📁 ' + CONFIG.DRIVE_SUB_FOLDER + '</div>' +
+  '        </div>' +
+  '      </div>' +
+  '      ' +
+  '      <div class="webhook-box">' +
+  '        <div style="font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase;">URL Webhook Kết Nối TitanPDF:</div>' +
+  '        <div class="webhook-url" id="webhookUrlText">' + (webAppUrl || "Chưa lấy được WebApp URL (vui lòng Deploy Web App)") + '</div>' +
+  '        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">' +
+  '          <button class="btn btn-primary" onclick="copyWebhookUrl()">📋 Sao Chép URL Webhook</button>' +
+  '          <a class="btn btn-outline" href="' + ssUrl + '" target="_blank">📊 Mở Google Sheet CSDL</a>' +
+  '          <a class="btn btn-outline" href="' + driveUrl + '" target="_blank">📂 Mở Thư Mục Google Drive</a>' +
+  '        </div>' +
+  '      </div>' +
+  '    </div>' +
+  '    ' +
+  '    <div class="table-card">' +
+  '      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">' +
+  '        <div>' +
+  '          <h3 style="font-size:18px; font-weight:800; color:#1e1b4b;">Danh Mục Hóa Chất CIL Trên Google Sheet</h3>' +
+  '          <p style="font-size:12px; color:#64748b; margin-top:2px;">Dữ liệu đọc trực tiếp từ bảng tính ' + CONFIG.SHEET_NAME_CIL + '</p>' +
+  '        </div>' +
+  '        <input type="text" class="search-input" id="chemSearch" placeholder="🔍 Tìm theo mã SP, tên hóa chất, số CAS..." onkeyup="filterTable()">' +
+  '      </div>' +
+  '      ' +
+  '      <div style="overflow-x:auto;">' +
+  '        <table id="chemTable">' +
+  '          <thead>' +
+  '            <tr>' +
+  '              <th style="width:50px;">STT</th>' +
+  '              <th>Mã Hóa Chất</th>' +
+  '              <th>Tên Hóa Chất (Tiếng Việt)</th>' +
+  '              <th>Số CAS</th>' +
+  '              <th>Mã GHS</th>' +
+  '              <th>Tệp Drive</th>' +
+  '              <th>Cập Nhật</th>' +
+  '            </tr>' +
+  '          </thead>' +
+  '          <tbody>' +
+  '            ' + renderTableRows(sheet) +
+  '          </tbody>' +
+  '        </table>' +
+  '      </div>' +
+  '    </div>' +
+  '  </div>' +
+  '  <script>' +
+  '    function copyWebhookUrl() {' +
+  '      var text = document.getElementById("webhookUrlText").innerText;' +
+  '      navigator.clipboard.writeText(text).then(function() {' +
+  '        alert("Đã sao chép URL Webhook thành công! Bạn có thể dán vào Cài Đặt Cloud trên TitanPDF.");' +
+  '      });' +
+  '    }' +
+  '    function filterTable() {' +
+  '      var input = document.getElementById("chemSearch").value.toLowerCase();' +
+  '      var rows = document.querySelectorAll("#chemTable tbody tr");' +
+  '      rows.forEach(function(row) {' +
+  '        var text = row.innerText.toLowerCase();' +
+  '        row.style.display = text.indexOf(input) > -1 ? "" : "none";' +
+  '      });' +
+  '    }' +
+  '  </script>' +
+  '</body>' +
+  '</html>';
+
+  return HtmlService.createHtmlOutput(html)
+    .setTitle("LUV-MSDS Cloud Gateway & Sổ Hóa Chất CIL")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag("viewport", "width=device-width, initial-scale=1, maximum-scale=1");
+}
+
+function renderTableRows(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return '<tr><td colspan="7" style="text-align:center; color:#64748b; padding:24px;">Chưa có hóa chất nào trong bảng tính. Dữ liệu sẽ tự động xuất hiện khi TitanPDF đồng bộ sang!</td></tr>';
+  }
+
+  var values = sheet.getRange(2, 1, Math.min(lastRow - 1, 100), Math.min(sheet.getLastColumn(), 38)).getValues();
+  var html = '';
+  for (var i = 0; i < values.length; i++) {
+    var r = values[i];
+    var driveLink = r[31] ? ('<a href="' + r[31] + '" target="_blank" style="color:#2563eb; font-weight:700; text-decoration:none;">📄 Xem Drive</a>') : '<span style="color:#94a3b8;">Chưa có</span>';
+    html += '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><b>' + (r[0] || 'N/A') + '</b></td>' +
+      '<td>' + (r[2] || r[3] || 'N/A') + '</td>' +
+      '<td><span style="background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:6px; font-weight:700; font-size:11px;">' + (r[6] || 'N/A') + '</span></td>' +
+      '<td>' + (r[11] || 'NON DG') + '</td>' +
+      '<td>' + driveLink + '</td>' +
+      '<td style="color:#64748b; font-size:11px;">' + (r[36] || r[35] || 'N/A') + '</td>' +
+    '</tr>';
+  }
+  return html;
 }
