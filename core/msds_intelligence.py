@@ -245,6 +245,32 @@ class MSDSDatabase:
             );
             """)
             conn.commit()
+
+            # Tự động nạp danh mục dự phòng từ data/msds_catalog_fallback.json nếu CSDL trống
+            try:
+                cur_count = conn.execute("SELECT count(*) FROM chemicals").fetchone()[0]
+                if cur_count == 0:
+                    fallback_file = DATA_DIR / "msds_catalog_fallback.json"
+                    if fallback_file.exists():
+                        with open(fallback_file, "r", encoding="utf-8") as f:
+                            chems_data = json.load(f)
+                            if isinstance(chems_data, list):
+                                cursor = conn.execute("PRAGMA table_info(chemicals)")
+                                t_cols = {r[1] for r in cursor.fetchall()}
+                                for chem in chems_data:
+                                    cols = [k for k in chem.keys() if k not in ("composition", "sections", "id") and k in t_cols]
+                                    placeholders = ", ".join(["?"] * len(cols))
+                                    vals = [chem[c] for c in cols]
+                                    conn.execute(f"INSERT OR REPLACE INTO chemicals ({', '.join(cols)}) VALUES ({placeholders})", vals)
+                                    for comp in chem.get("composition", []):
+                                        comp_cols = [k for k in comp.keys() if k != "id"]
+                                        conn.execute(f"INSERT INTO compositions ({', '.join(comp_cols)}) VALUES ({', '.join(['?']*len(comp_cols))})", [comp[k] for k in comp_cols])
+                                    for sec in chem.get("sections", []):
+                                        sec_cols = [k for k in sec.keys() if k != "id"]
+                                        conn.execute(f"INSERT INTO sections ({', '.join(sec_cols)}) VALUES ({', '.join(['?']*len(sec_cols))})", [sec[k] for k in sec_cols])
+                                conn.commit()
+            except Exception:
+                pass
         cls._initialized = True
 
     @classmethod

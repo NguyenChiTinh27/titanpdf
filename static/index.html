@@ -3561,7 +3561,7 @@
                 </div>
 
                 <!-- 2. SMART INTAKE & BATCH AI ANALYZER -->
-                <div class="msds-side-card" id="msds-intake-drawer">
+                <div class="msds-side-card admin-only-ctrl" id="msds-intake-drawer">
                     <div class="msds-side-card-title">
                         <span>⚡ NẠP TỆP &amp; BÓC TÁCH AI</span>
                     </div>
@@ -3636,18 +3636,30 @@
                         <button type="button" id="btn-export-annual-report" class="msds-btn-report-annual" onclick="exportAnnualChemicalReport()" title="Xuất Báo Cáo Hóa Chất Hàng Năm nộp Sở Công Thương (Thông tư 02/2026/TT-BCT)">
                             <span>📊 Báo Cáo Sở Công Thương</span>
                         </button>
-                        <button type="button" id="btn-open-msds-gas-modal" class="msds-btn-cloud-config" onclick="openMsdsGasSettingsModal()" title="Cấu hình kết nối Google Apps Script & Google Drive">
+                        <button type="button" id="btn-open-msds-gas-modal" class="msds-btn-cloud-config admin-only-ctrl" onclick="openMsdsGasSettingsModal()" title="Cấu hình kết nối Google Apps Script & Google Drive">
                             <span>⚙️ Cài Đặt Cloud (GAS)</span>
                         </button>
-                        <button type="button" id="btn-msds-gdrive-sync" class="msds-btn-gdrive" onclick="syncMsdsToGoogleDrive()" title="Đồng bộ Sổ CIL và file MSDS lên Google Drive">
+                        <button type="button" id="btn-msds-gdrive-sync" class="msds-btn-gdrive admin-only-ctrl" onclick="syncMsdsToGoogleDrive()" title="Đồng bộ Sổ CIL và file MSDS lên Google Drive">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M8 16l4-4 4 4"/></svg>
                             <span id="txt-msds-gdrive-sync">☁️ Lưu Drive</span>
                         </button>
                         <button type="button" class="msds-btn-gdrive-open" onclick="openMsdsGoogleDriveFolder()" title="Mở thư mục lưu trữ MSDS trên Google Drive trực tuyến">
                             <span>📂 Mở Drive</span>
                         </button>
+                        <button type="button" class="msds-btn-json-export" onclick="exportMsdsCatalogJson()" title="Xuất sao lưu CSDL MSDS thành tệp JSON">
+                            <span>💾 Sao lưu JSON</span>
+                        </button>
+                        <button type="button" class="msds-btn-json-import admin-only-ctrl" onclick="document.getElementById('msds-json-file-input').click()" title="Khôi phục danh mục MSDS từ tệp JSON sao lưu">
+                            <span>📂 Nhập JSON</span>
+                        </button>
+                        <input type="file" id="msds-json-file-input" class="hidden" accept=".json" onchange="importMsdsCatalogJson(event)" />
                     </div>
-                    <div class="msds-sidebar-danger-zone" style="margin-top:12px; padding-top:10px; border-top:1px dashed #e2e8f0;">
+                    <!-- Guest View Info Banner (Hiển thị khi ở chế độ Khách) -->
+                    <div id="msds-guest-badge-card" class="msds-guest-info-card hidden">
+                        <div class="msds-guest-pill">👤 Chế Độ Khách (Guest)</div>
+                        <div class="msds-guest-desc">Tra cứu 16 mục GHS, xem trước In-App & tải tệp an toàn hóa chất.</div>
+                    </div>
+                    <div class="msds-sidebar-danger-zone admin-only-ctrl" style="margin-top:12px; padding-top:10px; border-top:1px dashed #e2e8f0;">
                         <button type="button" class="msds-btn-delete-all" onclick="openMsdsDeleteAllModal()" title="Xóa toàn bộ CSDL hóa chất CIL (yêu cầu mật khẩu quản trị: 270120)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                             <span>🗑️ Xóa Tất Cả CSDL</span>
@@ -3688,6 +3700,18 @@
                         </button>
                     </div>
 
+                    <!-- View Mode Toggle Switch: Bảng (Table) vs Thẻ Lưới (Grid) -->
+                    <div class="msds-view-toggle-wrap">
+                        <button type="button" id="msds-view-btn-table" class="msds-view-mode-btn active" onclick="setMsdsViewMode('table')" title="Chế độ bảng dòng gọn gàng">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                            <span>Bảng</span>
+                        </button>
+                        <button type="button" id="msds-view-btn-grid" class="msds-view-mode-btn" onclick="setMsdsViewMode('grid')" title="Chế độ thẻ lưới trực quan (Card View)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            <span>Thẻ lưới</span>
+                        </button>
+                    </div>
+
                     <!-- Right Status & Refresh -->
                     <div class="msds-toolbar-right">
                         <span id="msds-showing-count" class="msds-showing-badge">0 hóa chất</span>
@@ -3708,6 +3732,7 @@
                     <button type="button" class="msds-filter-pill" data-ghs="GHS07" onclick="setMsdsGhsFilter('GHS07')">⚠️ Kích ứng (GHS07)</button>
                     <button type="button" class="msds-filter-pill" data-ghs="GHS08" onclick="setMsdsGhsFilter('GHS08')">🫁 Sức khỏe (GHS08)</button>
                     <button type="button" class="msds-filter-pill" data-ghs="GHS09" onclick="setMsdsGhsFilter('GHS09')">🐟 Môi trường (GHS09)</button>
+                    <button type="button" class="msds-filter-pill pill-expired" data-ghs="EXPIRED_3Y" onclick="setMsdsGhsFilter('EXPIRED_3Y')" title="Lọc các hóa chất có ngày hiệu lực quá 3 năm hoặc cần cập nhật mới">⏳ Cần cập nhật (> 3 năm)</button>
                 </div>
             </div>
 
@@ -3777,6 +3802,18 @@
                             <div class="msds-empty-icon">🧪</div>
                             <div class="msds-empty-title">Chưa có hóa chất nào khớp với bộ lọc hiện tại</div>
                             <div class="msds-empty-sub">Hãy kéo thả tệp MSDS / SDS vào khung nạp ở cột bên trái hoặc thử từ khóa tìm kiếm khác.</div>
+                        </div>
+
+                        <!-- CHẾ ĐỘ THẺ LƯỚI (GRID CARD VIEWPORT) -->
+                        <div id="msds-grid-container" class="msds-grid-card-viewport hidden">
+                            <div id="msds-grid-body" class="msds-card-grid">
+                                <!-- Rendered dynamically by renderMsdsCardGrid() -->
+                            </div>
+                            <div id="msds-grid-empty" class="msds-empty-state hidden">
+                                <div class="msds-empty-icon">🧪</div>
+                                <div class="msds-empty-title">Chưa có hóa chất nào khớp với bộ lọc hiện tại</div>
+                                <div class="msds-empty-sub">Hãy thử từ khóa tìm kiếm khác hoặc chọn bộ lọc 'Tất cả'</div>
+                            </div>
                         </div>
 
                         <!-- MSDS SMART PAGINATION HUD (M3 Anti-Crash & Fast Rendering) -->
@@ -5801,5 +5838,110 @@
     <script src="libs/chart.umd.min.js"></script>
     <script src="gatepass_studio.js"></script>
     <script src="license_manager.js"></script>
+
+    <!-- ==================================================================
+         9c. SLIDE-OVER IN-APP GOOGLE DRIVE & EMERGENCY SAFETY VIEWER
+         Xem tài liệu trực tiếp không mất vị trí cuộn & Tóm tắt PPE khẩn cấp
+         ================================================================== -->
+    <div id="msds-slideover-backdrop" class="msds-drawer-backdrop hidden" onclick="closeMsdsDriveViewer()">
+        <aside id="msds-slideover-drawer" class="msds-slideover-drawer" onclick="event.stopPropagation()">
+            <!-- Drawer Header -->
+            <div class="msds-drawer-header">
+                <div class="msds-drawer-title-group">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span class="msds-drawer-code-badge" id="drawer-chem-code">MÃ MSDS</span>
+                        <span class="msds-drawer-cas-badge" id="drawer-chem-cas">CAS: N/A</span>
+                        <span id="drawer-chem-lang" class="msds-lang-badge">VN / EN</span>
+                        <span id="drawer-chem-type" class="msds-type-badge type-raw">🧪 Nguyên liệu</span>
+                    </div>
+                    <h3 id="drawer-chem-name" class="msds-drawer-title">Tên Hóa Chất</h3>
+                </div>
+                <div class="msds-drawer-header-actions">
+                    <a id="drawer-btn-newtab" href="#" target="_blank" class="msds-drawer-btn" title="Mở file trên tab mới">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        <span>Mở Tab Mới</span>
+                    </a>
+                    <a id="drawer-btn-download" href="#" download class="msds-drawer-btn btn-highlight" title="Tải tệp xuống trực tiếp">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span>Tải Xuống</span>
+                    </a>
+                    <button type="button" class="msds-drawer-close" onclick="closeMsdsDriveViewer()" title="Đóng khung xem">✕</button>
+                </div>
+            </div>
+
+            <!-- Quick Safety / PPE Strip (Field Response in 3 seconds) -->
+            <div class="msds-drawer-ppe-strip">
+                <div class="msds-ppe-strip-title">⚡ TÓM TẮT AN TOÀN &amp; TRANG BỊ BẢO HỘ (PPE QUICK INFO)</div>
+                <div class="msds-ppe-grid">
+                    <div class="msds-ppe-card">
+                        <div class="msds-ppe-icon">🥽</div>
+                        <div class="msds-ppe-content">
+                            <div class="msds-ppe-lbl">Kính bảo hộ</div>
+                            <div class="msds-ppe-val" id="drawer-ppe-eye">Kính chống văng hóa chất</div>
+                        </div>
+                    </div>
+                    <div class="msds-ppe-card">
+                        <div class="msds-ppe-icon">🧤</div>
+                        <div class="msds-ppe-content">
+                            <div class="msds-ppe-lbl">Găng tay</div>
+                            <div class="msds-ppe-val" id="drawer-ppe-hand">Găng Nitrile / Butyl</div>
+                        </div>
+                    </div>
+                    <div class="msds-ppe-card">
+                        <div class="msds-ppe-icon">😷</div>
+                        <div class="msds-ppe-content">
+                            <div class="msds-ppe-lbl">Mặt nạ / Khẩu trang</div>
+                            <div class="msds-ppe-val" id="drawer-ppe-resp">Phin lọc hơi hữu cơ / vô cơ</div>
+                        </div>
+                    </div>
+                    <div class="msds-ppe-card">
+                        <div class="msds-ppe-icon">🥾</div>
+                        <div class="msds-ppe-content">
+                            <div class="msds-ppe-lbl">Ủng &amp; Yếm bảo hộ</div>
+                            <div class="msds-ppe-val" id="drawer-ppe-skin">Ủng cao su, yếm chống hóa chất</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="msds-emergency-subgrid">
+                    <div class="msds-emerg-box">
+                        <b>🚒 Sự cố &amp; Chữa cháy:</b> <span id="drawer-emerg-spill">Thu gom bằng cát khô / chất thấm trơ, cách ly nguồn nhiệt.</span>
+                    </div>
+                    <div class="msds-emerg-box">
+                        <b>🚑 Sơ cứu nhanh:</b> <span id="drawer-emerg-firstaid">Rửa mắt/da 15 phút dưới vòi nước chảy, đưa nạn nhân ra nơi thoáng khí.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow Chaining Quick Bar -->
+            <div class="msds-drawer-chain-bar">
+                <span class="msds-chain-label">🔗 Liên thông công cụ:</span>
+                <button type="button" class="msds-chain-btn" onclick="msdsSendToAi(CURRENT_DRAWER_CHEM_ID)" title="Chuyển sang công cụ AI để dịch hoặc tóm tắt">
+                    🤖 AI Dịch / Tóm tắt
+                </button>
+                <button type="button" class="msds-chain-btn" onclick="msdsSendToGatepass(CURRENT_DRAWER_CHEM_ID)" title="Thêm vào Phiếu Xuất Kho">
+                    📦 Tạo Phiếu Xuất Kho
+                </button>
+                <button type="button" class="msds-chain-btn" onclick="msdsSendToPdfTool(CURRENT_DRAWER_CHEM_ID, 'watermark')" title="Đóng dấu kiểm soát bản quyền">
+                    🏷️ Đóng Dấu (Watermark)
+                </button>
+                <button type="button" class="msds-chain-btn" onclick="msdsSendToPdfTool(CURRENT_DRAWER_CHEM_ID, 'sign')" title="Ký số tài liệu an toàn">
+                    🖋️ Ký Số PDF
+                </button>
+            </div>
+
+            <!-- Live Document Iframe Viewer -->
+            <div class="msds-drawer-viewport">
+                <div id="msds-drawer-spinner" class="msds-drawer-loader">
+                    <div class="spinner"></div>
+                    <span style="margin-top:10px; font-size:13px; color:#64748b; font-weight:600;">Đang tải xem trước tài liệu MSDS...</span>
+                </div>
+                <iframe id="msds-drawer-iframe" class="msds-drawer-iframe" src="about:blank" onload="onMsdsIframeLoaded()"></iframe>
+                <div id="msds-drawer-notice" class="msds-drawer-gdrive-notice hidden">
+                    <span>💡 Nếu màn hình báo cần quyền Google Drive, hãy bấm nút <b>"Mở Tab Mới"</b> hoặc <b>"Tải Xuống"</b> ở thanh tiêu đề bên trên.</span>
+                </div>
+            </div>
+        </aside>
+    </div>
+
 </body>
 </html>

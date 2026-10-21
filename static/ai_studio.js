@@ -1,3 +1,69 @@
+// ==============================================================================
+// MSDS ADVANCED ACCENT-INSENSITIVE SEARCH & DUAL VIEW MODE HELPERS
+// ==============================================================================
+function removeVietnameseTones(str) {
+    if (!str) return "";
+    return String(str)
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/Đ/g, "D")
+        .toLowerCase()
+        .trim();
+}
+
+let CURRENT_MSDS_VIEW_MODE = localStorage.getItem("luv_msds_view_mode") || "table";
+let CURRENT_DRAWER_CHEM_ID = null;
+
+function setMsdsViewMode(mode) {
+    CURRENT_MSDS_VIEW_MODE = mode === "grid" ? "grid" : "table";
+    try {
+        localStorage.setItem("luv_msds_view_mode", CURRENT_MSDS_VIEW_MODE);
+    } catch (_) {}
+
+    const btnTable = document.getElementById("msds-view-btn-table");
+    const btnGrid = document.getElementById("msds-view-btn-grid");
+    const tableEl = document.querySelector(".msds-modern-table");
+    const gridContainer = document.getElementById("msds-grid-container");
+
+    if (btnTable) btnTable.classList.toggle("active", CURRENT_MSDS_VIEW_MODE === "table");
+    if (btnGrid) btnGrid.classList.toggle("active", CURRENT_MSDS_VIEW_MODE === "grid");
+
+    if (tableEl) tableEl.style.display = CURRENT_MSDS_VIEW_MODE === "table" ? "table" : "none";
+    if (gridContainer) gridContainer.classList.toggle("hidden", CURRENT_MSDS_VIEW_MODE !== "grid");
+
+    const searchVal = document.getElementById("msds-search-input")?.value || "";
+    renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, searchVal);
+}
+
+function applyMsdsRbacVisibility() {
+    const isGuest = isGuestUser();
+    document.querySelectorAll(".admin-only-ctrl").forEach(el => {
+        el.style.display = isGuest ? "none" : "";
+    });
+
+    const guestCard = document.getElementById("msds-guest-badge-card");
+    if (guestCard) {
+        guestCard.classList.toggle("hidden", !isGuest);
+    }
+
+    const intakeDrawer = document.getElementById("msds-intake-drawer");
+    if (intakeDrawer && isGuest) {
+        intakeDrawer.style.display = "none";
+    }
+
+    const batchBar = document.getElementById("msds-batch-action-bar");
+    if (batchBar && isGuest) {
+        batchBar.classList.add("hidden");
+    }
+
+    const selectAllTh = document.getElementById("msds-select-all");
+    if (selectAllTh) {
+        const thCell = selectAllTh.closest("th");
+        if (thCell) thCell.style.display = isGuest ? "none" : "";
+    }
+}
+
 // ============================================================
 // TitanPDF Private Suite - AI Studio Intelligence Module
 // 1. Dịch Thuật Tự Do (Google Translate Siêu Tốc & AI DeepSeek)
@@ -1375,25 +1441,61 @@ async function loadMsdsChemicalsList(query = "") {
     const tbody = document.getElementById("msds-table-body");
     if (!tbody) return;
 
+    applyMsdsRbacVisibility();
+
+    // 1. Instant Cache Retrieval (< 100ms)
     try {
-        // Nạp song song CSDL hóa chất và CSDL đối soát pháp lý
+        const cachedRaw = localStorage.getItem("luv_msds_cache");
+        if (cachedRaw) {
+            const cachedList = JSON.parse(cachedRaw);
+            if (Array.isArray(cachedList) && cachedList.length > 0) {
+                ALL_MSDS_CHEMICALS_CACHE = cachedList;
+                updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+                const activeSearch = query || (document.getElementById("msds-search-input")?.value || "").trim();
+                renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
+            }
+        }
+    } catch (_cacheErr) {
+        console.warn("Lỗi đọc cache MSDS từ localStorage:", _cacheErr);
+    }
+
+    // 2. Fetch fresh live data in background
+    try {
         const [respMsds] = await Promise.all([
             fetch("/api/msds/list"),
             preloadCilLegalMatches()
         ]);
         const res = await respMsds.json();
 
-        if (!respMsds.ok || !res.success) {
-            throw new Error(res.error || "Không thể tải danh sách hóa chất.");
+        if (respMsds.ok && res.success && Array.isArray(res.data) && res.data.length > 0) {
+            ALL_MSDS_CHEMICALS_CACHE = res.data;
+            try {
+                localStorage.setItem("luv_msds_cache", JSON.stringify(ALL_MSDS_CHEMICALS_CACHE));
+            } catch (_saveErr) {}
+            updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+            const activeSearch = query || (document.getElementById("msds-search-input")?.value || "").trim();
+            renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
+        } else if ((!res.data || res.data.length === 0) && ALL_MSDS_CHEMICALS_CACHE.length === 0) {
+            // Fallback to static catalog if SQLite is temporarily empty
+            const fallbackResp = await fetch("/api/msds/fallback-catalog");
+            if (fallbackResp.ok) {
+                const fbJson = await fallbackResp.json();
+                const fbList = Array.isArray(fbJson) ? fbJson : (fbJson.data || []);
+                if (fbList.length > 0) {
+                    ALL_MSDS_CHEMICALS_CACHE = fbList;
+                    updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+                    renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, query);
+                }
+            }
         }
-
-        ALL_MSDS_CHEMICALS_CACHE = res.data || [];
-        updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
-
-        const activeSearch = query || (document.getElementById("msds-search-input")?.value || "").trim();
-        renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
     } catch (err) {
-        console.error("loadMsdsChemicalsList error:", err);
+        console.warn("loadMsdsChemicalsList network warning (using cache):", err);
+        if (ALL_MSDS_CHEMICALS_CACHE && ALL_MSDS_CHEMICALS_CACHE.length > 0) {
+            const countBadge = document.getElementById("msds-showing-count");
+            if (countBadge) {
+                countBadge.title = "Đang hiển thị bản lưu ngoại tuyến (Offline cache)";
+            }
+        }
     }
 }
 
@@ -1403,16 +1505,28 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
     const showingCountEl = document.getElementById("msds-showing-count");
     if (!tbody) return;
 
-    const q = (searchQuery || "").toLowerCase();
+    applyMsdsRbacVisibility();
 
-    // Lọc theo GHS pill + Item Type (Nguyên liệu vs Thành phẩm) + Search text
+    const cleanQ = (searchQuery || "").trim().toLowerCase();
+    const unaccentQ = removeVietnameseTones(cleanQ);
+
+    // Lọc theo GHS pill + Hết hạn > 3 năm + Item Type + Search text
     const filtered = (sourceItems || []).filter(item => {
         const rawGhs = String(item.ghs_symbols || "").trim().toUpperCase();
         const isNonDg = !rawGhs || rawGhs.includes("NON DG") || rawGhs.includes("NONDG") || rawGhs === "NONE";
 
         if (CURRENT_MSDS_GHS_FILTER === "NON DG" && !isNonDg) return false;
         if (CURRENT_MSDS_GHS_FILTER === "HAZARD" && isNonDg) return false;
-        if (CURRENT_MSDS_GHS_FILTER.startsWith("GHS") && !rawGhs.includes(CURRENT_MSDS_GHS_FILTER)) return false;
+        if (CURRENT_MSDS_GHS_FILTER === "EXPIRED_3Y") {
+            const rev = String(item.revision_date || "");
+            const m = rev.match(/\b(19\d\d|20\d\d)\b/);
+            const curYear = new Date().getFullYear();
+            if (m && (curYear - parseInt(m[1]) < 3)) {
+                return false;
+            }
+        } else if (CURRENT_MSDS_GHS_FILTER.startsWith("GHS") && !rawGhs.includes(CURRENT_MSDS_GHS_FILTER)) {
+            return false;
+        }
 
         // Lọc theo item_type
         if (CURRENT_MSDS_ITEM_TYPE_FILTER !== "all") {
@@ -1422,21 +1536,30 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
             }
         }
 
-        if (!q) return true;
-        const haystack = [
+        if (!cleanQ) return true;
+
+        const rawHaystack = [
             item.product_code,
             item.chem_id,
             item.product_name,
+            item.product_name_vi,
+            item.product_name_original,
             item.cas_numbers,
+            item.cas_primary,
+            item.un_no,
             item.manufacturer_supplier,
             item.manufacturer,
             item.intended_use,
             item.ghs_symbols,
+            item.hazard_statements,
             item.source_file,
             item.item_type,
             item.mother_msds_id
         ].map(v => String(v || "").toLowerCase()).join(" ");
-        return haystack.includes(q);
+
+        if (rawHaystack.includes(cleanQ)) return true;
+        const unaccentHaystack = removeVietnameseTones(rawHaystack);
+        return unaccentHaystack.includes(unaccentQ);
     });
 
     CURRENT_FILTERED_MSDS = filtered;
@@ -1605,6 +1728,9 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
     });
     tbody.innerHTML = html;
     updateMsdsBatchActionBar();
+
+    // Đồng thời kết xuất Chế độ Thẻ Lưới (Grid Card View)
+    renderMsdsCardGrid(pagedItems, filtered.length, startIdx);
 }
 
 function handleMsdsSearch(val) {
@@ -3542,3 +3668,424 @@ window.onMsdsPageSizeChange = function(newSize) {
     const activeSearch = (document.getElementById("msds-search-input")?.value || "").trim();
     renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
 };
+
+
+// ==============================================================================
+// CHẾ ĐỘ THẺ LƯỚI (GRID CARD VIEW) CHO MSDS & EHS
+// ==============================================================================
+function renderMsdsCardGrid(items, totalCount, startIdx = 0) {
+    const gridBody = document.getElementById("msds-grid-body");
+    const gridEmpty = document.getElementById("msds-grid-empty");
+    if (!gridBody) return;
+
+    if (!items || items.length === 0) {
+        gridBody.innerHTML = "";
+        if (gridEmpty) gridEmpty.classList.remove("hidden");
+        return;
+    }
+    if (gridEmpty) gridEmpty.classList.add("hidden");
+
+    const isGuest = isGuestUser();
+    let cardsHtml = "";
+
+    items.forEach((item, localIdx) => {
+        const index = startIdx + localIdx;
+        const displayCode = item.product_code || item.chem_id || "CHM";
+        const safeChemId = escapeHtml(item.chem_id || displayCode);
+        const nameVi = item.product_name_vi || item.product_name || "Hóa chất công nghiệp";
+        const nameOrig = item.product_name_original || "";
+        const casNo = item.cas_numbers || item.cas_primary || "Hỗn hợp";
+        const supplier = item.manufacturer_supplier || item.manufacturer || "Chưa cập nhật";
+        const driveFileId = item.drive_file_id || "";
+        const srcFileName = item.source_file || `MSDS-${displayCode}.pdf`;
+
+        const isFinished = (item.item_type || "").toLowerCase() === "finished_product";
+        const typeBadge = isFinished
+            ? `<span class="msds-type-badge type-finished">🏷️ Thành phẩm</span>`
+            : `<span class="msds-type-badge type-raw">🧪 Nguyên liệu</span>`;
+
+        // Check if revision date expired > 3 years
+        const revDate = item.revision_date || "";
+        let expiredBadge = "";
+        const m = revDate.match(/\b(19\d\d|20\d\d)\b/);
+        const curYear = new Date().getFullYear();
+        if (!m || (curYear - parseInt(m[1]) >= 3)) {
+            expiredBadge = `<span class="msds-expired-pill" title="Tài liệu MSDS cần cập nhật định kỳ (> 3 năm)">⏳ Cần cập nhật</span>`;
+        }
+
+        // GHS Badges
+        const rawGhs = String(item.ghs_symbols || "").trim();
+        let ghsCodes = rawGhs.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+        if (ghsCodes.length === 0 || rawGhs.toUpperCase().includes("NON DG")) {
+            ghsCodes = ["NON DG"];
+        }
+        const ghsBadges = ghsCodes.map(c => renderGhsTableBadge(c)).join("");
+
+        // Language tag
+        const isEn = srcFileName.toLowerCase().includes("-en") || (nameOrig && !nameVi);
+        const langBadge = isEn ? `<span class="msds-lang-badge lang-en">EN</span>` : `<span class="msds-lang-badge lang-vn">VN</span>`;
+
+        cardsHtml += `
+            <div class="msds-chem-card" data-chem-id="${safeChemId}">
+                <!-- Card Header -->
+                <div class="msds-card-head">
+                    <div class="msds-card-badges-row">
+                        <span class="msds-code-badge" onclick="openMsdsDriveViewer('${safeChemId}', '${escapeHtml(driveFileId)}', '${escapeHtml(srcFileName)}')">${escapeHtml(displayCode)}</span>
+                        ${typeBadge}
+                        ${langBadge}
+                        ${expiredBadge}
+                    </div>
+                    <span class="msds-card-stt">#${index + 1}</span>
+                </div>
+
+                <!-- Card Body -->
+                <div class="msds-card-content" onclick="openMsdsDriveViewer('${safeChemId}', '${escapeHtml(driveFileId)}', '${escapeHtml(srcFileName)}')">
+                    <h4 class="msds-card-title">${escapeHtml(nameVi)}</h4>
+                    ${nameOrig && nameOrig !== nameVi ? `<div class="msds-card-orig-name">${escapeHtml(nameOrig)}</div>` : ''}
+                    <div class="msds-card-meta-row">
+                        <div class="msds-card-meta-item">
+                            <span class="msds-meta-k">CAS:</span>
+                            <span class="msds-cas-pill">${escapeHtml(casNo)}</span>
+                        </div>
+                        <div class="msds-card-meta-item msds-meta-supplier" title="${escapeHtml(supplier)}">
+                            <span class="msds-meta-k">NSX:</span>
+                            <span class="msds-meta-v">${escapeHtml(supplier)}</span>
+                        </div>
+                    </div>
+                    <!-- GHS Badges -->
+                    <div class="msds-card-ghs-strip">
+                        ${ghsBadges}
+                    </div>
+                    <!-- Quick PPE Icons -->
+                    <div class="msds-card-ppe-quick" title="Trang bị bảo hộ: Kính mắt, Găng tay, Mặt nạ, Ủng bảo hộ">
+                        <span class="msds-card-ppe-ico">🥽</span>
+                        <span class="msds-card-ppe-ico">🧤</span>
+                        <span class="msds-card-ppe-ico">😷</span>
+                        <span class="msds-card-ppe-ico">🥾</span>
+                        <span class="msds-card-ppe-txt">Bảo hộ bắt buộc</span>
+                    </div>
+                </div>
+
+                <!-- Card Footer Actions -->
+                <div class="msds-card-foot">
+                    <div class="msds-card-btns-grid">
+                        <button type="button" class="msds-card-btn btn-view" onclick="openMsdsDriveViewer('${safeChemId}', '${escapeHtml(driveFileId)}', '${escapeHtml(srcFileName)}')">
+                            <span>👁️ Xem Trực Tiếp</span>
+                        </button>
+                        <button type="button" class="msds-card-btn btn-qr" onclick="openMsdsQrModal('${safeChemId}')" title="Mã QR dán thùng / nhãn kho">
+                            <span>📱 QR</span>
+                        </button>
+                        <button type="button" class="msds-card-btn btn-card" onclick="openMsdsSafetyModal('${safeChemId}')" title="Thẻ an toàn khẩn cấp chuẩn 16 mục">
+                            <span>📄 Thẻ An Toàn</span>
+                        </button>
+                        <a href="/api/msds/download-original/${encodeURIComponent(safeChemId)}" download="${escapeHtml(srcFileName)}" class="msds-card-btn btn-dl" title="Tải tệp MSDS gốc">
+                            <span>📥 Tải File</span>
+                        </a>
+                    </div>
+                    <!-- Action Row: Workflow Chaining -->
+                    <div class="msds-card-chain-links">
+                        <button type="button" class="msds-btn-chain-chip" onclick="msdsSendToAi('${safeChemId}')" title="Dịch hoặc tóm tắt bằng AI">
+                            🤖 Dịch AI
+                        </button>
+                        <button type="button" class="msds-btn-chain-chip" onclick="msdsSendToGatepass('${safeChemId}')" title="Tạo phiếu xuất kho">
+                            📦 Xuất kho
+                        </button>
+                        <button type="button" class="msds-btn-chain-chip" onclick="msdsSendToPdfTool('${safeChemId}', 'watermark')" title="Đóng dấu kiểm soát">
+                            🏷️ Đóng dấu
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    gridBody.innerHTML = cardsHtml;
+}
+
+// ==============================================================================
+// SLIDE-OVER IN-APP GOOGLE DRIVE & EMERGENCY SAFETY VIEWER
+// ==============================================================================
+async function openMsdsDriveViewer(chemId, driveFileId = "", filename = "") {
+    CURRENT_DRAWER_CHEM_ID = chemId;
+    const backdrop = document.getElementById("msds-slideover-backdrop");
+    const drawer = document.getElementById("msds-slideover-drawer");
+    const codeEl = document.getElementById("drawer-chem-code");
+    const casEl = document.getElementById("drawer-chem-cas");
+    const nameEl = document.getElementById("drawer-chem-name");
+    const langEl = document.getElementById("drawer-chem-lang");
+    const typeEl = document.getElementById("drawer-chem-type");
+    const newtabBtn = document.getElementById("drawer-btn-newtab");
+    const dlBtn = document.getElementById("drawer-btn-download");
+    const iframe = document.getElementById("msds-drawer-iframe");
+    const spinner = document.getElementById("msds-drawer-spinner");
+    const noticeEl = document.getElementById("msds-drawer-notice");
+
+    if (!backdrop || !drawer) return;
+    backdrop.classList.remove("hidden");
+
+    if (codeEl) codeEl.textContent = chemId;
+    if (nameEl) nameEl.textContent = "Đang tải dữ liệu...";
+    if (casEl) casEl.textContent = "CAS: ...";
+    if (spinner) spinner.classList.remove("hidden");
+    if (noticeEl) noticeEl.classList.add("hidden");
+
+    // Fetch chemical details
+    let chemObj = ALL_MSDS_CHEMICALS_CACHE.find(c => (c.chemical_id === chemId || c.chem_id === chemId || c.product_code === chemId));
+
+    try {
+        const detailResp = await fetch(`/api/msds/detail/${encodeURIComponent(chemId)}`);
+        if (detailResp.ok) {
+            const res = await detailResp.json();
+            if (res.data && res.data.chemical) {
+                chemObj = res.data.chemical;
+            }
+        }
+    } catch (_) {}
+
+    if (chemObj) {
+        const displayCode = chemObj.product_code || chemObj.chem_id || chemId;
+        const chemName = chemObj.product_name_vi || chemObj.product_name || "Hóa chất";
+        const casNo = chemObj.cas_numbers || chemObj.cas_primary || "Hỗn hợp";
+        const actualFileId = driveFileId || chemObj.drive_file_id || "";
+        const actualSrc = filename || chemObj.source_file || `MSDS-${displayCode}.pdf`;
+
+        if (codeEl) codeEl.textContent = displayCode;
+        if (nameEl) nameEl.textContent = chemName;
+        if (casEl) casEl.textContent = `CAS: ${casNo}`;
+
+        if (typeEl) {
+            const isFin = (chemObj.item_type || "").toLowerCase() === "finished_product";
+            typeEl.className = isFin ? "msds-type-badge type-finished" : "msds-type-badge type-raw";
+            typeEl.textContent = isFin ? "🏷️ Thành phẩm" : "🧪 Nguyên liệu";
+        }
+
+        if (langEl) {
+            const isEn = actualSrc.toLowerCase().includes("-en") || (!chemObj.product_name_vi && chemObj.product_name_original);
+            langEl.className = isEn ? "msds-lang-badge lang-en" : "msds-lang-badge lang-vn";
+            langEl.textContent = isEn ? "EN" : "VN";
+        }
+
+        // Fill PPE strip
+        const eyeEl = document.getElementById("drawer-ppe-eye");
+        const handEl = document.getElementById("drawer-ppe-hand");
+        const respEl = document.getElementById("drawer-ppe-resp");
+        const skinEl = document.getElementById("drawer-ppe-skin");
+        const emergSpillEl = document.getElementById("drawer-emerg-spill");
+        const emergFaEl = document.getElementById("drawer-emerg-firstaid");
+
+        if (eyeEl) eyeEl.textContent = chemObj.eye_protection || "Kính bảo hộ chống văng hóa chất";
+        if (handEl) handEl.textContent = chemObj.hand_protection || "Găng tay chịu hóa chất (Nitrile/Butyl)";
+        if (respEl) respEl.textContent = chemObj.respiratory_protection || "Mặt nạ phòng độc phin lọc hữu cơ/vô cơ";
+        if (skinEl) skinEl.textContent = chemObj.skin_protection || "Ủng cao su, yếm chống hóa chất";
+        if (emergSpillEl) emergSpillEl.textContent = chemObj.spill_measures || chemObj.fire_measures || "Thu gom bằng cát khô / chất thấm trơ, cách ly nguồn nhiệt.";
+        if (emergFaEl) emergFaEl.textContent = chemObj.first_aid_eyes || chemObj.first_aid_inhalation || "Rửa mắt/da 15 phút dưới vòi nước chảy, đưa nạn nhân ra nơi thoáng khí.";
+
+        // Viewer URLs
+        let viewerUrl = "";
+        let directDlUrl = "";
+        let newTabUrl = "";
+
+        if (actualFileId) {
+            viewerUrl = `https://drive.google.com/file/d/${encodeURIComponent(actualFileId)}/preview`;
+            directDlUrl = `https://drive.google.com/uc?export=download&id=${encodeURIComponent(actualFileId)}`;
+            newTabUrl = `https://drive.google.com/file/d/${encodeURIComponent(actualFileId)}/view`;
+            if (noticeEl) noticeEl.classList.remove("hidden");
+        } else {
+            viewerUrl = `/api/msds/download-original/${encodeURIComponent(chemId)}`;
+            directDlUrl = `/api/msds/download-original/${encodeURIComponent(chemId)}`;
+            newTabUrl = `/api/msds/download-original/${encodeURIComponent(chemId)}`;
+        }
+
+        if (newtabBtn) newtabBtn.href = newTabUrl;
+        if (dlBtn) {
+            dlBtn.href = directDlUrl;
+            dlBtn.setAttribute("download", actualSrc);
+        }
+
+        if (iframe) {
+            iframe.src = viewerUrl;
+        }
+    }
+}
+
+function closeMsdsDriveViewer() {
+    const backdrop = document.getElementById("msds-slideover-backdrop");
+    const iframe = document.getElementById("msds-drawer-iframe");
+    if (backdrop) backdrop.classList.add("hidden");
+    if (iframe) iframe.src = "about:blank";
+    CURRENT_DRAWER_CHEM_ID = null;
+}
+
+function onMsdsIframeLoaded() {
+    const spinner = document.getElementById("msds-drawer-spinner");
+    if (spinner) spinner.classList.add("hidden");
+}
+
+// ==============================================================================
+// LIÊN THÔNG CÔNG CỤ (WORKFLOW CHAINING) TỪ MSDS
+// ==============================================================================
+async function msdsSendToAi(chemId) {
+    if (!chemId) return;
+    closeMsdsDriveViewer();
+    const chem = ALL_MSDS_CHEMICALS_CACHE.find(c => c.chemical_id === chemId || c.chem_id === chemId) || { chemical_id: chemId };
+    const name = chem.product_name_vi || chem.product_name || chem.product_code || chemId;
+    const cas = chem.cas_numbers || chem.cas_primary || "Hỗn hợp";
+    const code = chem.product_code || chemId;
+
+    if (typeof switchMainTab === "function") {
+        switchMainTab("ai", "translate");
+        setTimeout(() => {
+            const input = document.getElementById("ai-input-text");
+            if (input) {
+                input.value = `Vui lòng tóm tắt đầy đủ 16 mục GHS và dịch thuật các biện pháp an toàn bắt buộc cho hóa chất:
+Tên hóa chất: ${name}
+Mã SP: ${code}
+Số CAS: ${cas}
+Yêu cầu: Định dạng song ngữ đối chiếu Tiếng Việt - Tiếng Anh rõ ràng.`;
+                input.focus();
+            }
+            if (typeof showSafetyToast === "function") {
+                showSafetyToast(`✓ Đã nạp thông tin [${name}] vào AI Studio!`, 3500);
+            }
+        }, 150);
+    }
+}
+
+async function msdsSendToGatepass(chemId) {
+    if (!chemId) return;
+    closeMsdsDriveViewer();
+    const chem = ALL_MSDS_CHEMICALS_CACHE.find(c => c.chemical_id === chemId || c.chem_id === chemId) || { chemical_id: chemId };
+    const name = chem.product_name_vi || chem.product_name || chem.product_code || chemId;
+    const code = chem.product_code || chemId;
+    const cas = chem.cas_numbers || chem.cas_primary || "";
+
+    if (typeof switchMainTab === "function") {
+        switchMainTab("gatepass");
+        setTimeout(() => {
+            if (window.GatePassStudio && typeof window.GatePassStudio.addCustomItem === "function") {
+                window.GatePassStudio.addCustomItem({
+                    loai_hang_hoa: `${name} (${code})`,
+                    quy_cach: "25kg/can hoặc 200kg/phuy",
+                    sl_kien: "1",
+                    sl_thung: "1",
+                    khoi_luong_kg: "25.0",
+                    ghi_chu: `Hóa chất CAS: ${cas || 'Theo hồ sơ'}`
+                });
+            } else if (typeof addGatePassItemRow === "function") {
+                addGatePassItemRow({
+                    loai_hang_hoa: `${name} (${code})`,
+                    quy_cach: "25kg/can",
+                    sl_kien: "1",
+                    sl_thung: "1",
+                    khoi_luong_kg: "25.0",
+                    ghi_chu: `CAS: ${cas || 'MSDS'}`
+                });
+            }
+            if (typeof showSafetyToast === "function") {
+                showSafetyToast(`✓ Đã thêm hóa chất [${name}] vào Phiếu Xuất Kho!`, 3500);
+            }
+        }, 180);
+    }
+}
+
+async function msdsSendToPdfTool(chemId, toolId) {
+    if (!chemId) return;
+    closeMsdsDriveViewer();
+    if (typeof showSafetyToast === "function") {
+        showSafetyToast("⏳ Đang chuẩn bị tệp MSDS gốc...", 2500);
+    }
+
+    try {
+        const resp = await fetch(`/api/msds/download-original/${encodeURIComponent(chemId)}`);
+        if (!resp.ok) throw new Error("Không thể tải tệp MSDS gốc.");
+        const blob = await resp.blob();
+
+        const chem = ALL_MSDS_CHEMICALS_CACHE.find(c => c.chemical_id === chemId || c.chem_id === chemId) || {};
+        const filename = chem.source_file || `MSDS-${chemId}.pdf`;
+        const file = new File([blob], filename, { type: blob.type || "application/pdf" });
+
+        if (typeof openTool === "function") {
+            await openTool(toolId);
+            setTimeout(() => {
+                if (typeof handleFileSelection === "function") {
+                    handleFileSelection([file]);
+                }
+                if (typeof showSafetyToast === "function") {
+                    showSafetyToast(`✓ Đã nạp tệp MSDS vào công cụ [${toolId.toUpperCase()}]!`, 3500);
+                }
+            }, 200);
+        }
+    } catch (err) {
+        console.error("Lỗi chuyển tiếp PDF:", err);
+        alert("Không thể chuyển tiếp tệp PDF: " + err.message);
+    }
+}
+
+// ==============================================================================
+// SAO LƯU & KHÔI PHỤC CSDL MSDS (.JSON)
+// ==============================================================================
+function exportMsdsCatalogJson() {
+    window.location.href = "/api/msds/export-json";
+    if (typeof showSafetyToast === "function") {
+        showSafetyToast("💾 Đang tải tệp sao lưu JSON danh mục MSDS...", 3000);
+    }
+}
+
+async function importMsdsCatalogJson(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    if (isGuestUser()) {
+        alert("Khách (Guest) không có quyền nhập CSDL.");
+        return;
+    }
+
+    if (!confirm(`Bạn có chắc chắn muốn nhập danh mục hóa chất từ tệp "${file.name}" vào CSDL?`)) {
+        event.target.value = "";
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        if (typeof showSafetyToast === "function") {
+            showSafetyToast("⏳ Đang nhập danh mục MSDS vào hệ thống...", 4000);
+        }
+        const resp = await fetch("/api/msds/import-json", {
+            method: "POST",
+            body: formData
+        });
+        const res = await resp.json();
+        if (!resp.ok || !res.success) {
+            throw new Error(res.detail || res.error || "Không thể nhập dữ liệu JSON.");
+        }
+        alert(`✅ ${res.message}`);
+        await loadMsdsChemicalsList();
+    } catch (err) {
+        alert("Lỗi nhập tệp JSON: " + err.message);
+    } finally {
+        event.target.value = "";
+    }
+}
+
+// ==============================================================================
+// DEEP-LINKING SUPPORT (URL PARAMETERS & HASH)
+// ==============================================================================
+window.addEventListener("DOMContentLoaded", () => {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const hash = window.location.hash || "";
+        const targetTab = params.get("tab") || (hash.includes("msds") ? "msds" : null);
+        const targetId = params.get("id") || (hash.match(/#msds-detail-([^&]+)/)?.[1]);
+
+        if (targetTab === "msds" && typeof switchMainTab === "function") {
+            switchMainTab("msds");
+            if (targetId) {
+                setTimeout(() => {
+                    openMsdsDriveViewer(targetId);
+                }, 400);
+            }
+        }
+    } catch (_) {}
+});

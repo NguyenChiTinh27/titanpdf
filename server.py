@@ -2572,6 +2572,57 @@ def api_msds_export_cil():
         raise HTTPException(status_code=500, detail=f"Lỗi xuất file CIL Excel: {str(e)}")
 
 
+
+@app.get("/api/msds/export-json")
+def api_msds_export_json():
+    """Xuất toàn bộ CSDL danh mục MSDS dạng tệp JSON dự phòng."""
+    from core.msds_intelligence import MSDSDatabase
+    import datetime
+    chems = MSDSDatabase.list_chemicals()
+    full_data = []
+    for c in chems:
+        cid = c.get("chemical_id")
+        detail = MSDSDatabase.get_chemical(cid)
+        full_data.append(detail or c)
+    content_bytes = json.dumps(full_data, ensure_ascii=False, indent=2).encode("utf-8")
+    return Response(
+        content=content_bytes,
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=msds_catalog_backup_{datetime.date.today().strftime('%Y%m%d')}.json"}
+    )
+
+
+@app.post("/api/msds/import-json")
+async def api_msds_import_json(file: UploadFile = File(...), _: str = Depends(require_owner)):
+    """Nhập danh mục MSDS từ tệp JSON sao lưu (yêu cầu quyền Admin/Chính chủ)."""
+    from core.msds_intelligence import MSDSDatabase
+    try:
+        content_raw = await file.read()
+        items = json.loads(content_raw.decode("utf-8"))
+        if not isinstance(items, list):
+            raise HTTPException(status_code=400, detail="Định dạng tệp JSON không hợp lệ (phải là danh sách hóa chất).")
+        imported = 0
+        for it in items:
+            if isinstance(it, dict) and (it.get("chemical_id") or it.get("product_code") or it.get("product_name_vi")):
+                MSDSDatabase.insert_chemical(it, sync_gas=False)
+                imported += 1
+        return {"success": True, "imported_count": imported, "message": f"Đã nhập thành công {imported} hóa chất vào CSDL."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi nhập dữ liệu JSON: {str(e)}")
+
+
+@app.get("/api/msds/fallback-catalog")
+def api_msds_fallback_catalog():
+    """Lấy danh mục hóa chất dự phòng khi client ngoại tuyến hoặc cần nạp bộ đệm."""
+    from core.msds_intelligence import DATA_DIR
+    fallback_file = DATA_DIR / "msds_catalog_fallback.json"
+    if fallback_file.exists():
+        return FileResponse(str(fallback_file), media_type="application/json")
+    from core.msds_intelligence import MSDSDatabase
+    chems = MSDSDatabase.list_chemicals()
+    return {"success": True, "data": chems}
+
+
 @app.get("/api/msds/export-safety-card/{chem_id}")
 def api_msds_export_safety_card(chem_id: str):
     """Xuất Thẻ an toàn hóa chất khẩn cấp (Emergency Safety Card) ra Word (.docx)."""
