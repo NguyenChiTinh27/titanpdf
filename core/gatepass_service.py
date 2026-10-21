@@ -363,10 +363,21 @@ class GatePassService:
                     sync_status TEXT DEFAULT 'pending',
                     synced_at TEXT DEFAULT NULL,
                     last_sync_error TEXT DEFAULT '',
+                    plant_code TEXT DEFAULT 'BD',
+                    plant_name TEXT DEFAULT 'Nhà máy Bình Dương',
                     created_at TEXT DEFAULT (datetime('now', 'localtime')),
                     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
                 );
                 """)
+
+                # 1b. Di trú cột plant_code & plant_name nếu bảng đã tồn tại từ trước
+                cur = conn.cursor()
+                cur.execute("PRAGMA table_info(gatepass_slips);")
+                existing_cols = [c[1] for c in cur.fetchall()]
+                if "plant_code" not in existing_cols:
+                    conn.execute("ALTER TABLE gatepass_slips ADD COLUMN plant_code TEXT DEFAULT 'BD';")
+                if "plant_name" not in existing_cols:
+                    conn.execute("ALTER TABLE gatepass_slips ADD COLUMN plant_name TEXT DEFAULT 'Nhà máy Bình Dương';")
 
                 # 2. Bảng chi tiết mặt hàng gatepass_items
                 conn.execute("""
@@ -395,6 +406,7 @@ class GatePassService:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_gp_slips_khach_hang ON gatepass_slips(don_vi_dat_hang);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_gp_slips_loai_xuat ON gatepass_slips(loai_xuat);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_gp_slips_sync_status ON gatepass_slips(sync_status);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_gp_slips_plant_code ON gatepass_slips(plant_code);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_gp_slips_created_at ON gatepass_slips(created_at);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_gp_items_so_phieu ON gatepass_items(so_phieu);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_gp_items_stt ON gatepass_items(so_phieu, stt);")
@@ -411,7 +423,6 @@ class GatePassService:
                 """)
 
                 # 5. Nạp dữ liệu mẫu khởi đầu nếu chưa có phiếu nào
-                cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) FROM gatepass_slips;")
                 count = cur.fetchone()[0]
                 if count == 0:
@@ -522,15 +533,16 @@ class GatePassService:
                 tong_kien, tong_thung, tong_thung_kien, bo_phan_ky_ten, phe_duyet,
                 nguoi_lap_phieu, thu_kho, nguoi_nhan_hang,
                 audit_summary, audit_status, match_summary, match_status, main_file_url,
-                proof_urls, sync_status, synced_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                proof_urls, sync_status, plant_code, plant_name, synced_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
             """, (
                 p["so_phieu"], p["loai_xuat"], p["ngay_thang"], iso, p["don_vi_van_chuyen"], p["so_xe"],
                 p["don_vi_dat_hang"], p["so_don_hang"], p["tong_cong_kg"], p["tong_cong_kg_display"],
                 p["tong_kien"], p["tong_thung"], p["tong_thung_kien"], p["bo_phan_ky_ten"], p["phe_duyet"],
                 p.get("nguoi_lap_phieu", ""), p.get("thu_kho", ""), p.get("nguoi_nhan_hang", ""),
                 p["audit_summary"], p["audit_status"], p["match_summary"], p["match_status"], p["main_file_url"],
-                p["proof_urls"], p["sync_status"]
+                p["proof_urls"], p["sync_status"],
+                p.get("plant_code", "BD"), p.get("plant_name", "Nhà máy Bình Dương")
             ))
             for it in p["items"]:
                 conn.execute("""
@@ -578,6 +590,16 @@ class GatePassService:
         main_file_url = str(pass_data.get("main_file_url") or "").strip()
         main_file_name = str(pass_data.get("main_file_name") or "").strip()
         main_image_b64 = str(pass_data.get("main_image_b64") or pass_data.get("slip_image_b64") or "").strip()
+
+        # Chi nhánh / Nhà máy (Plant context)
+        plant_code = str(pass_data.get("plant_code") or "BD").strip().upper() or "BD"
+        plant_name = str(pass_data.get("plant_name") or "").strip()
+        if not plant_name:
+            try:
+                from core.plant_registry import get_plant_name
+                plant_name = get_plant_name(plant_code)
+            except Exception:
+                plant_name = "Nhà máy Bình Dương" if plant_code == "BD" else f"Chi nhánh {plant_code}"
 
         # Items list
         raw_items = items if items is not None else pass_data.get("items", []) or pass_data.get("danh_sach_hang_hoa", []) or []
@@ -664,7 +686,7 @@ class GatePassService:
                         phe_duyet, nguoi_lap_phieu, thu_kho, nguoi_nhan_hang,
                         audit_summary, audit_status, match_summary, match_status,
                         main_file_url, main_file_name, main_image_b64, proof_urls, proof_count,
-                        sync_status
+                        sync_status, plant_code, plant_name
                     ) VALUES (
                         ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?,
@@ -672,7 +694,7 @@ class GatePassService:
                         ?, ?, ?, ?,
                         ?, ?, ?, ?,
                         ?, ?, ?, ?, ?,
-                        ?
+                        ?, ?, ?
                     )
                     ON CONFLICT(so_phieu) DO UPDATE SET
                         loai_xuat = excluded.loai_xuat,
@@ -702,6 +724,8 @@ class GatePassService:
                         main_image_b64 = excluded.main_image_b64,
                         proof_urls = excluded.proof_urls,
                         proof_count = excluded.proof_count,
+                        plant_code = excluded.plant_code,
+                        plant_name = excluded.plant_name,
                         updated_at = datetime('now', 'localtime');
                     """, (
                         so_phieu,
@@ -732,7 +756,9 @@ class GatePassService:
                         main_image_b64,
                         proof_urls_json,
                         proof_count,
-                        "pending"
+                        "pending",
+                        plant_code,
+                        plant_name
                     ))
 
                     # Ghi đè danh mục mặt hàng
@@ -793,6 +819,8 @@ class GatePassService:
             "local_backup": local_backup_ok,
             "local_backup_error": local_backup_error,
             "main_file_url": main_file_url,
+            "plant_code": plant_code,
+            "plant_name": plant_name,
             "message": f"Đã lưu phiếu {so_phieu} vào hệ thống thành công!"
         }
 
@@ -826,6 +854,8 @@ class GatePassService:
                 slip["proof_urls"] = []
 
             # Aliases for frontend compatibility
+            slip["plant_code"] = slip.get("plant_code") or "BD"
+            slip["plant_name"] = slip.get("plant_name") or "Nhà máy Bình Dương"
             slip["khach_hang"] = slip.get("don_vi_dat_hang", "")
             slip["so_po"] = slip.get("so_don_hang", "")
             slip["nguoi_lap"] = slip.get("nguoi_lap_phieu", "")
@@ -856,6 +886,7 @@ class GatePassService:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         loai_xuat: Optional[str] = None,
+        plant_code: Optional[str] = None,
         page: int = 1,
         page_size: int = 50,
         limit: Optional[int] = None,
@@ -870,6 +901,10 @@ class GatePassService:
 
         where_clauses = ["1=1"]
         params: List[Any] = []
+
+        if plant_code and str(plant_code).strip() and str(plant_code).strip().upper() != "ALL":
+            where_clauses.append("UPPER(COALESCE(s.plant_code, 'BD')) = ?")
+            params.append(str(plant_code).strip().upper())
 
         if search and search.strip():
             search_nfc = unicodedata.normalize("NFC", str(search).strip())
@@ -925,6 +960,8 @@ class GatePassService:
                 r["khach_hang"] = r.get("don_vi_dat_hang", "")
                 r["so_po"] = r.get("so_don_hang", "")
                 r["item_count"] = r.get("tong_kien", 0) + r.get("tong_thung", 0)
+                r["plant_code"] = r.get("plant_code") or "BD"
+                r["plant_name"] = r.get("plant_name") or "Nhà máy Bình Dương"
                 try:
                     r["proof_urls"] = json.loads(r.get("proof_urls") or "[]")
                 except Exception:
@@ -941,7 +978,8 @@ class GatePassService:
             "page_size": actual_limit,
             "total_pages": total_pages,
             "limit": actual_limit,
-            "offset": actual_offset
+            "offset": actual_offset,
+            "plant_code": plant_code or "ALL"
         }
 
     # -------------------------------------------------------------------------
@@ -952,13 +990,18 @@ class GatePassService:
         period: Optional[str] = None,
         date_filter: Optional[str] = None,
         date_from: Optional[str] = None,
-        date_to: Optional[str] = None
+        date_to: Optional[str] = None,
+        plant_code: Optional[str] = None
     ) -> Dict[str, Any]:
         """Tính toán tổng hợp KPI và xuất các tập dữ liệu biểu đồ Chart.js."""
         target_period = period or date_filter
 
         where_clauses = ["1=1"]
         params: List[Any] = []
+
+        if plant_code and str(plant_code).strip() and str(plant_code).strip().upper() != "ALL":
+            where_clauses.append("UPPER(COALESCE(plant_code, 'BD')) = ?")
+            params.append(str(plant_code).strip().upper())
 
         now = datetime.now()
         if target_period == "today":
@@ -1122,7 +1165,8 @@ class GatePassService:
                     "breakdown": dispatch_types
                 }
             },
-            "recent_slips": recent_rows
+            "recent_slips": recent_rows,
+            "plant_code": plant_code or "ALL"
         }
 
     # -------------------------------------------------------------------------
@@ -2182,12 +2226,12 @@ class GatePassService:
         return cls.get_default_instance().delete_slip_instance(so_phieu)
 
     @classmethod
-    def list_slips(cls, search: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, loai_xuat: Optional[str] = None, page: int = 1, page_size: int = 50, limit: Optional[int] = None, offset: Optional[int] = None) -> Dict[str, Any]:
-        return cls.get_default_instance().list_slips_instance(search=search, date_from=date_from, date_to=date_to, loai_xuat=loai_xuat, page=page, page_size=page_size, limit=limit, offset=offset)
+    def list_slips(cls, search: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, loai_xuat: Optional[str] = None, plant_code: Optional[str] = None, page: int = 1, page_size: int = 50, limit: Optional[int] = None, offset: Optional[int] = None) -> Dict[str, Any]:
+        return cls.get_default_instance().list_slips_instance(search=search, date_from=date_from, date_to=date_to, loai_xuat=loai_xuat, plant_code=plant_code, page=page, page_size=page_size, limit=limit, offset=offset)
 
     @classmethod
-    def get_dashboard_metrics(cls, period: Optional[str] = None, date_filter: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None) -> Dict[str, Any]:
-        return cls.get_default_instance().get_dashboard_metrics_instance(period=period, date_filter=date_filter, date_from=date_from, date_to=date_to)
+    def get_dashboard_metrics(cls, period: Optional[str] = None, date_filter: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, plant_code: Optional[str] = None) -> Dict[str, Any]:
+        return cls.get_default_instance().get_dashboard_metrics_instance(period=period, date_filter=date_filter, date_from=date_from, date_to=date_to, plant_code=plant_code)
 
     @classmethod
     def sync_to_google_sheet(cls, so_phieu: str) -> Dict[str, Any]:

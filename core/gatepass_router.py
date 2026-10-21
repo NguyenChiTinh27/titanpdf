@@ -22,12 +22,13 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.auth_rbac import require_owner
 from core.gatepass_service import GatePassService
+from core.plant_registry import resolve_plant_context
 
 logger = logging.getLogger("titan.gatepass_router")
 
@@ -120,6 +121,8 @@ class GatePassSaveRequest(BaseModel):
     proof_urls: Optional[Union[List[str], str]] = Field(default_factory=list, description="Danh sách URL ảnh bằng chứng")
     items: List[GatePassItemInput] = Field(default_factory=list, description="Danh mục các dòng hàng hóa")
     danh_sach_hang_hoa: Optional[List[GatePassItemInput]] = Field(default=None, description="Alias cho items")
+    plant_code: Optional[str] = Field(default=None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)")
+    plant_name: Optional[str] = Field(default=None, description="Tên chi nhánh/nhà máy")
     sync_cloud: bool = Field(default=True, description="Đồng bộ ngay với Google Sheet & Drive")
 
 
@@ -144,13 +147,18 @@ def get_dashboard(
     period: Optional[str] = Query(default=None, description="Khoảng thời gian: today | 7days | month | all | custom"),
     date_filter: Optional[str] = Query(default=None, description="Alias cho period"),
     date_from: Optional[str] = Query(default=None, description="Từ ngày (YYYY-MM-DD hoặc DD/MM/YYYY)"),
-    date_to: Optional[str] = Query(default=None, description="Đến ngày (YYYY-MM-DD hoặc DD/MM/YYYY)")
+    date_to: Optional[str] = Query(default=None, description="Đến ngày (YYYY-MM-DD hoặc DD/MM/YYYY)"),
+    plant_code: Optional[str] = Query(default=None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
 ):
     try:
+        resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
         data = GatePassService.get_dashboard_metrics(
             period=period or date_filter,
             date_from=date_from,
-            date_to=date_to
+            date_to=date_to,
+            plant_code=resolved_plant
         )
         return data
     except Exception as e:
@@ -158,13 +166,17 @@ def get_dashboard(
         raise HTTPException(status_code=500, detail=f"Lỗi truy xuất dashboard: {str(e)}")
 
 
-# 2. GET /api/gatepass/history (Read-only: Guest & Owner)
+# 2. GET /api/gatepass/history & /api/gatepass/slips (Read-only: Guest & Owner)
 @gatepass_router.get("/history", summary="Tra cứu lịch sử phiếu xuất kho")
+@gatepass_router.get("/slips", summary="Tra cứu lịch sử phiếu xuất kho (Alias)")
 def get_history(
     search: Optional[str] = Query(default="", description="Từ khóa: số phiếu, số xe, khách hàng, PO"),
     date_from: Optional[str] = Query(default=None, description="Từ ngày"),
     date_to: Optional[str] = Query(default=None, description="Đến ngày"),
     loai_xuat: Optional[str] = Query(default=None, description="Bộ lọc loại xuất"),
+    plant_code: Optional[str] = Query(default=None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
     page: int = Query(default=1, ge=1, description="Trang hiện tại"),
     page_size: int = Query(default=50, ge=1, le=500, description="Kích thước trang"),
     limit: Optional[int] = Query(default=None, description="Alias cho page_size"),
@@ -176,11 +188,13 @@ def get_history(
         if offset is not None and actual_page_size > 0:
             actual_page = (offset // actual_page_size) + 1
 
+        resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
         result = GatePassService.list_slips(
             search=search or "",
             date_from=date_from,
             date_to=date_to,
             loai_xuat=loai_xuat,
+            plant_code=resolved_plant,
             page=actual_page,
             page_size=actual_page_size,
             limit=limit,
@@ -208,10 +222,19 @@ def get_slip_detail(so_phieu: str):
 @gatepass_router.post("/save", summary="Lưu phiếu xuất vào CSDL SQLite & Đồng bộ Cloud")
 def save_slip(
     payload: GatePassSaveRequest,
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
     _: str = Depends(require_owner)
 ):
     try:
         slip_dict = payload.model_dump(by_alias=True)
+
+        # Plant context resolution
+        resolved_plant = resolve_plant_context(payload.plant_code, x_titan_plant, x_plant_code)
+        if resolved_plant and resolved_plant.upper() != "ALL":
+            slip_dict["plant_code"] = resolved_plant
+        else:
+            slip_dict["plant_code"] = payload.plant_code or "BD"
 
         # Normalize aliases
         khach_hang_val = payload.khach_hang or payload.don_vi_dat_hang or ""
@@ -233,6 +256,8 @@ def save_slip(
             "status": "success",
             "message": f"Đã lưu phiếu {payload.so_phieu} thành công!",
             "so_phieu": payload.so_phieu,
+            "plant_code": saved_info.get("plant_code", "BD"),
+            "plant_name": saved_info.get("plant_name", "Nhà máy Bình Dương"),
             "sync_status": saved_info.get("sync_status", "pending"),
             "synced_cloud": saved_info.get("synced_cloud", False),
             "main_file_url": saved_info.get("main_file_url", ""),

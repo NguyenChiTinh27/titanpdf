@@ -21,12 +21,13 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from core.auth_rbac import require_owner
 from core.monthly_inventory_engine import MonthlyInventoryEngine
+from core.plant_registry import resolve_plant_context
 
 logger = logging.getLogger("titan.monthly_inventory_router")
 
@@ -44,6 +45,8 @@ class PeriodCreateRequest(BaseModel):
     notes: Optional[str] = Field(default="", description="Ghi chú kỳ báo cáo")
     copy_from_previous: Optional[bool] = Field(default=True, description="Kế thừa tồn tháng trước")
     auto_roll_forward: Optional[bool] = Field(default=True, description="Tự động chuyển số dư")
+    plant_code: Optional[str] = Field(default=None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)")
+    plant_name: Optional[str] = Field(default=None, description="Tên chi nhánh/nhà máy")
 
 
 class PeriodStatusUpdateRequest(BaseModel):
@@ -96,6 +99,8 @@ class CreateTransactionRequest(BaseModel):
     partner: Optional[str] = Field(default="", description="Alias cho department")
     purpose: Optional[str] = Field(default="", description="Mục đích sử dụng")
     notes: Optional[str] = Field(default="", description="Ghi chú giao dịch")
+    plant_code: Optional[str] = Field(default=None, description="Mã chi nhánh/nhà máy")
+    plant_name: Optional[str] = Field(default=None, description="Tên chi nhánh/nhà máy")
 
 
 class UpdateTransactionRequest(BaseModel):
@@ -177,10 +182,14 @@ def _determine_period_ident(
 def list_periods(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    plant_code: Optional[str] = Query(None, description="Lọc theo mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
 ):
     """Lấy danh sách tất cả các kỳ báo cáo kèm chỉ số tổng quan."""
     try:
-        periods = MonthlyInventoryEngine.list_periods(limit=limit, offset=offset)
+        resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
+        periods = MonthlyInventoryEngine.list_periods(limit=limit, offset=offset, plant_code=resolved_plant)
         return periods
     except Exception as e:
         logger.error("Lỗi list_periods: %s", e)
@@ -202,6 +211,8 @@ def create_period(payload: PeriodCreateRequest, _: str = Depends(require_owner))
             notes=payload.notes or "",
             copy_from_previous=bool(copy_prev),
             auto_roll_forward=bool(copy_prev),
+            plant_code=payload.plant_code,
+            plant_name=payload.plant_name,
         )
         return period
     except ValueError as ve:
@@ -251,16 +262,21 @@ def delete_period(period_ident: str, _: str = Depends(require_owner)):
 # =============================================================================
 
 @monthly_inventory_router.get("/summary", summary="Lấy chỉ số KPI tổng quan thời gian thực")
+@monthly_inventory_router.get("/kpi", summary="Lấy chỉ số KPI tổng quan thời gian thực (Alias)")
 def get_summary(
     period_id: Optional[int] = Query(None),
     period_key: Optional[str] = Query(None),
     period: Optional[str] = Query(None),
     month: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
+    plant_code: Optional[str] = Query(None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
 ):
     """Trả về KPI thời gian thực của kỳ báo cáo: tổng hóa chất, tổng tồn, nhập, xuất, số cảnh báo."""
     ident = _determine_period_ident(period_id, period_key, period, month, year)
-    kpi = MonthlyInventoryEngine.get_period_kpi(ident)
+    resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
+    kpi = MonthlyInventoryEngine.get_period_kpi(ident, plant_code=resolved_plant)
     return kpi
 
 
@@ -284,18 +300,24 @@ def list_records(
     year: Optional[int] = Query(None),
     q: Optional[str] = Query(None),
     warning_only: bool = Query(False),
+    plant_code: Optional[str] = Query(None, description="Lọc theo mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
 ):
     """Lấy danh sách các dòng dữ liệu Nhập - Xuất - Tồn trong kỳ báo cáo."""
     ident = _determine_period_ident(period_id, period_key, period, month, year)
+    resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
     records = MonthlyInventoryEngine.list_records(
         period_ident=ident,
         query=q or "",
         warning_only=warning_only,
+        plant_code=resolved_plant,
     )
-    kpi = MonthlyInventoryEngine.get_period_kpi(ident)
+    kpi = MonthlyInventoryEngine.get_period_kpi(ident, plant_code=resolved_plant)
     return {
         "success": True,
         "period_ident": ident,
+        "plant_code": resolved_plant,
         "total": len(records),
         "records": records,
         "kpi": kpi,
@@ -427,13 +449,18 @@ def list_transactions_by_period(
     chemical_id: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
     transaction_type: Optional[str] = Query(None),
+    plant_code: Optional[str] = Query(None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
 ):
     """Lấy danh sách các phiếu xuất/nhập chi tiết trong kỳ."""
     ttype = type or transaction_type
+    resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
     txns = MonthlyInventoryEngine.list_transactions(
         period_ident=period_ident,
         chemical_id=chemical_id,
         transaction_type=ttype,
+        plant_code=resolved_plant,
     )
     return txns
 
@@ -446,14 +473,19 @@ def list_transactions(
     chemical_id: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
     transaction_type: Optional[str] = Query(None),
+    plant_code: Optional[str] = Query(None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
 ):
     """Lấy danh sách các phiếu xuất/nhập chi tiết."""
     ident = _determine_period_ident(period_id, period_key, period)
     ttype = type or transaction_type
+    resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
     txns = MonthlyInventoryEngine.list_transactions(
         period_ident=ident,
         chemical_id=chemical_id,
         transaction_type=ttype,
+        plant_code=resolved_plant,
     )
     return txns
 
@@ -481,6 +513,8 @@ def create_transaction(payload: CreateTransactionRequest, _: str = Depends(requi
             department=dept,
             purpose=payload.purpose or "",
             notes=payload.notes or "",
+            plant_code=payload.plant_code,
+            plant_name=payload.plant_name,
         )
         return txn
     except ValueError as ve:

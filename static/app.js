@@ -5560,3 +5560,225 @@ if (document.readyState === "loading") {
     window.AdminAuth.init();
 }
 
+
+
+// ==============================================================================
+// GLOBAL DEEPSEEK AI INTEGRATION & SETTINGS SYNC
+// ==============================================================================
+window.GlobalDeepSeek = {
+    async init() {
+        await this.loadSettings();
+    },
+
+    async loadSettings() {
+        try {
+            const resp = await fetch("/api/settings/deepseek");
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const badge = document.getElementById("global-deepseek-badge");
+            const msdsText = document.getElementById("msds-ai-key-text");
+            const keyInput = document.getElementById("global-deepseek-key-input");
+            const modelSelect = document.getElementById("global-deepseek-model-select");
+
+            const currentLocalKey = localStorage.getItem("deepseek_api_key") || "";
+
+            if (data.has_key) {
+                if (badge) {
+                    badge.textContent = "🟢 Đã kết nối API";
+                    badge.style.background = "#ecfdf5";
+                    badge.style.color = "#065f46";
+                    badge.style.borderColor = "#a7f3d0";
+                }
+                if (msdsText) {
+                    msdsText.innerHTML = "✅ <span style='color:#059669; font-weight:600;'>DeepSeek AI sẵn sàng</span>";
+                }
+                if (data.key) {
+                    localStorage.setItem("deepseek_api_key", data.key);
+                    if (keyInput && !keyInput.value) keyInput.value = data.key;
+                } else if (currentLocalKey && keyInput && !keyInput.value) {
+                    keyInput.value = currentLocalKey;
+                }
+                if (modelSelect && data.default_model) {
+                    modelSelect.value = data.default_model;
+                }
+            } else if (currentLocalKey) {
+                if (badge) {
+                    badge.textContent = "🟢 Đã lưu cục bộ";
+                    badge.style.background = "#eff6ff";
+                    badge.style.color = "#1d4ed8";
+                    badge.style.borderColor = "#bfdbfe";
+                }
+                if (msdsText) {
+                    msdsText.innerHTML = "✅ <span style='color:#0284c7; font-weight:600;'>Đã nhận Key cục bộ</span>";
+                }
+                if (keyInput && !keyInput.value) keyInput.value = currentLocalKey;
+            } else {
+                if (badge) {
+                    badge.textContent = "⚠️ Chưa cấu hình";
+                    badge.style.background = "#fef3c7";
+                    badge.style.color = "#92400e";
+                    badge.style.borderColor = "#fde68a";
+                }
+                if (msdsText) {
+                    msdsText.innerHTML = "⚠️ <span style='color:#d97706;'>Chưa liên kết Key DeepSeek</span>";
+                }
+            }
+
+            // Sync with other AI input fields if present
+            const effectiveKey = data.key || currentLocalKey;
+            if (effectiveKey) {
+                const aiKey = document.getElementById("ai-deepseek-key");
+                const sumKey = document.getElementById("ai-sum-key");
+                if (aiKey && !aiKey.value) aiKey.value = effectiveKey;
+                if (sumKey && !sumKey.value) sumKey.value = effectiveKey;
+            }
+        } catch (e) {
+            console.error("Lỗi tải cấu hình DeepSeek:", e);
+        }
+    },
+
+    async saveSettings() {
+        const keyInput = document.getElementById("global-deepseek-key-input");
+        const modelSelect = document.getElementById("global-deepseek-model-select");
+        const feedback = document.getElementById("global-deepseek-feedback");
+        const key = (keyInput ? keyInput.value : "").trim();
+        const model = modelSelect ? modelSelect.value : "DeepSeek-V4.1-Flash";
+
+        if (!key) {
+            if (feedback) {
+                feedback.className = "";
+                feedback.style.background = "#fef2f2";
+                feedback.style.color = "#991b1b";
+                feedback.style.border = "1px solid #fecaca";
+                feedback.textContent = "Vui lòng nhập API Key trước khi lưu!";
+            }
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("api_key", key);
+        formData.append("model", model);
+
+        try {
+            const resp = await fetch("/api/settings/deepseek", {
+                method: "POST",
+                body: formData
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                localStorage.setItem("deepseek_api_key", key);
+                // Đồng bộ toàn bộ các trường nhập key trên hệ thống
+                const aiKey = document.getElementById("ai-deepseek-key");
+                const sumKey = document.getElementById("ai-sum-key");
+                if (aiKey) aiKey.value = key;
+                if (sumKey) sumKey.value = key;
+
+                if (feedback) {
+                    feedback.className = "";
+                    feedback.style.background = "#ecfdf5";
+                    feedback.style.color = "#065f46";
+                    feedback.style.border = "1px solid #a7f3d0";
+                    feedback.innerHTML = "✅ <b>Thành công:</b> Đã lưu khóa DeepSeek API toàn cục! Tất cả các tab (MSDS, HSE, OCR, Dịch thuật) đã được đồng bộ tự động.";
+                }
+                await this.loadSettings();
+                if (typeof showToast === "function") {
+                    showToast("Đã lưu khóa DeepSeek API toàn cục!");
+                }
+            } else {
+                throw new Error(data.detail || data.error || "Không thể lưu cấu hình");
+            }
+        } catch (err) {
+            if (feedback) {
+                feedback.className = "";
+                feedback.style.background = "#fef2f2";
+                feedback.style.color = "#991b1b";
+                feedback.style.border = "1px solid #fecaca";
+                feedback.textContent = "Lỗi lưu cấu hình: " + err.message;
+            }
+        }
+    },
+
+    async testConnection() {
+        const keyInput = document.getElementById("global-deepseek-key-input");
+        const feedback = document.getElementById("global-deepseek-feedback");
+        const key = (keyInput ? keyInput.value : "").trim() || localStorage.getItem("deepseek_api_key") || "";
+
+        if (!key) {
+            if (feedback) {
+                feedback.className = "";
+                feedback.style.background = "#fef2f2";
+                feedback.style.color = "#991b1b";
+                feedback.style.border = "1px solid #fecaca";
+                feedback.textContent = "Vui lòng nhập API Key để kiểm tra kết nối!";
+            }
+            return;
+        }
+
+        if (feedback) {
+            feedback.className = "";
+            feedback.style.background = "#eff6ff";
+            feedback.style.color = "#1d4ed8";
+            feedback.style.border = "1px solid #bfdbfe";
+            feedback.textContent = "⏳ Đang kết nối thử nghiệm tới máy chủ DeepSeek API...";
+        }
+
+        const formData = new FormData();
+        formData.append("api_key", key);
+
+        try {
+            const resp = await fetch("/api/settings/deepseek/test", {
+                method: "POST",
+                body: formData
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                if (feedback) {
+                    feedback.className = "";
+                    feedback.style.background = "#ecfdf5";
+                    feedback.style.color = "#065f46";
+                    feedback.style.border = "1px solid #a7f3d0";
+                    feedback.innerHTML = "✅ <b>Kết nối thành công:</b> DeepSeek AI phản hồi tốt (Mô hình: " + (data.model || "DeepSeek-V4.1-Flash") + "). Khóa API hoàn toàn hợp lệ!";
+                }
+            } else {
+                if (feedback) {
+                    feedback.className = "";
+                    feedback.style.background = "#fef2f2";
+                    feedback.style.color = "#991b1b";
+                    feedback.style.border = "1px solid #fecaca";
+                    feedback.innerHTML = "❌ <b>Kết nối thất bại:</b> " + (data.message || data.detail || "Không thể xác thực khóa.");
+                }
+            }
+        } catch (e) {
+            if (feedback) {
+                feedback.className = "";
+                feedback.style.background = "#fef2f2";
+                feedback.style.color = "#991b1b";
+                feedback.style.border = "1px solid #fecaca";
+                feedback.textContent = "Lỗi mạng khi kiểm tra kết nối: " + e.message;
+            }
+        }
+    },
+
+    toggleVisibility() {
+        const inp = document.getElementById("global-deepseek-key-input");
+        const eye = document.getElementById("global-deepseek-eye");
+        if (!inp) return;
+        if (inp.type === "password") {
+            inp.type = "text";
+            if (eye) eye.textContent = "🔒";
+        } else {
+            inp.type = "password";
+            if (eye) eye.textContent = "👁️";
+        }
+    }
+};
+
+window.saveGlobalDeepSeekSettings = () => window.GlobalDeepSeek.saveSettings();
+window.testGlobalDeepSeekConnection = () => window.GlobalDeepSeek.testConnection();
+window.toggleGlobalDeepSeekKeyVisibility = () => window.GlobalDeepSeek.toggleVisibility();
+
+if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", () => window.GlobalDeepSeek.init());
+} else {
+    window.GlobalDeepSeek.init();
+}

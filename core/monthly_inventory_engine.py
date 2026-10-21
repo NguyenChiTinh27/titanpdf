@@ -100,6 +100,8 @@ class MonthlyInventoryEngine:
                 title TEXT DEFAULT '',
                 status TEXT DEFAULT 'OPEN',
                 notes TEXT DEFAULT '',
+                plant_code TEXT DEFAULT 'BD',
+                plant_name TEXT DEFAULT 'Nhà máy Bình Dương',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -135,6 +137,8 @@ class MonthlyInventoryEngine:
                 warning_status TEXT DEFAULT 'normal',
                 safety_notes TEXT DEFAULT '',
                 notes TEXT DEFAULT '',
+                plant_code TEXT DEFAULT 'BD',
+                plant_name TEXT DEFAULT 'Nhà máy Bình Dương',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(period_id, chemical_id)
@@ -161,6 +165,8 @@ class MonthlyInventoryEngine:
                 partner TEXT DEFAULT '',
                 purpose TEXT DEFAULT '',
                 notes TEXT DEFAULT '',
+                plant_code TEXT DEFAULT 'BD',
+                plant_name TEXT DEFAULT 'Nhà máy Bình Dương',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -168,12 +174,15 @@ class MonthlyInventoryEngine:
 
             # Chỉ mục tối ưu tốc độ truy vấn
             conn.execute("CREATE INDEX IF NOT EXISTS idx_monthly_periods_key ON monthly_periods(period_key);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_monthly_periods_plant ON monthly_periods(plant_code);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_monthly_records_period_id ON monthly_inventory_records(period_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_monthly_records_period_key ON monthly_inventory_records(period_key);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_monthly_records_chem_id ON monthly_inventory_records(chemical_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_monthly_records_plant ON monthly_inventory_records(plant_code);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_period_id ON inventory_transactions(period_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_period_key ON inventory_transactions(period_key);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_chem_id ON inventory_transactions(chemical_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_plant ON inventory_transactions(plant_code);")
 
             # Đảm bảo di trú các cột nếu bảng đã tồn tại từ trước
             cursor = conn.execute("PRAGMA table_info(monthly_inventory_records)")
@@ -191,6 +200,8 @@ class MonthlyInventoryEngine:
                 ("consumption_rate", "REAL DEFAULT NULL"),
                 ("warning_status", "TEXT DEFAULT 'normal'"),
                 ("notes", "TEXT DEFAULT ''"),
+                ("plant_code", "TEXT DEFAULT 'BD'"),
+                ("plant_name", "TEXT DEFAULT 'Nhà máy Bình Dương'"),
             ]
             for col_name, col_type in cols_to_add:
                 if col_name not in existing_cols:
@@ -199,7 +210,30 @@ class MonthlyInventoryEngine:
                     except Exception:
                         pass
 
+            # Di trú bảng monthly_periods
+            p_cursor = conn.execute("PRAGMA table_info(monthly_periods)")
+            p_existing_cols = {row[1] for row in p_cursor.fetchall()}
+            if "plant_code" not in p_existing_cols:
+                conn.execute("ALTER TABLE monthly_periods ADD COLUMN plant_code TEXT DEFAULT 'BD';")
+            if "plant_name" not in p_existing_cols:
+                conn.execute("ALTER TABLE monthly_periods ADD COLUMN plant_name TEXT DEFAULT 'Nhà máy Bình Dương';")
+
+            # Di trú bảng inventory_transactions
+            t_cursor = conn.execute("PRAGMA table_info(inventory_transactions)")
+            t_existing_cols = {row[1] for row in t_cursor.fetchall()}
+            if "plant_code" not in t_existing_cols:
+                conn.execute("ALTER TABLE inventory_transactions ADD COLUMN plant_code TEXT DEFAULT 'BD';")
+            if "plant_name" not in t_existing_cols:
+                conn.execute("ALTER TABLE inventory_transactions ADD COLUMN plant_name TEXT DEFAULT 'Nhà máy Bình Dương';")
+
             conn.commit()
+
+        # Đảm bảo PlantRegistry đồng bộ
+        try:
+            from core.plant_registry import PlantRegistry
+            PlantRegistry.init_db()
+        except Exception:
+            pass
 
         cls._initialized = True
         logger.info("Đã khởi tạo thành công CSDL Báo Cáo Hóa Chất Tháng (NXT).")
@@ -238,11 +272,18 @@ class MonthlyInventoryEngine:
             return None
 
     @classmethod
-    def list_periods(cls, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    def list_periods(cls, limit: int = 100, offset: int = 0, plant_code: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lấy danh sách tất cả kỳ báo cáo kèm tóm tắt chỉ số kho tổng quan."""
         cls.init_db()
         with cls.get_connection() as conn:
-            rows = conn.execute("""
+            where_clause = ""
+            params: List[Any] = []
+            if plant_code and str(plant_code).strip().upper() not in ("ALL", ""):
+                where_clause = "WHERE UPPER(COALESCE(p.plant_code, 'BD')) = UPPER(?)"
+                params.append(str(plant_code).strip())
+
+            params.extend([limit, offset])
+            rows = conn.execute(f"""
                 SELECT p.*,
                        COUNT(r.id) AS record_count,
                        COALESCE(SUM(r.import_qty), 0.0) AS total_import,
@@ -251,14 +292,17 @@ class MonthlyInventoryEngine:
                        SUM(CASE WHEN r.warning_status != 'normal' OR r.closing_stock < 0 THEN 1 ELSE 0 END) AS warning_count
                 FROM monthly_periods p
                 LEFT JOIN monthly_inventory_records r ON p.id = r.period_id
+                {where_clause}
                 GROUP BY p.id
                 ORDER BY p.year DESC, p.month DESC
                 LIMIT ? OFFSET ?
-            """, (limit, offset)).fetchall()
+            """, tuple(params)).fetchall()
 
             result = []
             for r in rows:
                 item = dict(r)
+                item["plant_code"] = item.get("plant_code") or "BD"
+                item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
                 # Đảm bảo trường title mặc định
                 if not item.get("title"):
                     item["title"] = f"Kỳ {item['month']:02d}/{item['year']}"
@@ -279,6 +323,8 @@ class MonthlyInventoryEngine:
                 return None
 
             period = dict(period_row)
+            period["plant_code"] = period.get("plant_code") or "BD"
+            period["plant_name"] = period.get("plant_name") or "Nhà máy Bình Dương"
             if not period.get("title"):
                 period["title"] = f"Kỳ {period['month']:02d}/{period['year']}"
 
@@ -299,6 +345,8 @@ class MonthlyInventoryEngine:
         notes: str = "",
         copy_from_previous: bool = True,
         auto_roll_forward: bool = True,
+        plant_code: Optional[str] = "BD",
+        plant_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Tạo kỳ báo cáo mới. Nếu copy_from_previous hoặc auto_roll_forward=True,
@@ -312,20 +360,34 @@ class MonthlyInventoryEngine:
         if year < 2000 or year > 2100:
             raise ValueError(f"Năm không hợp lệ: {year}.")
 
-        period_key = f"{year:04d}-{month:02d}"
+        pcode = str(plant_code or "BD").strip().upper() or "BD"
+        from core.plant_registry import PlantRegistry
+        pname = str(plant_name or "").strip() or PlantRegistry.get_plant_name(pcode)
+
+        if pcode != "BD":
+            period_key = f"{year:04d}-{month:02d}-{pcode}"
+        else:
+            period_key = f"{year:04d}-{month:02d}"
+
         if not title:
-            title = f"Kỳ {month:02d}/{year}"
+            if pcode != "BD":
+                title = f"Kỳ {month:02d}/{year} ({pcode})"
+            else:
+                title = f"Kỳ {month:02d}/{year}"
 
         with cls.get_connection() as conn:
             # Kiểm tra xem kỳ đã tồn tại chưa
-            existing = conn.execute("SELECT * FROM monthly_periods WHERE period_key = ?", (period_key,)).fetchone()
+            existing = conn.execute(
+                "SELECT * FROM monthly_periods WHERE period_key = ? OR (year = ? AND month = ? AND UPPER(COALESCE(plant_code, 'BD')) = UPPER(?))",
+                (period_key, year, month, pcode)
+            ).fetchone()
             if existing:
                 return cls.get_period(existing["id"]) or dict(existing)
 
             cursor = conn.execute("""
-                INSERT INTO monthly_periods (period_key, year, month, title, status, notes)
-                VALUES (?, ?, ?, ?, 'OPEN', ?)
-            """, (period_key, year, month, title, notes))
+                INSERT INTO monthly_periods (period_key, year, month, title, status, notes, plant_code, plant_name)
+                VALUES (?, ?, ?, ?, 'OPEN', ?, ?, ?)
+            """, (period_key, year, month, title, notes, pcode, pname))
             new_id = cursor.lastrowid
             conn.commit()
 
@@ -333,10 +395,11 @@ class MonthlyInventoryEngine:
             if copy_from_previous or auto_roll_forward:
                 prev_month = 12 if month == 1 else month - 1
                 prev_year = year - 1 if month == 1 else year
-                prev_key = f"{prev_year:04d}-{prev_month:02d}"
+                prev_key_scoped = f"{prev_year:04d}-{prev_month:02d}-{pcode}" if pcode != "BD" else f"{prev_year:04d}-{prev_month:02d}"
 
                 prev_period = conn.execute(
-                    "SELECT id FROM monthly_periods WHERE period_key = ?", (prev_key,)
+                    "SELECT id FROM monthly_periods WHERE period_key = ? OR (year = ? AND month = ? AND UPPER(COALESCE(plant_code, 'BD')) = UPPER(?))",
+                    (prev_key_scoped, prev_year, prev_month, pcode)
                 ).fetchone()
 
                 if prev_period:
@@ -414,8 +477,9 @@ class MonthlyInventoryEngine:
         period_ident: Union[int, str],
         query: str = "",
         warning_only: bool = False,
+        plant_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Lấy danh sách các dòng hóa chất trong kỳ báo cáo có hỗ trợ tìm kiếm và lọc cảnh báo."""
+        """Lấy danh sách các dòng hóa chất trong kỳ báo cáo có hỗ trợ tìm kiếm, lọc cảnh báo và lọc chi nhánh."""
         cls.init_db()
         with cls.get_connection() as conn:
             pid = cls._resolve_period_id(period_ident, conn)
@@ -424,6 +488,10 @@ class MonthlyInventoryEngine:
 
             sql = "SELECT * FROM monthly_inventory_records WHERE period_id = ?"
             params: List[Any] = [pid]
+
+            if plant_code and str(plant_code).strip().upper() not in ("ALL", ""):
+                sql += " AND UPPER(COALESCE(plant_code, 'BD')) = UPPER(?)"
+                params.append(str(plant_code).strip())
 
             if query:
                 q_like = f"%{query.strip()}%"
@@ -447,6 +515,8 @@ class MonthlyInventoryEngine:
             result = []
             for r in rows:
                 item = dict(r)
+                item["plant_code"] = item.get("plant_code") or "BD"
+                item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
                 # Đồng bộ hai chiều các trường alias
                 item["initial_stock"] = item.get("opening_stock", 0.0)
                 item["total_import"] = item.get("import_qty", 0.0)
@@ -466,6 +536,8 @@ class MonthlyInventoryEngine:
             if not row:
                 return None
             item = dict(row)
+            item["plant_code"] = item.get("plant_code") or "BD"
+            item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
             item["initial_stock"] = item.get("opening_stock", 0.0)
             item["total_import"] = item.get("import_qty", 0.0)
             item["total_export"] = item.get("export_qty", 0.0)
@@ -728,8 +800,10 @@ class MonthlyInventoryEngine:
             if not pid:
                 raise ValueError(f"Không tìm thấy kỳ báo cáo '{period_ident}'")
 
-            period_row = conn.execute("SELECT period_key FROM monthly_periods WHERE id = ?", (pid,)).fetchone()
+            period_row = conn.execute("SELECT * FROM monthly_periods WHERE id = ?", (pid,)).fetchone()
             period_key = period_row["period_key"] if period_row else ""
+            plant_code = period_row["plant_code"] if period_row and "plant_code" in period_row.keys() and period_row["plant_code"] else "BD"
+            plant_name = period_row["plant_name"] if period_row and "plant_name" in period_row.keys() and period_row["plant_name"] else "Nhà máy Bình Dương"
 
             # Lấy danh sách hóa chất đã có trong kỳ để tránh trùng
             existing_cids = {
@@ -816,17 +890,20 @@ class MonthlyInventoryEngine:
                         period_id, period_key, chemical_id, product_code, chemical_name, product_name,
                         cas_number, supplier, unit, opening_stock, initial_stock, import_qty, total_import,
                         export_qty, total_export, closing_stock, ending_stock, storage_location,
-                        safety_threshold, legal_classification, ghs_symbols, warning_status, safety_notes, notes
+                        safety_threshold, legal_classification, ghs_symbols, warning_status, safety_notes, notes,
+                        plant_code, plant_name
                     ) VALUES (
                         ?, ?, ?, ?, ?, ?,
                         ?, ?, 'kg', 0.0, 0.0, 0.0, 0.0,
                         0.0, 0.0, 0.0, 0.0, ?,
-                        ?, ?, ?, 'normal', '', ''
+                        ?, ?, ?, 'normal', '', '',
+                        ?, ?
                     )
                 """, (
                     pid, period_key, cid, pcode, pname, pname,
                     cas, supplier, storage_loc,
-                    safety_threshold, legal_classification, ghs
+                    safety_threshold, legal_classification, ghs,
+                    plant_code, plant_name
                 ))
                 existing_cids.add(cid)
                 added_count += 1
@@ -844,8 +921,9 @@ class MonthlyInventoryEngine:
         period_ident: Union[int, str],
         chemical_id: Optional[str] = None,
         transaction_type: Optional[str] = None,
+        plant_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Lấy danh sách các phiếu giao dịch xuất / nhập trong kỳ."""
+        """Lấy danh sách các phiếu giao dịch xuất / nhập trong kỳ có lọc chi nhánh."""
         cls.init_db()
         with cls.get_connection() as conn:
             pid = cls._resolve_period_id(period_ident, conn)
@@ -854,6 +932,10 @@ class MonthlyInventoryEngine:
 
             sql = "SELECT * FROM inventory_transactions WHERE period_id = ?"
             params: List[Any] = [pid]
+
+            if plant_code and str(plant_code).strip().upper() not in ("ALL", ""):
+                sql += " AND UPPER(COALESCE(plant_code, 'BD')) = UPPER(?)"
+                params.append(str(plant_code).strip())
 
             if chemical_id:
                 sql += " AND chemical_id = ?"
@@ -869,6 +951,8 @@ class MonthlyInventoryEngine:
             result = []
             for r in rows:
                 item = dict(r)
+                item["plant_code"] = item.get("plant_code") or "BD"
+                item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
                 item["date"] = item.get("transaction_date") or item.get("date") or ""
                 item["voucher_no"] = item.get("reference_doc") or item.get("voucher_no") or ""
                 item["partner"] = item.get("department") or item.get("partner") or ""
@@ -888,6 +972,8 @@ class MonthlyInventoryEngine:
         department: str = "",
         purpose: str = "",
         notes: str = "",
+        plant_code: Optional[str] = None,
+        plant_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Ghi nhận một phiếu nhập hoặc xuất kho (Mode 2).
@@ -912,8 +998,12 @@ class MonthlyInventoryEngine:
                 if not pid:
                     raise ValueError(f"Không tìm thấy kỳ báo cáo '{period_ident}'")
 
-                p_row = conn.execute("SELECT period_key FROM monthly_periods WHERE id = ?", (pid,)).fetchone()
+                p_row = conn.execute("SELECT period_key, plant_code, plant_name FROM monthly_periods WHERE id = ?", (pid,)).fetchone()
                 pkey = p_row["period_key"] if p_row else ""
+                if not plant_code:
+                    plant_code = p_row["plant_code"] if p_row and "plant_code" in p_row.keys() and p_row["plant_code"] else "BD"
+                if not plant_name:
+                    plant_name = p_row["plant_name"] if p_row and "plant_name" in p_row.keys() and p_row["plant_name"] else "Nhà máy Bình Dương"
 
                 # Kiểm tra dòng hóa chất trong kỳ, nếu chưa có thì tự động thêm từ CIL
                 rec = conn.execute(
@@ -980,18 +1070,21 @@ class MonthlyInventoryEngine:
                             cas_number, supplier, unit, opening_stock, initial_stock, import_qty, total_import,
                             export_qty, total_export, closing_stock, ending_stock, storage_location,
                             safety_threshold, legal_classification, ghs_symbols, consumption_rate,
-                            warning_status, safety_notes, notes
+                            warning_status, safety_notes, notes,
+                            plant_code, plant_name
                         ) VALUES (
                             ?, ?, ?, ?, ?, ?,
                             ?, ?, ?, 0.0, 0.0, 0.0, 0.0,
                             0.0, 0.0, 0.0, 0.0, ?,
                             ?, ?, ?, NULL,
-                            'normal', '', ''
+                            'normal', '', '',
+                            ?, ?
                         )
                     """, (
                         pid, pkey, chemical_id, chemical_id, auto_name, auto_name,
                         cas_val, "Tự động ghi nhận từ giao dịch", unit or "kg", "Kho hóa chất",
-                        auto_threshold, auto_legal_class, ""
+                        auto_threshold, auto_legal_class, "",
+                        plant_code, plant_name
                     ))
                     conn.commit()
 
@@ -1010,16 +1103,19 @@ class MonthlyInventoryEngine:
                     INSERT INTO inventory_transactions (
                         transaction_id, period_id, period_key, chemical_id, record_id,
                         transaction_type, transaction_date, date, quantity, unit,
-                        reference_doc, voucher_no, department, partner, purpose, notes
+                        reference_doc, voucher_no, department, partner, purpose, notes,
+                        plant_code, plant_name
                     ) VALUES (
                         ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?, ?,
+                        ?, ?
                     )
                 """, (
                     txn_id, pid, pkey, chemical_id, record_id,
                     ttype, tdate, tdate, quantity, unit,
-                    reference_doc, reference_doc, department, department, purpose, notes
+                    reference_doc, reference_doc, department, department, purpose, notes,
+                    plant_code, plant_name
                 ))
                 conn.commit()
 
@@ -1319,8 +1415,8 @@ class MonthlyInventoryEngine:
     # =========================================================================
 
     @classmethod
-    def get_period_kpi(cls, period_ident: Union[int, str]) -> Dict[str, Any]:
-        """Tính toán các chỉ số KPI thời gian thực cho một kỳ báo cáo."""
+    def get_period_kpi(cls, period_ident: Union[int, str], plant_code: Optional[str] = None) -> Dict[str, Any]:
+        """Tính toán các chỉ số KPI thời gian thực cho một kỳ báo cáo có hỗ trợ lọc chi nhánh."""
         cls.init_db()
         with cls.get_connection() as conn:
             pid = cls._resolve_period_id(period_ident, conn)
@@ -1337,12 +1433,23 @@ class MonthlyInventoryEngine:
                     "negative_stock_count": 0,
                     "threshold_exceeded_count": 0,
                     "transactions_count": 0,
+                    "plant_code": plant_code or "BD",
+                    "plant_name": "Nhà máy Bình Dương",
                 }
 
             p_row = conn.execute("SELECT * FROM monthly_periods WHERE id = ?", (pid,)).fetchone()
             p_dict = dict(p_row) if p_row else {}
 
-            rec_stats = conn.execute("""
+            plant_filter_sql = ""
+            stats_params: List[Any] = [pid]
+            txn_params: List[Any] = [pid]
+            effective_plant = plant_code or p_dict.get("plant_code")
+            if effective_plant and str(effective_plant).strip().upper() not in ("ALL", ""):
+                plant_filter_sql = " AND UPPER(COALESCE(plant_code, 'BD')) = UPPER(?)"
+                stats_params.append(str(effective_plant).strip())
+                txn_params.append(str(effective_plant).strip())
+
+            rec_stats = conn.execute(f"""
                 SELECT COUNT(id) AS total_chems,
                        COALESCE(SUM(opening_stock), 0.0) AS sum_opening,
                        COALESCE(SUM(import_qty), 0.0) AS sum_import,
@@ -1352,11 +1459,12 @@ class MonthlyInventoryEngine:
                         SUM(CASE WHEN safety_threshold IS NOT NULL AND safety_threshold > 0 AND closing_stock >= safety_threshold THEN 1 ELSE 0 END) AS exceed_count,
                         SUM(CASE WHEN warning_status != 'normal' OR closing_stock < 0 THEN 1 ELSE 0 END) AS total_warns
                 FROM monthly_inventory_records
-                WHERE period_id = ?
-            """, (pid,)).fetchone()
+                WHERE period_id = ? {plant_filter_sql}
+            """, tuple(stats_params)).fetchone()
 
             txn_count_row = conn.execute(
-                "SELECT COUNT(id) AS cnt FROM inventory_transactions WHERE period_id = ?", (pid,)
+                f"SELECT COUNT(id) AS cnt FROM inventory_transactions WHERE period_id = ? {plant_filter_sql}",
+                tuple(txn_params)
             ).fetchone()
 
             return {
@@ -1365,6 +1473,8 @@ class MonthlyInventoryEngine:
                 "year": p_dict.get("year", 0),
                 "month": p_dict.get("month", 0),
                 "period_status": p_dict.get("status", "OPEN"),
+                "plant_code": p_dict.get("plant_code") or "BD",
+                "plant_name": p_dict.get("plant_name") or "Nhà máy Bình Dương",
                 "total_chemicals": int(rec_stats["total_chems"] or 0),
                 "total_initial_stock": round(float(rec_stats["sum_opening"] or 0.0), 2),
                 "total_opening_stock": round(float(rec_stats["sum_opening"] or 0.0), 2),

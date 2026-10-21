@@ -20,7 +20,7 @@ import socket
 import secrets
 import subprocess
 from pydantic import BaseModel
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Body, Request, Response, Query, Depends
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, BackgroundTasks, Body, Request, Response, Query, Depends
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -154,6 +154,11 @@ def app_startup_event():
     from core.msds_intelligence import MSDSDatabase
     try:
         MSDSDatabase.init_db()
+    except Exception:
+        pass
+    try:
+        from core.plant_registry import PlantRegistry
+        PlantRegistry.init_db()
     except Exception:
         pass
     cleanup_old_exports()
@@ -1647,6 +1652,7 @@ def get_deepseek_settings(request: Request):
     if role == "guest":
         return {
             "has_key": bool(saved_key),
+            "key": "",
             "masked_key": "••••••••••••••••" if saved_key else "",
             "default_model": DeepSeekOCR.DEFAULT_MODEL,
             "read_only": True
@@ -1656,6 +1662,7 @@ def get_deepseek_settings(request: Request):
         masked = saved_key[:6] + "..." + saved_key[-4:] if len(saved_key) > 10 else "******"
     return {
         "has_key": bool(saved_key),
+        "key": saved_key,
         "masked_key": masked,
         "default_model": DeepSeekOCR.DEFAULT_MODEL,
         "read_only": False
@@ -1663,15 +1670,34 @@ def get_deepseek_settings(request: Request):
 
 
 @app.post("/api/settings/deepseek")
-def save_deepseek_settings(api_key: str = Form(...), _: str = Depends(require_owner)):
-    """Lưu DeepSeek API Key vào cấu hình (Chỉ Quản trị viên)."""
+def save_deepseek_settings(api_key: str = Form(...), model: Optional[str] = Form(None), _: str = Depends(require_owner)):
+    """Lưu DeepSeek API Key vào cấu hình toàn cục (Chỉ Quản trị viên)."""
     key = api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="API Key không được để trống.")
-    success = DeepSeekOCR.save_api_key(key)
+    success = DeepSeekOCR.save_api_key(key, model=model)
     if success:
-        return {"success": True, "message": "Đã lưu DeepSeek API Key thành công!"}
+        return {"success": True, "message": "Đã lưu DeepSeek API Key toàn cục thành công!"}
     raise HTTPException(status_code=500, detail="Không thể ghi file cấu hình settings.json.")
+
+
+@app.post("/api/settings/deepseek/test")
+def test_deepseek_settings(api_key: Optional[str] = Form(None), _: str = Depends(require_owner)):
+    """Kiểm tra kết nối DeepSeek API thực tế."""
+    from core.ai_text_engine import AITextEngine
+    key_to_test = (api_key or "").strip() or DeepSeekOCR.get_saved_api_key() or os.getenv("DEEPSEEK_API_KEY", "")
+    if not key_to_test:
+        raise HTTPException(status_code=400, detail="Chưa có API Key để kiểm tra.")
+    try:
+        res = AITextEngine.chat_completion(
+            messages=[{"role": "user", "content": "ping"}],
+            api_key=key_to_test,
+            model="DeepSeek-V4.1-Flash",
+            max_tokens=5
+        )
+        return {"success": True, "message": "Kết nối DeepSeek AI thành công!", "model": "DeepSeek-V4.1-Flash"}
+    except Exception as e:
+        return {"success": False, "message": f"Kết nối thất bại: {str(e)}"}
 
 
 @app.post("/api/process/ocr")
@@ -2118,9 +2144,10 @@ def api_msds_upload_summarize(
     from core.msds_intelligence import MSDSExtractorEngine, MSDSDatabase
     saved_path = save_upload_file(file, TEMP_DIR)
     try:
+        actual_key = (api_key or "").strip() or DeepSeekOCR.get_saved_api_key() or os.getenv("DEEPSEEK_API_KEY", "")
         parsed = MSDSExtractorEngine.process_file(
             saved_path,
-            api_key=api_key,
+            api_key=actual_key,
             engine=engine,
             original_filename=file.filename
         )
@@ -2215,6 +2242,13 @@ def api_msds_confirm_save(payload: Dict[str, Any] = Body(...), _: str = Depends(
                     "error": f"Mã '{target_code}' cũng đã tồn tại trong CSDL! Vui lòng nhập một mã khác (ví dụ: {MSDSDatabase.suggest_unique_code(target_code)})."
                 }
 
+        # Plant context
+        p_code = str(payload.get("plant_code") or data.get("plant_code") or "BD").strip().upper() or "BD"
+        p_name = str(payload.get("plant_name") or data.get("plant_name") or "").strip()
+        data["plant_code"] = p_code
+        if p_name:
+            data["plant_name"] = p_name
+
         data["chemical_id"] = target_code
         data["product_code"] = target_code
         chem_id = MSDSDatabase.save_chemical(data)
@@ -2230,6 +2264,8 @@ def api_msds_confirm_save(payload: Dict[str, Any] = Body(...), _: str = Depends(
             "chemical_id": chem_id,
             "chem_id": chem_id,
             "data": data,
+            "plant_code": p_code,
+            "plant_name": data.get("plant_name") or "Nhà máy Bình Dương",
             "message": f"Đã {action_label} thành công mã '{chem_id}' ({data.get('product_name')}) vào Danh mục CIL."
         }
     except HTTPException:
@@ -2241,19 +2277,25 @@ def api_msds_confirm_save(payload: Dict[str, Any] = Body(...), _: str = Depends(
 
 @app.get("/api/msds/chemicals")
 @app.get("/api/msds/list")
+@app.get("/api/msds/search")
 def api_msds_list(
     q: Optional[str] = None,
     item_type: Optional[str] = None,
     page: Optional[int] = None,
     page_size: Optional[str] = None,
-    ghs_filter: Optional[str] = None
+    ghs_filter: Optional[str] = None,
+    plant_code: Optional[str] = Query(None, description="Mã chi nhánh/nhà máy (BD, DN, HP...)"),
+    x_titan_plant: Optional[str] = Header(None, alias="X-Titan-Plant"),
+    x_plant_code: Optional[str] = Header(None, alias="X-Plant-Code"),
 ):
     """Lấy danh sách hoặc tra cứu nhanh hóa chất trong CSDL CIL theo từ khóa (CAS, tên, UN, NSX...) và loại hàng."""
     from core.msds_intelligence import MSDSDatabase, MSDSExtractorEngine
+    from core.plant_registry import resolve_plant_context
     if page is not None and page <= 0:
         raise HTTPException(status_code=400, detail="Trang (page) phải lớn hơn hoặc bằng 1.")
     try:
-        chemicals = MSDSDatabase.list_chemicals(query=q, item_type=item_type)
+        resolved_plant = resolve_plant_context(plant_code, x_titan_plant, x_plant_code)
+        chemicals = MSDSDatabase.list_chemicals(query=q, item_type=item_type, plant_code=resolved_plant)
         for c in chemicals:
             c = MSDSExtractorEngine.ensure_vietnamese_msds_fields(c)
             c["chem_id"] = c.get("chemical_id")
@@ -3821,6 +3863,73 @@ try:
     print("[INFO] Successfully mounted Gate Pass Studio Router at /api/gatepass")
 except Exception as e:
     print(f"[ERROR] Failed to mount Gate Pass Studio Router: {e}")
+
+
+# ============================================================
+# MULTI-PLANT ENTITY & BRANCH REGISTRY (Milestone M1)
+# ============================================================
+try:
+    from core.plant_registry import PlantRegistry
+
+    PlantRegistry.init_db()
+
+    @app.get("/api/plants", summary="Danh sách các chi nhánh / nhà máy")
+    def api_get_plants(include_inactive: bool = Query(True)):
+        plants = PlantRegistry.get_all_plants(include_inactive=include_inactive)
+        return {"success": True, "plants": plants, "total": len(plants)}
+
+    @app.get("/api/plants/{code}", summary="Chi tiết một chi nhánh / nhà máy")
+    def api_get_plant(code: str):
+        plant = PlantRegistry.get_plant(code)
+        if not plant:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy chi nhánh/nhà máy mã '{code}'.")
+        return {"success": True, "plant": plant}
+
+    @app.post("/api/plants", summary="Tạo mới chi nhánh / nhà máy")
+    def api_create_plant(payload: Dict[str, Any] = Body(...), _: str = Depends(require_owner)):
+        try:
+            new_plant = PlantRegistry.create_plant(payload)
+            return {"success": True, "plant": new_plant, "message": f"Tạo chi nhánh {new_plant.get('plant_code')} thành công."}
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Lỗi tạo chi nhánh: {str(e)}")
+
+    @app.put("/api/plants/{code}", summary="Cập nhật chi nhánh / nhà máy")
+    def api_update_plant(code: str, payload: Dict[str, Any] = Body(...), _: str = Depends(require_owner)):
+        try:
+            updated = PlantRegistry.update_plant(code, payload)
+            return {"success": True, "plant": updated, "message": f"Cập nhật chi nhánh {code} thành công."}
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Lỗi cập nhật chi nhánh: {str(e)}")
+
+    @app.post("/api/plants/{code}/toggle", summary="Bật/Tắt trạng thái hoạt động của chi nhánh")
+    @app.patch("/api/plants/{code}/toggle-active", summary="Bật/Tắt trạng thái hoạt động (Alias)")
+    def api_toggle_plant(
+        code: str,
+        payload: Optional[Dict[str, Any]] = Body(None),
+        is_active: Optional[bool] = Query(None),
+        _: str = Depends(require_owner)
+    ):
+        try:
+            active_val = None
+            if is_active is not None:
+                active_val = is_active
+            elif payload and "is_active" in payload:
+                active_val = bool(payload["is_active"])
+
+            updated = PlantRegistry.toggle_plant_active(code, is_active=active_val)
+            return {"success": True, "plant": updated, "message": f"Thay đổi trạng thái chi nhánh {code} thành công."}
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Lỗi chuyển trạng thái chi nhánh: {str(e)}")
+
+    print("[INFO] Successfully mounted Plant Registry endpoints at /api/plants")
+except Exception as e:
+    print(f"[ERROR] Failed to mount Plant Registry endpoints: {e}")
 
 
 # SERVE FRONTEND

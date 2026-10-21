@@ -9,6 +9,7 @@ from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings.json")
+DATA_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "settings.json")
 
 class DeepSeekOCR:
     """
@@ -29,29 +30,38 @@ class DeepSeekOCR:
         if env_key:
             return env_key
         
-        if os.path.exists(SETTINGS_FILE):
-            try:
-                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return data.get("deepseek_api_key", "").strip() or None
-            except Exception:
-                pass
+        for s_file in [SETTINGS_FILE, DATA_SETTINGS_FILE]:
+            if os.path.exists(s_file):
+                try:
+                    with open(s_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        key = data.get("deepseek_api_key", "").strip()
+                        if key:
+                            return key
+                except Exception:
+                    pass
         return None
 
     @staticmethod
-    def save_api_key(key: str) -> bool:
-        """Lưu API key vào file settings.json."""
+    def save_api_key(key: str, model: Optional[str] = None) -> bool:
+        """Lưu API key vào file settings.json và data/settings.json."""
         try:
-            data = {}
-            if os.path.exists(SETTINGS_FILE):
-                try:
-                    with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                except Exception:
-                    data = {}
-            data["deepseek_api_key"] = key.strip()
-            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            clean_key = key.strip()
+            os.environ["DEEPSEEK_API_KEY"] = clean_key
+            for s_file in [SETTINGS_FILE, DATA_SETTINGS_FILE]:
+                data = {}
+                if os.path.exists(s_file):
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                    except Exception:
+                        data = {}
+                data["deepseek_api_key"] = clean_key
+                if model and model.strip():
+                    data["deepseek_model"] = model.strip()
+                os.makedirs(os.path.dirname(s_file), exist_ok=True)
+                with open(s_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
             return True
         except Exception:
             return False

@@ -943,7 +943,38 @@ async function runMsdsAnalysis() {
     }
 
     const engine = document.getElementById("msds-ai-engine")?.value || "deepseek";
-    const apiKey = localStorage.getItem("deepseek_api_key") || "";
+    let apiKey = (localStorage.getItem("deepseek_api_key") || "").trim();
+
+    // Tự động kiểm tra và đồng bộ key toàn cục từ máy chủ nếu chưa có trong localStorage
+    if (engine === "deepseek" && !apiKey) {
+        try {
+            const checkResp = await fetch("/api/settings/deepseek");
+            if (checkResp.ok) {
+                const checkData = await checkResp.json();
+                if (checkData.key) {
+                    apiKey = checkData.key.trim();
+                    localStorage.setItem("deepseek_api_key", apiKey);
+                }
+            }
+        } catch (e) {
+            console.warn("Chưa tải được cấu hình DeepSeek:", e);
+        }
+    }
+
+    if (engine === "deepseek" && !apiKey) {
+        const confirmSetup = confirm(
+            "Hệ thống chưa tìm thấy DeepSeek API Key toàn cục!\n\n" +
+            "Bạn có muốn mở ngay phần Cài Đặt để nhập và lưu khóa API DeepSeek không?\n" +
+            "(Khóa này sẽ dùng chung cho toàn bộ các công cụ AI bao gồm cả bóc tách MSDS)."
+        );
+        if (confirmSetup) {
+            if (typeof openSecurityModal === "function") {
+                openSecurityModal();
+                if (typeof switchSecTab === "function") switchSecTab("ai");
+            }
+            return;
+        }
+    }
 
     const btn = document.getElementById("btn-run-msds-analyze");
     const txtBtn = document.getElementById("txt-run-msds-analyze");

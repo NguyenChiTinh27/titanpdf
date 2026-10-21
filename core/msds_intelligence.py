@@ -191,6 +191,10 @@ class MSDSDatabase:
                 conn.execute("ALTER TABLE chemicals ADD COLUMN drive_download_url TEXT DEFAULT NULL")
             if "sync_status" not in existing_cols:
                 conn.execute("ALTER TABLE chemicals ADD COLUMN sync_status TEXT DEFAULT 'synced'")
+            if "plant_code" not in existing_cols:
+                conn.execute("ALTER TABLE chemicals ADD COLUMN plant_code TEXT DEFAULT 'BD'")
+            if "plant_name" not in existing_cols:
+                conn.execute("ALTER TABLE chemicals ADD COLUMN plant_name TEXT DEFAULT 'Nhà máy Bình Dương'")
 
             # Tự động phân loại heuristic cho các hóa chất hiện hữu
             try:
@@ -394,6 +398,11 @@ class MSDSDatabase:
             except Exception:
                 raw_item_type = "raw_material"
         mother_msds_id = data.get("mother_msds_id") or None
+        plant_code = str(data.get("plant_code") or "BD").strip().upper() or "BD"
+        plant_name = str(data.get("plant_name") or "").strip()
+        if not plant_name:
+            from core.plant_registry import PlantRegistry
+            plant_name = PlantRegistry.get_plant_name(plant_code)
 
         with cls.get_connection() as conn:
             # Kiểm tra xem mã hóa chất đã có chưa (không phân biệt hoa thường)
@@ -413,7 +422,8 @@ class MSDSDatabase:
                     eye_protection = ?, skin_protection = ?, first_aid_inhalation = ?, first_aid_skin = ?,
                     first_aid_eyes = ?, first_aid_ingestion = ?, fire_measures = ?, spill_measures = ?,
                     source_file = ?, sha256 = ?, raw_summary_ai = ?, item_type = ?, mother_msds_id = ?,
-                    drive_file_id = ?, drive_view_url = ?, drive_download_url = ?, sync_status = ?
+                    drive_file_id = ?, drive_view_url = ?, drive_download_url = ?, sync_status = ?,
+                    plant_code = ?, plant_name = ?
                 WHERE chemical_id = ?
                 """, (
                     product_code, data.get("product_name_vi", ""), data.get("product_name_original", ""), data.get("intended_use", ""),
@@ -426,6 +436,7 @@ class MSDSDatabase:
                     data.get("source_file", ""), data.get("sha256", ""), data.get("raw_summary_ai", "") or data.get("summary", ""),
                     raw_item_type, mother_msds_id,
                     data.get("drive_file_id", ""), data.get("drive_view_url", ""), data.get("drive_download_url", ""), data.get("sync_status", "synced"),
+                    plant_code, plant_name,
                     chem_id
                 ))
                 # Xóa compositions và sections cũ để ghi lại mới
@@ -442,8 +453,9 @@ class MSDSDatabase:
                     eye_protection, skin_protection, first_aid_inhalation, first_aid_skin,
                     first_aid_eyes, first_aid_ingestion, fire_measures, spill_measures,
                     source_file, sha256, raw_summary_ai, item_type, mother_msds_id,
-                    drive_file_id, drive_view_url, drive_download_url, sync_status
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    drive_file_id, drive_view_url, drive_download_url, sync_status,
+                    plant_code, plant_name
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     chem_id, product_code, data.get("product_name_vi", ""), data.get("product_name_original", ""), data.get("intended_use", ""),
                     data.get("manufacturer", ""), data.get("revision_date", ""), data.get("cas_primary", ""), data.get("un_no", ""), data.get("transport_class", ""),
@@ -454,7 +466,8 @@ class MSDSDatabase:
                     data.get("first_aid_eyes", ""), data.get("first_aid_ingestion", ""), data.get("fire_measures", ""), data.get("spill_measures", ""),
                     data.get("source_file", ""), data.get("sha256", ""), data.get("raw_summary_ai", "") or data.get("summary", ""),
                     raw_item_type, mother_msds_id,
-                    data.get("drive_file_id", ""), data.get("drive_view_url", ""), data.get("drive_download_url", ""), data.get("sync_status", "synced")
+                    data.get("drive_file_id", ""), data.get("drive_view_url", ""), data.get("drive_download_url", ""), data.get("sync_status", "synced"),
+                    plant_code, plant_name
                 ))
 
             # Lưu danh sách thành phần / CAS
@@ -504,8 +517,13 @@ class MSDSDatabase:
         return cls.save_chemical(data, sync_gas=sync_gas)
 
     @classmethod
-    def list_chemicals(cls, query: Optional[str] = None, item_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Lấy danh sách hoặc tìm kiếm toàn diện hóa chất có hỗ trợ lọc theo item_type."""
+    def list_chemicals(
+        cls,
+        query: Optional[str] = None,
+        item_type: Optional[str] = None,
+        plant_code: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Lấy danh sách hoặc tìm kiếm toàn diện hóa chất có hỗ trợ lọc theo item_type và plant_code."""
         with cls.get_connection() as conn:
             where_clauses = []
             params = []
@@ -531,6 +549,10 @@ class MSDSDatabase:
                 where_clauses.append("LOWER(COALESCE(c.item_type, 'raw_material')) = LOWER(?)")
                 params.append(item_type.strip())
 
+            if plant_code and str(plant_code).strip().upper() not in ("ALL", ""):
+                where_clauses.append("UPPER(COALESCE(c.plant_code, 'BD')) = UPPER(?)")
+                params.append(str(plant_code).strip())
+
             where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
             sql = f"""
                 SELECT DISTINCT c.* FROM chemicals c
@@ -547,6 +569,8 @@ class MSDSDatabase:
                 item["item_type"] = item.get("item_type") or "raw_material"
                 item["product_code"] = item.get("product_code") or item.get("chemical_id")
                 item["mother_msds_id"] = item.get("mother_msds_id")
+                item["plant_code"] = item.get("plant_code") or "BD"
+                item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
                 chem_ids.append(item["chemical_id"])
                 # Parse GHS codes
                 try:
@@ -588,6 +612,8 @@ class MSDSDatabase:
             item["item_type"] = item.get("item_type") or "raw_material"
             item["product_code"] = item.get("product_code") or item.get("chemical_id")
             item["mother_msds_id"] = item.get("mother_msds_id")
+            item["plant_code"] = item.get("plant_code") or "BD"
+            item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
             comps = conn.execute("SELECT * FROM compositions WHERE chemical_id = ?", (actual_id,)).fetchall()
             item["composition"] = [dict(c) for c in comps]
             sects = conn.execute("SELECT * FROM sections WHERE chemical_id = ? ORDER BY section_no ASC", (actual_id,)).fetchall()
