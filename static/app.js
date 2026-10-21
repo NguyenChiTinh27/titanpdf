@@ -1111,6 +1111,10 @@ function setupKeyboardNavigation() {
 // 2. WORKSPACE & TOOL OPENING
 // -------------------------------------------------------------
 function openTool(toolId) {
+    if (typeof window.isSecurityAuthorized === "function" && !window.isSecurityAuthorized()) {
+        if (typeof window.lockApp === "function") window.lockApp();
+        return;
+    }
     if (document.body.getAttribute("data-role") === "guest" && typeof isToolAllowedForGuest === "function") {
         if (!isToolAllowedForGuest(toolId)) {
             const toolObj = typeof TOOLS !== "undefined" ? TOOLS.find(t => t.id === toolId) : null;

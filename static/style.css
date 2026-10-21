@@ -241,6 +241,11 @@ body {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.navbar-container::-webkit-scrollbar {
+  display: none;
 }
 
 .navbar-brand {
@@ -351,7 +356,9 @@ body {
   white-space: nowrap !important;
   user-select: none;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 .main-nav-tabs::-webkit-scrollbar {
   display: none;
@@ -2829,6 +2836,18 @@ svg.icon {
   }
   .btn-theme-switcher .theme-text {
     display: none;
+  }
+  .btn-gdrive-nav span {
+    display: none;
+  }
+  .btn-gdrive-nav {
+    padding: 5px 8px;
+  }
+  .status-indicator .status-text {
+    display: none;
+  }
+  .status-indicator {
+    padding: 4px 6px;
   }
   .navbar-search {
     max-width: 150px;

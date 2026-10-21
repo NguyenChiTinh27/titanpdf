@@ -38,6 +38,10 @@ const VIP_STATE = {
 // 1. MAIN TAB SWITCHER (Tools Dashboard <-> VIP Editor <-> AI Studio <-> MSDS CIL)
 // -------------------------------------------------------------
 function switchMainTab(tab, subTab = null) {
+    if (typeof window.isSecurityAuthorized === "function" && !window.isSecurityAuthorized()) {
+        if (typeof window.lockApp === "function") window.lockApp();
+        return false;
+    }
     if ((tab === 'ai' || tab === 'ai-studio') && subTab === 'msds') {
         tab = 'msds';
     }
@@ -139,16 +143,13 @@ function switchMainTab(tab, subTab = null) {
     const navLicense = document.getElementById("nav-tab-license");
     const footer = document.querySelector(".footer");
 
-    // Reset active nav states
-    if (navTools) navTools.classList.remove("active");
-    if (navEditor) navEditor.classList.remove("active");
-    if (navAi) navAi.classList.remove("active");
-    if (navMsds) navMsds.classList.remove("active");
-    if (navHse) navHse.classList.remove("active");
-    if (navLegal) navLegal.classList.remove("active");
-    if (navMonthly) navMonthly.classList.remove("active");
-    if (navGatepass) navGatepass.classList.remove("active");
-    if (navLicense) navLicense.classList.remove("active");
+    // Reset active nav states & aria-selected attributes
+    [navTools, navEditor, navAi, navMsds, navHse, navLegal, navMonthly, navGatepass, navLicense].forEach(n => {
+        if (n) {
+            n.classList.remove("active");
+            n.setAttribute("aria-selected", "false");
+        }
+    });
 
     // 1. Luôn cuộn trang lên đỉnh (0, 0) ngay lập tức để thanh Header/Navbar không bị trôi/lỗi đè
     try {
@@ -181,7 +182,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.add("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navEditor) navEditor.classList.add("active");
+        if (navEditor) { navEditor.classList.add("active"); navEditor.setAttribute("aria-selected", "true"); }
 
         // If no file loaded yet, check if workspace has a file to import
         if (!VIP_STATE.loadedFile && typeof selectedFiles !== 'undefined' && selectedFiles.length > 0) {
@@ -193,7 +194,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.add("msds-studio-active");
 
-        if (navMsds) navMsds.classList.add("active");
+        if (navMsds) { navMsds.classList.add("active"); navMsds.setAttribute("aria-selected", "true"); }
 
         if (typeof loadMsdsChemicalsList === 'function') {
             loadMsdsChemicalsList();
@@ -204,7 +205,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navMonthly) navMonthly.classList.add("active");
+        if (navMonthly) { navMonthly.classList.add("active"); navMonthly.setAttribute("aria-selected", "true"); }
 
         if (typeof window.initMonthlyInventory === 'function') {
             window.initMonthlyInventory();
@@ -215,7 +216,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navAi) navAi.classList.add("active");
+        if (navAi) { navAi.classList.add("active"); navAi.setAttribute("aria-selected", "true"); }
 
         if (subTab && typeof switchAiSubTab === 'function') {
             switchAiSubTab(subTab);
@@ -226,7 +227,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navHse) navHse.classList.add("active");
+        if (navHse) { navHse.classList.add("active"); navHse.setAttribute("aria-selected", "true"); }
 
         if (typeof window.initHseStudio === 'function') {
             window.initHseStudio();
@@ -237,7 +238,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navLegal) navLegal.classList.add("active");
+        if (navLegal) { navLegal.classList.add("active"); navLegal.setAttribute("aria-selected", "true"); }
 
         if (typeof window.initLegalCatalog === 'function') {
             window.initLegalCatalog();
@@ -248,7 +249,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navGatepass) navGatepass.classList.add("active");
+        if (navGatepass) { navGatepass.classList.add("active"); navGatepass.setAttribute("aria-selected", "true"); }
 
         if (window.location.hash !== '#gatepass-studio' && window.location.hash !== '#gatepass') {
             history.replaceState(null, '', '#gatepass-studio');
@@ -268,7 +269,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navLicense) navLicense.classList.add("active");
+        if (navLicense) { navLicense.classList.add("active"); navLicense.setAttribute("aria-selected", "true"); }
 
         if (window.location.hash !== '#license-manager' && window.location.hash !== '#license') {
             history.replaceState(null, '', '#license-manager');
@@ -285,7 +286,7 @@ function switchMainTab(tab, subTab = null) {
         document.body.classList.remove("vip-editor-active");
         document.body.classList.remove("msds-studio-active");
 
-        if (navTools) navTools.classList.add("active");
+        if (navTools) { navTools.classList.add("active"); navTools.setAttribute("aria-selected", "true"); }
         if (window.location.hash === '#gatepass-studio' || window.location.hash === '#gatepass') {
             history.replaceState(null, '', window.location.pathname + window.location.search);
         }
