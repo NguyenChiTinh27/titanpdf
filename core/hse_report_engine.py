@@ -888,15 +888,24 @@ def apply_metadata(doc: Document, metadata: dict[str, Any], report_type: str = "
             clear_paragraph(p)
             label = "复查人员/ Người phục tra" if is_imp else "检查人员/ Người kiểm tra"
             add_run(p, f"{label}：{inspectors}", size=10.5, bold=True)
-        elif is_imp and "月度安全、环保、消防检查记录" in txt:
+        elif "月度安全、环保、消防检查记录" in txt:
             clear_paragraph(p)
-            add_run(p, f"{year_str}年{month_str}月度安全、环保、消防整改复查记录", size=13, bold=True, font="Microsoft YaHei")
-        elif is_imp and "NHẬT KÝ KIỂM TRA AN TOÀN-MÔI TRƯỜNG-PHÒNG CHÁY" in txt:
+            if is_imp:
+                add_run(p, f"{year_str}年{month_str}月度安全、环保、消防整改复查记录", size=13, bold=True, font="Microsoft YaHei")
+            else:
+                add_run(p, f"{year_str}年{month_str}月度安全、环保、消防检查记录", size=13, bold=True, font="Microsoft YaHei")
+        elif "NHẬT KÝ KIỂM TRA AN TOÀN-MÔI TRƯỜNG-PHÒNG CHÁY" in txt:
             clear_paragraph(p)
-            add_run(p, "BÁO CÁO PHỤC TRA CẢI THIỆN AN TOÀN - MÔI TRƯỜNG - PCCC", size=12, bold=True, font="Times New Roman")
-        elif is_imp and "THÁNG " in txt and "/" in txt:
+            if is_imp:
+                add_run(p, "BÁO CÁO PHỤC TRA CẢI THIỆN AN TOÀN - MÔI TRƯỜNG - PCCC", size=12, bold=True, font="Times New Roman")
+            else:
+                add_run(p, "NHẬT KÝ KIỂM TRA AN TOÀN-MÔI TRƯỜNG-PHÒNG CHÁY", size=12, bold=True, font="Times New Roman")
+        elif "THÁNG " in txt and "/" in txt:
             clear_paragraph(p)
-            add_run(p, f"THÁNG {month_str}/{year_str} (PHỤC TRA CẢI THIỆN)", size=12, bold=True, font="Times New Roman")
+            if is_imp:
+                add_run(p, f"THÁNG {month_str}/{year_str} (PHỤC TRA CẢI THIỆN)", size=12, bold=True, font="Times New Roman")
+            else:
+                add_run(p, f"THÁNG {month_str}/{year_str}", size=12, bold=True, font="Times New Roman")
 
 
 def apply_checklist(
@@ -1008,8 +1017,8 @@ def add_issue_header(
     # Signature Navy bottom line
     line = doc.add_paragraph()
     line.paragraph_format.space_before = Pt(0)
-    line.paragraph_format.space_after = Pt(22)
-    add_bottom_border(line, color="004B97", size="24")
+    line.paragraph_format.space_after = Pt(8.5)
+    add_bottom_border(line, color="174EA6", size="18")
 
 
 def populate_finding_row(

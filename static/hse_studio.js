@@ -244,15 +244,20 @@
   function makePayload() {
     const dateInput = $("#hse-inspection-date");
     const inspectorsInput = $("#hse-inspectors");
+    const titleInput = $("#hse-report-title");
     const rawDateVal = dateInput ? dateInput.value : state.metadata.date;
     const dateVal = normalizeDateToIso(rawDateVal);
     const inspectorsVal = inspectorsInput ? inspectorsInput.value : state.metadata.inspectors;
+    const titleVal = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : (state.metadata.title || "越南展辰 HSE 办巡厂报告");
 
     return {
       id: state.currentReportId || `hse_${Date.now()}`,
+      title: titleVal,
+      reportTitle: titleVal,
       reportType: state.reportMode,
       globalAiHint: state.globalAiHint || "",
       metadata: {
+        title: titleVal,
         date: dateVal || new Date().toISOString().substring(0, 10),
         prevDate: state.metadata.prevDate || "",
         inspectors: inspectorsVal || "Ban HSE - ZhanChen"
@@ -301,10 +306,13 @@
     const globalHintInput = $("#hse-global-ai-hint");
     if (globalHintInput) globalHintInput.value = state.globalAiHint;
 
+    state.metadata.title = report.title || report.metadata?.title || (state.reportMode === "improvement" ? "越南展辰 HSE 办整改复查报告" : "越南展辰 HSE 办巡厂报告");
     state.metadata.date = report.metadata?.date || new Date().toISOString().substring(0, 10);
     state.metadata.prevDate = report.metadata?.prevDate || "";
     state.metadata.inspectors = report.metadata?.inspectors || "Ban HSE";
 
+    const titleInput = $("#hse-report-title");
+    if (titleInput) titleInput.value = state.metadata.title;
     const dateInput = $("#hse-inspection-date");
     if (dateInput) dateInput.value = state.metadata.date;
     const inspectorsInput = $("#hse-inspectors");
@@ -1198,6 +1206,8 @@
     const isImprove = (state.reportMode === "improvement");
     const dateInput = $("#hse-inspection-date");
     const dateVal = (dateInput && dateInput.value) ? dateInput.value : state.metadata.date;
+    const titleInput = $("#hse-report-title");
+    const reportTitleVal = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : (state.metadata.title || (isImprove ? "越南展辰 HSE 办整改复查报告" : "越南展辰 HSE 办巡厂报告"));
 
     // View Mode: Checklist Table
     if (state.previewMode === "checklist") {
@@ -1257,7 +1267,7 @@
               <img src="icons/hse_avatar.jpg" alt="Logo">
             </td>
             <td class="col-title">
-              <strong>越南展辰 HSE 办巡厂报告 ${isImprove ? "(整改复查)" : ""}</strong>
+              <strong>${escapeHtml(reportTitleVal)}</strong>
             </td>
             <td class="col-date">
               <time>${escapeHtml(dateVal)}</time>

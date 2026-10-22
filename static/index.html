@@ -3867,29 +3867,29 @@
                             </div>
                         </div>
 
-                        <!-- MSDS SMART PAGINATION HUD (M3 Anti-Crash & Fast Rendering) -->
-                        <div id="msds-pagination-hud" class="msds-pagination-container" style="display:flex; justify-content:space-between; align-items:center; padding:12px 18px; margin-top:12px; background:rgba(255,255,255,0.85); backdrop-filter:blur(8px); border-radius:12px; border:1px solid rgba(226,232,240,0.9); font-size:13px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
-                            <div style="display:flex; align-items:center; gap:14px;">
-                                <span id="msds-pagination-info" style="color:#64748b; font-weight:600;">Hiển thị 1 - 20 trên tổng số 0 hóa chất</span>
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <label for="msds-page-size-select" style="color:#64748b; font-weight:500;">Mỗi trang:</label>
-                                    <select id="msds-page-size-select" onchange="onMsdsPageSizeChange(this.value)" style="padding:4px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-size:12px; font-weight:600; cursor:pointer; outline:none;">
-                                        <option value="20" selected>20 dòng</option>
-                                        <option value="50">50 dòng</option>
-                                        <option value="100">100 dòng</option>
-                                        <option value="all">Tất cả</option>
-                                    </select>
-                                </div>
+                    </div>
+                    <!-- MSDS SMART PAGINATION HUD (Docked at bottom of card, outside horizontal scroll viewport) -->
+                    <div id="msds-pagination-hud" class="msds-pagination-container" style="display:flex; justify-content:space-between; align-items:center; padding:10px 18px; background:#ffffff; border-top:1px solid #e2e8f0; font-size:13px; z-index:15; flex-shrink:0;">
+                        <div style="display:flex; align-items:center; gap:14px;">
+                            <span id="msds-pagination-info" style="color:#64748b; font-weight:600;">Hiển thị 1 - 20 trên tổng số 0 hóa chất</span>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <label for="msds-page-size-select" style="color:#64748b; font-weight:500;">Mỗi trang:</label>
+                                <select id="msds-page-size-select" onchange="onMsdsPageSizeChange(this.value)" style="padding:4px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-size:12px; font-weight:600; cursor:pointer; outline:none;">
+                                    <option value="20" selected>20 dòng</option>
+                                    <option value="50">50 dòng</option>
+                                    <option value="100">100 dòng</option>
+                                    <option value="all">Tất cả</option>
+                                </select>
                             </div>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <button type="button" id="msds-page-prev-btn" onclick="onMsdsPageChange(-1)" style="padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.2s; color:#334155;" disabled>
-                                    <span>« Trang trước</span>
-                                </button>
-                                <span id="msds-page-current-display" style="font-weight:700; color:#3b82f6; padding:0 8px; min-width:80px; text-align:center;">Trang 1 / 1</span>
-                                <button type="button" id="msds-page-next-btn" onclick="onMsdsPageChange(1)" style="padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.2s; color:#334155;" disabled>
-                                    <span>Trang sau »</span>
-                                </button>
-                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button type="button" id="msds-page-prev-btn" onclick="onMsdsPageChange(-1)" style="padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.2s; color:#334155;" disabled>
+                                <span>« Trang trước</span>
+                            </button>
+                            <span id="msds-page-current-display" style="font-weight:700; color:#3b82f6; padding:0 8px; min-width:80px; text-align:center;">Trang 1 / 1</span>
+                            <button type="button" id="msds-page-next-btn" onclick="onMsdsPageChange(1)" style="padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.2s; color:#334155;" disabled>
+                                <span>Trang sau »</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -4657,6 +4657,10 @@
                     </div>
 
                     <div class="hse-form-grid">
+                        <label class="hse-label" style="grid-column: 1 / -1;">
+                            Tiêu đề báo cáo / 报告标题 *
+                            <input type="text" id="hse-report-title" class="hse-input" placeholder="Ví dụ: 越南展辰 HSE 办巡厂报告" value="越南展辰 HSE 办巡厂报告" />
+                        </label>
                         <label class="hse-label">
                             Ngày kiểm tra / phục tra *
                             <input type="date" id="hse-inspection-date" class="hse-input" />

@@ -8,7 +8,7 @@
     "prevDate": "2026-09-30",
     "inspectors": "向雄伟，阮文完，阮志情 / Xiang Xiong Wei, Nguyễn Văn Vẹn, Nguyễn Chí Tình",
     "company": "越南展辰新材料有限公司",
-    "title": "Báo cáo kiểm tra An toàn - Môi trường - Phòng cháy Tháng 09/2026",
+    "title": "越南展辰 HSE 办巡厂报告",
     "department": ""
   },
   "checklist": [
@@ -752,5 +752,7 @@
     }
   ],
   "save_docx": true,
-  "folder": ""
+  "folder": "",
+  "title": "越南展辰 HSE 办巡厂报告",
+  "reportTitle": "越南展辰 HSE 办巡厂报告"
 }

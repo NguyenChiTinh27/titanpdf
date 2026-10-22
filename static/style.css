@@ -5050,7 +5050,14 @@ body.msds-studio-active {
   align-items: center;
   gap: 10px;
   width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.msds-toolbar-top-row::-webkit-scrollbar {
+  display: none;
 }
 
 .msds-btn-reopen-sidebar {
@@ -5337,7 +5344,11 @@ body.msds-studio-active {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 3px;
+  scrollbar-width: thin;
 }
 
 .msds-filter-pill {
@@ -8757,4 +8768,22 @@ body[data-role="guest"] #gp-btn-add-proof {
         border: 2px solid #000000 !important;
         page-break-inside: avoid;
     }
+}
+
+/* Stable MSDS Pagination Dock */
+.msds-pagination-container {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  z-index: 10;
+}
+
+/* Guard: Prevent floating widgets and toolbars from leaking across tabs */
+#hse-studio-view.hidden .hse-assistant-launcher,
+#hse-studio-view.hidden .hse-assistant-panel,
+#vip-editor-view.hidden .vip-bottom-nav,
+.vip-bottom-nav.hidden {
+  display: none !important;
 }

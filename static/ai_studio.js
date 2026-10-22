@@ -1370,7 +1370,7 @@ function renderGhsDiamondSvg(code, size = 28) {
 }
 
 function renderGhsTableBadge(code) {
-    const cleanCode = String(code || "").trim().toUpperCase();
+    let cleanCode = String(code || "").trim().toUpperCase().replace(/[\[\]"']/g, "").trim();
     if (!cleanCode || cleanCode === "NON DG" || cleanCode === "NONDG" || cleanCode === "NONE" || cleanCode === "-") {
         return `
             <div title="NON DG: Không phải là chất hay hỗn hợp nguy hại theo Phần 2 GHS" style="display:inline-flex; align-items:center; gap:6px; background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:3px 9px 3px 6px; margin:2px 4px 2px 0; box-shadow:0 1px 2px rgba(22,163,74,0.06);">
@@ -2760,9 +2760,24 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
     let html = "";
     pagedItems.forEach((item, localIdx) => {
         const index = startIdx + localIdx;
-        const rawGhs = String(item.ghs_symbols || "").trim();
-        let ghsCodes = rawGhs.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
-        if (ghsCodes.length === 0 || rawGhs.toUpperCase().includes("NON DG")) {
+        let ghsCodes = [];
+        if (Array.isArray(item.ghs_symbols)) {
+            ghsCodes = item.ghs_symbols.map(s => String(s).trim());
+        } else {
+            const rawGhs = String(item.ghs_symbols || "").trim();
+            if (rawGhs.startsWith("[") && rawGhs.endsWith("]")) {
+                try {
+                    const parsed = JSON.parse(rawGhs);
+                    if (Array.isArray(parsed)) ghsCodes = parsed.map(s => String(s).trim());
+                } catch (e) {
+                    ghsCodes = rawGhs.replace(/[\[\]"']/g, "").split(/[,;]+/).map(s => s.trim());
+                }
+            } else {
+                ghsCodes = rawGhs.replace(/[\[\]"']/g, "").split(/[,;]+/).map(s => s.trim());
+            }
+        }
+        ghsCodes = ghsCodes.map(s => s.replace(/[\[\]"']/g, "").trim()).filter(Boolean);
+        if (ghsCodes.length === 0 || ghsCodes.some(c => c.toUpperCase().includes("NON DG") || c.toUpperCase() === "NONDG")) {
             ghsCodes = ["NON DG"];
         }
         const ghsBadges = ghsCodes.map(c => renderGhsTableBadge(c)).join("");
