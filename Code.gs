@@ -117,6 +117,12 @@ function doGet(e) {
       return jsonResponse(handleGetAllChemicals());
     } else if (action === "getAllDefects" || action === "listDefects") {
       return jsonResponse(handleGetAllDefects());
+    } else if (action === "deleteDefect") {
+      return jsonResponse(handleDeleteDefect(e.parameter));
+    } else if (action === "deleteReport") {
+      return jsonResponse(handleDeleteReport(e.parameter));
+    } else if (action === "clearAllDefects") {
+      return jsonResponse(handleClearAllDefects());
     } else if (action === "initHeaders") {
       return jsonResponse(ensureSheetStructure());
     }
@@ -316,6 +322,18 @@ function doPost(e) {
     if (action === "clearAllDefects" || action === "deleteAllDefects") {
       var delHseRes = handleClearAllDefects();
       return jsonResponse(delHseRes);
+    }
+
+    // 8b2. Xóa 1 sự cố HSE Tracker (Delete Single HSE Defect)
+    if (action === "deleteDefect") {
+      var delOneDefectRes = handleDeleteDefect(payload);
+      return jsonResponse(delOneDefectRes);
+    }
+
+    // 8b3. Xóa 1 bản lưu báo cáo HSE khỏi Google Drive (Delete HSE Report)
+    if (action === "deleteReport") {
+      var delRepRes = handleDeleteReport(payload);
+      return jsonResponse(delRepRes);
     }
 
     // 8c. Cập nhật sự cố HSE Tracker (Update / Upsert Defect)
@@ -1463,3 +1481,86 @@ function handleClearAllDefects() {
     message: "Đã xóa sạch toàn bộ " + deletedCount + " dòng dữ liệu sự cố HSE khỏi Google Sheet."
   };
 }
+
+function handleDeleteDefect(payload) {
+  var ss = getOrCreateSpreadsheet();
+  var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_HSE);
+  var code = String(payload.defectId || payload.code || payload.id || "").trim();
+  if (!code) {
+    return { status: "error", error: "Thiếu mã sự cố (defectId) để xóa!" };
+  }
+
+  var lastRow = sheet.getLastRow();
+  var deletedRow = false;
+  if (lastRow > 1) {
+    var codes = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = codes.length - 1; i >= 0; i--) {
+      var cellVal = String(codes[i][0]).trim().toUpperCase();
+      if (cellVal === code.toUpperCase()) {
+        sheet.deleteRow(i + 2);
+        deletedRow = true;
+      }
+    }
+  }
+
+  return {
+    status: "ok",
+    success: true,
+    deleted: deletedRow,
+    defectId: code,
+    message: deletedRow ? ("Đã xóa sự cố " + code + " khỏi Google Sheet.") : ("Không tìm thấy sự cố " + code + " trên Google Sheet.")
+  };
+}
+
+function handleDeleteReport(payload) {
+  var reportId = String(payload.id || payload.reportId || "").trim();
+  var filename = String(payload.filename || "").trim();
+  var deletedCount = 0;
+
+  if (!reportId && !filename) {
+    return { status: "error", error: "Thiếu ID hoặc filename của báo cáo cần xóa!" };
+  }
+
+  try {
+    // 1. Tìm trong các thư mục lưu trữ báo cáo
+    var folderNames = ["HSE_BaoCao", "HSE_ZhanChen_Storage", CONFIG.DRIVE_ROOT_FOLDER];
+    for (var f = 0; f < folderNames.length; f++) {
+      var folders = DriveApp.getFoldersByName(folderNames[f]);
+      while (folders.hasNext()) {
+        var folder = folders.next();
+        var files = folder.getFiles();
+        while (files.hasNext()) {
+          var file = files.next();
+          var fName = file.getName();
+          if ((reportId && fName.indexOf(reportId) !== -1) || (filename && fName === filename)) {
+            file.setTrashed(true);
+            deletedCount++;
+          }
+        }
+      }
+    }
+
+    // 2. Tìm kiếm file toàn cục nếu chưa tìm thấy
+    if (deletedCount === 0 && (filename || reportId)) {
+      var queryTerm = filename || reportId;
+      var searchFiles = DriveApp.searchFiles("title contains '" + queryTerm.replace(/'/g, "\'") + "' and trashed = false");
+      while (searchFiles.hasNext()) {
+        var sFile = searchFiles.next();
+        sFile.setTrashed(true);
+        deletedCount++;
+      }
+    }
+  } catch (eDrive) {
+    Logger.log("Lỗi xóa file báo cáo trên Google Drive: " + eDrive.toString());
+  }
+
+  return {
+    status: "ok",
+    success: true,
+    deleted_count: deletedCount,
+    reportId: reportId,
+    filename: filename,
+    message: "Đã xóa " + deletedCount + " tệp báo cáo trên Google Drive."
+  };
+}
+

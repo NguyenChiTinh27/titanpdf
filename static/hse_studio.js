@@ -2342,7 +2342,15 @@
       const resp = await fetch("/api/hse/reports/list");
       if (!resp.ok) return;
       const data = await resp.json();
-      const count = (data.reports || []).length;
+      let reports = data.reports || [];
+      try {
+        const deletedReports = JSON.parse(localStorage.getItem("deleted_hse_report_ids") || "[]");
+        if (deletedReports.length > 0) {
+          const delSet = new Set(deletedReports.map(x => String(x).toLowerCase()));
+          reports = reports.filter(r => !delSet.has(String(r.filename || "").toLowerCase()) && !delSet.has(String(r.id || "").toLowerCase()));
+        }
+      } catch (_) {}
+      const count = reports.length;
       
       const badge = $("#hse-reports-count-badge");
       if (badge) badge.textContent = count;
@@ -2381,7 +2389,15 @@
       const resp = await fetch("/api/hse/reports/list");
       if (!resp.ok) throw new Error("Không thể tải danh sách báo cáo từ máy chủ.");
       const data = await resp.json();
-      savedReportsList = data.reports || [];
+      let rawReports = data.reports || [];
+      try {
+        const deletedReports = JSON.parse(localStorage.getItem("deleted_hse_report_ids") || "[]");
+        if (deletedReports.length > 0) {
+          const delSet = new Set(deletedReports.map(x => String(x).toLowerCase()));
+          rawReports = rawReports.filter(r => !delSet.has(String(r.filename || "").toLowerCase()) && !delSet.has(String(r.id || "").toLowerCase()));
+        }
+      } catch (_) {}
+      savedReportsList = rawReports;
       
       const countEl = $("#hse-reports-modal-count");
       if (countEl) countEl.textContent = `${savedReportsList.length} báo cáo`;
@@ -2646,6 +2662,17 @@
 
     try {
       setLoading(true, "Đang xóa bản lưu báo cáo...");
+
+      // 1. Lưu Tombstone vào localStorage để UI không bao giờ nạp lại báo cáo này
+      const repId = filename.replace(/^HSE_Report_[^_]+_/, "").replace(/\.json$/, "").replace(/\.docx$/, "").replace(/_Improvement$/, "");
+      try {
+        const deletedReports = JSON.parse(localStorage.getItem("deleted_hse_report_ids") || "[]");
+        if (!deletedReports.includes(filename)) deletedReports.push(filename);
+        if (repId && !deletedReports.includes(repId)) deletedReports.push(repId);
+        localStorage.setItem("deleted_hse_report_ids", JSON.stringify(deletedReports));
+      } catch (_) {}
+
+      // 2. Gọi API DELETE xuống Backend Server
       const resp = await fetch(`/api/hse/reports/${encodeURIComponent(filename)}`, {
         method: "DELETE"
       });
@@ -2653,6 +2680,25 @@
         const err = await resp.json().catch(() => ({}));
         throw new Error(err.detail || err.error || "Không thể xóa bản ghi.");
       }
+
+      // 3. Gửi trực tiếp lên GAS Web App action: 'deleteReport'
+      const savedGasUrl = localStorage.getItem("hse_gas_web_app_url") || localStorage.getItem("gas_web_app_url") || "";
+      if (savedGasUrl) {
+        try {
+          fetch(savedGasUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "deleteReport",
+              filename: filename,
+              id: repId,
+              timestamp: new Date().toISOString()
+            })
+          }).catch(() => {});
+        } catch (_) {}
+      }
+
       showToast(`✓ Đã xóa báo cáo "${filename}" thành công.`);
       await loadHseReportsList();
       await updateHseSavedCountBadge();
@@ -2661,7 +2707,7 @@
       if (window.HseDefectTracker && typeof window.HseDefectTracker.loadDefects === 'function') {
         window.HseDefectTracker.loadDefects(false);
       }
-      window.dispatchEvent(new CustomEvent('hse-report-deleted', { detail: { filename } }));
+      window.dispatchEvent(new CustomEvent('hse-report-deleted', { detail: { filename, id: repId } }));
     } catch (err) {
       showToast(`Lỗi xóa: ${err.message}`, true);
     } finally {

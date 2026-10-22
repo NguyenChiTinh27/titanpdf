@@ -859,14 +859,20 @@ def download_report_docx_endpoint(filename: str):
 @hse_router.get("/reports")
 @hse_router.get("/reports/list")
 def list_reports_endpoint():
+    from core.hse_defect_tracker import HSETombstoneManager
     reports = []
     for file in sorted(REPORTS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if HSETombstoneManager.is_report_deleted(file.stem, file.name):
+            continue
         try:
             with open(file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
-            clean_d = (data.get("metadata", {}).get("date") or "").split("T")[0]
             rep_id = data.get("id", file.stem)
+            if HSETombstoneManager.is_report_deleted(rep_id, file.name):
+                continue
+
+            clean_d = (data.get("metadata", {}).get("date") or "").split("T")[0]
             rep_type = data.get("reportType") or data.get("mode", "inspection")
             suffix = "_Improvement" if rep_type == "improvement" else ""
             
@@ -924,40 +930,87 @@ def load_report_endpoint(filename: Optional[str] = None, id: Optional[str] = Non
 @hse_router.delete("/reports/delete")
 def delete_report_endpoint(filename: Optional[str] = None, id: Optional[str] = None):
     target_identifier = filename or id
-    deleted = False
+    if not target_identifier:
+        raise HTTPException(status_code=400, detail="Thiếu tên tệp hoặc mã báo cáo cần xóa.")
+
+    from core.hse_defect_tracker import HSETombstoneManager, DefectAggregatorService
+
+    # 1. Ghi nhận Tombstone ngay lập tức để chống xuất hiện lại từ bất kỳ nguồn nào
+    HSETombstoneManager.add_deleted_report(target_identifier, filename or "")
+
+    # 2. Xóa tệp vật lý tại REPORTS_DIR (cả .json và .docx)
     if target_identifier:
         direct = REPORTS_DIR / target_identifier
         if direct.exists() and direct.is_file():
-            direct.unlink()
-            deleted = True
+            try:
+                direct.unlink()
+            except Exception:
+                pass
             docx_cand = direct.with_suffix(".docx")
             if docx_cand.exists():
                 try:
                     docx_cand.unlink()
                 except Exception:
                     pass
-        else:
-            for f in REPORTS_DIR.glob("*.json"):
-                if target_identifier in f.name:
+        for f in list(REPORTS_DIR.glob("*.json")):
+            if target_identifier in f.name:
+                try:
                     f.unlink()
-                    deleted = True
-                    docx_cand = f.with_suffix(".docx")
-                    if docx_cand.exists():
-                        try:
-                            docx_cand.unlink()
-                        except Exception:
-                            pass
-                    break
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Không tìm thấy bản ghi để xóa.")
+                except Exception:
+                    pass
+                docx_cand = f.with_suffix(".docx")
+                if docx_cand.exists():
+                    try:
+                        docx_cand.unlink()
+                    except Exception:
+                        pass
 
+    # 3. Xóa tệp tương ứng trên Google Drive Desktop nếu có kết nối
+    drive_dir = detect_google_drive()
+    if drive_dir and drive_dir.exists():
+        try:
+            target_folders = [
+                drive_dir if drive_dir.name in ("HSE_ZhanChen_Storage", "HSE_BaoCao") else (drive_dir / "HSE_ZhanChen_Storage"),
+                drive_dir if drive_dir.name in ("HSE_ZhanChen_Storage", "HSE_BaoCao") else (drive_dir / "HSE_BaoCao")
+            ]
+            for folder in target_folders:
+                if folder.exists():
+                    for f in list(folder.glob("*")):
+                        if target_identifier in f.name:
+                            try:
+                                f.unlink()
+                            except Exception:
+                                pass
+        except Exception as e_drive:
+            print(f"[HSE_DRIVE_DELETE_WARNING] Lỗi xóa tệp trên Google Drive: {e_drive}", flush=True)
+
+    # 4. Gỡ bỏ sự cố liên quan trong Master Defect Tracker
     try:
-        from core.hse_defect_tracker import DefectAggregatorService
         DefectAggregatorService.remove_report_from_defect_tracker(target_identifier)
     except Exception as _rem_err:
         print(f"[HSE_DEFECT_REMOVE_WARNING] Error removing report from tracker: {_rem_err}", flush=True)
 
-    return {"success": True, "message": "Đã xóa bản lưu thành công."}
+    # 5. Gửi yêu cầu xóa file lên Google Apps Script Web App
+    gas_url = DefectAggregatorService.get_gas_url()
+    try:
+        import requests
+        gas_payload = {
+            "action": "deleteReport",
+            "id": target_identifier,
+            "filename": filename or target_identifier,
+            "timestamp": datetime.now().isoformat()
+        }
+        requests.post(
+            gas_url,
+            data=json.dumps(gas_payload, ensure_ascii=False),
+            headers={"Content-Type": "text/plain;charset=utf-8"},
+            allow_redirects=True,
+            timeout=5.0
+        )
+    except Exception as _gas_err:
+        print(f"[HSE_GAS_DELETE_WARNING] Error sending deleteReport to GAS: {_gas_err}", flush=True)
+
+    return {"success": True, "message": "Đã xóa vĩnh viễn bản lưu báo cáo trên hệ thống và Google Drive."}
 
 
 @hse_router.post("/drive/upload_image")
@@ -1144,23 +1197,23 @@ def get_defects_endpoint(
     force_reconcile: bool = False
 ):
     from core.hse_defect_tracker import DefectAggregatorService
-    res = DefectAggregatorService.aggregate_all_defects(
+    return DefectAggregatorService.aggregate_all_defects(
         month_filter=month,
         dept_filter=department,
         status_filter=status,
         search_query=search,
         force_reconcile=force_reconcile
     )
-    # Tự động hòa giải / backfill nếu tracker rỗng mà thư mục có báo cáo
-    if res.get("total", 0) == 0 and any(REPORTS_DIR.glob("*.json")):
-        DefectAggregatorService.reconcile_all_reports_to_tracker()
-        res = DefectAggregatorService.aggregate_all_defects(
-            month_filter=month,
-            dept_filter=department,
-            status_filter=status,
-            search_query=search
-        )
-    return res
+
+
+@hse_router.delete("/defects/{defect_id}")
+@hse_router.post("/defects/delete")
+def delete_defect_endpoint(defect_id: Optional[str] = None, id: Optional[str] = None):
+    target_id = defect_id or id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Thiếu mã sự cố cần xóa.")
+    from core.hse_defect_tracker import DefectAggregatorService
+    return DefectAggregatorService.delete_single_defect(target_id)
 
 
 @hse_router.get("/defects/reconcile")

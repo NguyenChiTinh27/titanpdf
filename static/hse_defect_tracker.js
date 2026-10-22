@@ -89,14 +89,26 @@
       if (!resp.ok) throw new Error(`Lỗi tải dữ liệu (Mã ${resp.status})`);
       const data = await resp.json();
 
-      state.allDefects = data.defects || [];
+      let fetchedDefects = data.defects || [];
+
+      // Lọc qua Tombstones trong localStorage để chống phục hồi dữ liệu đã xóa
+      try {
+        const deletedIds = JSON.parse(localStorage.getItem("deleted_hse_defect_ids") || "[]");
+        if (deletedIds.length > 0) {
+          const delSet = new Set(deletedIds.map(x => String(x).trim().toUpperCase()));
+          fetchedDefects = fetchedDefects.filter(d => !delSet.has(String(d.id || "").trim().toUpperCase()) && !delSet.has(String(d.code || "").trim().toUpperCase()));
+        }
+      } catch (_) {}
+
+      const isCleared = localStorage.getItem("IS_DB_CLEARED_HSE") === "true" || localStorage.getItem("HSE_TRACKER_CLEARED") === "true";
+      if (isCleared && (data.cleared || fetchedDefects.length === 0)) {
+        state.allDefects = [];
+      } else {
+        state.allDefects = fetchedDefects;
+      }
+
       state.availableMonths = data.available_months || [];
       state.availableDepts = data.available_departments || [];
-
-      // Tự động thử lại hòa giải 1 lần nếu danh sách trống
-      if (state.allDefects.length === 0 && !forceReconcile) {
-        return await loadDefects(false, true);
-      }
 
       // Update badge on main header
       const badge = $("#nav-hse-tracker-count-badge");
@@ -299,15 +311,20 @@
           </div>
 
           <!-- Card Footer -->
-          <div class="hse-defect-footer">
+          <div class="hse-defect-footer" style="display:flex; justify-content:space-between; align-items:center;">
             <label class="hse-checkbox-label ${isDone ? 'done' : 'pending'}">
               <input type="checkbox" data-action="quick-toggle" data-id="${escapeHtml(d.id)}" ${isDone ? 'checked' : ''}>
               <span>${isDone ? `✓ Đã cải thiện (${escapeHtml(d.improve_date || 'Xong')})` : '✕ Chờ xử lý'}</span>
             </label>
 
-            <button type="button" class="hse-btn-detail" data-action="open-detail" data-id="${escapeHtml(d.id)}">
-              Chi Tiết / 详情
-            </button>
+            <div style="display:inline-flex; gap:6px; align-items:center;">
+              <button type="button" class="hse-btn-detail" data-action="open-detail" data-id="${escapeHtml(d.id)}">
+                Chi Tiết / 详情
+              </button>
+              <button type="button" class="hse-btn-delete-defect" data-action="delete-defect" data-id="${escapeHtml(d.id)}" title="Xóa vĩnh viễn sự cố này" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.15s;">
+                🗑️
+              </button>
+            </div>
           </div>
         </article>
       `;
@@ -348,12 +365,15 @@
             ${escapeHtml(d.improve_date || '---')}
           </td>
           <td style="text-align:right; white-space:nowrap;">
-            <div style="display:inline-flex; gap:6px;">
+            <div style="display:inline-flex; gap:6px; align-items:center;">
               <button type="button" class="hse-btn-detail" data-action="quick-toggle-btn" data-id="${escapeHtml(d.id)}" data-improved="${isDone}">
                 ${isDone ? 'Hủy hoàn thành' : '✓ Hoàn thành'}
               </button>
               <button type="button" class="hse-btn-detail" data-action="open-detail" data-id="${escapeHtml(d.id)}">
                 Chi Tiết
+              </button>
+              <button type="button" class="hse-btn-delete-defect" data-action="delete-defect" data-id="${escapeHtml(d.id)}" title="Xóa vĩnh viễn sự cố này" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.15s;">
+                🗑️
               </button>
             </div>
           </td>
@@ -693,6 +713,71 @@
     syncGasNow();
   }
 
+    async function deleteSingleDefect(defectId) {
+    if (!defectId) return;
+    if (!confirm(`⚠️ Bạn có chắc chắn muốn XÓA VĨNH VIỄN sự cố [${defectId}]?\n\nHành động này sẽ xóa sự cố khỏi hệ thống và đồng bộ xóa trên Google Sheet.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true, `Đang xóa sự cố ${defectId}...`);
+
+      // 1. Lưu Tombstone vào localStorage để UI không bao giờ nạp lại
+      try {
+        const deletedIds = JSON.parse(localStorage.getItem("deleted_hse_defect_ids") || "[]");
+        if (!deletedIds.includes(defectId)) {
+          deletedIds.push(defectId);
+          localStorage.setItem("deleted_hse_defect_ids", JSON.stringify(deletedIds));
+        }
+      } catch (_) {}
+
+      // 2. Gửi request DELETE tới Backend Server
+      try {
+        await fetch(`/api/hse/defects/${encodeURIComponent(defectId)}`, {
+          method: "DELETE"
+        });
+      } catch (beErr) {
+        console.warn("Backend defect delete error:", beErr);
+      }
+
+      // 3. Gửi trực tiếp lên GAS Web App nếu có URL
+      const savedGasUrl = localStorage.getItem("hse_gas_web_app_url") || localStorage.getItem("gas_web_app_url") || "";
+      if (savedGasUrl) {
+        try {
+          fetch(savedGasUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "deleteDefect",
+              defectId: defectId,
+              code: defectId,
+              timestamp: new Date().toISOString()
+            })
+          }).catch(() => {});
+        } catch (_) {}
+      }
+
+      // 4. Cập nhật state in-memory
+      state.allDefects = state.allDefects.filter(d => d.id !== defectId && d.code !== defectId);
+      applyFilters();
+
+      // Cập nhật badge
+      const badge = $("#nav-hse-tracker-count-badge");
+      if (badge) {
+        const total = state.allDefects.length;
+        badge.textContent = `${total} LỖI`;
+      }
+
+      closeDetailModal();
+      showToast(`🗑️ Đã xóa vĩnh viễn sự cố [${defectId}]!`);
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function clearAllDefects() {
     if (!confirm("⚠️ BẠN CÓ CHẮC CHẮN MUỐN XÓA TẤT CẢ SỰ CỐ LỖI HSE?\n\nHành động này sẽ xóa sạch toàn bộ sự cố lỗi HSE trên hệ thống và làm trống Google Sheet.\n\nBấm OK để tiếp tục, hoặc Hủy để dừng.")) {
       return;
@@ -715,7 +800,25 @@
       try {
         localStorage.setItem("IS_DB_CLEARED_HSE", "true");
         localStorage.setItem("IS_DB_CLEARED", "true");
+        localStorage.setItem("HSE_TRACKER_CLEARED", "true");
+        localStorage.setItem("deleted_hse_defect_ids", "[]");
       } catch (_) {}
+
+      // Gửi trực tiếp lên GAS Web App action clearAllDefects
+      const savedGasUrl = localStorage.getItem("hse_gas_web_app_url") || localStorage.getItem("gas_web_app_url") || "";
+      if (savedGasUrl) {
+        try {
+          fetch(savedGasUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "clearAllDefects",
+              timestamp: new Date().toISOString()
+            })
+          }).catch(() => {});
+        } catch (_) {}
+      }
 
       state.allDefects = [];
       state.filteredDefects = [];
@@ -854,6 +957,13 @@
         return;
       }
 
+      // Delete single defect button
+      const delBtn = e.target.closest("[data-action='delete-defect']");
+      if (delBtn) {
+        deleteSingleDefect(delBtn.dataset.id);
+        return;
+      }
+
       // Open detail modal
       const dBtn = e.target.closest("[data-action='open-detail']");
       if (dBtn) {
@@ -866,6 +976,11 @@
     $("#modal-close-btn")?.addEventListener("click", closeDetailModal);
     $("#modal-cancel-btn")?.addEventListener("click", closeDetailModal);
     $("#modal-save-btn")?.addEventListener("click", saveDetailModal);
+    $("#modal-delete-defect-btn")?.addEventListener("click", () => {
+      if (state.currentDetailDefect) {
+        deleteSingleDefect(state.currentDetailDefect.code || state.currentDetailDefect.id);
+      }
+    });
 
     // Close on backdrop click
     const detailModal = $("#hse-tracker-detail-modal");
@@ -943,6 +1058,8 @@
 
   window.HseDefectTracker = {
     loadDefects,
+    deleteSingleDefect,
+    clearAllDefects,
     applyFilters,
     exportMasterExcel,
     syncGasNow,

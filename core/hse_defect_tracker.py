@@ -61,8 +61,107 @@ class DefectUpdatePayload(BaseModel):
     date: Optional[str] = ""
 
 
+TOMBSTONES_FILE = DATA_DIR / "hse_tombstones.json"
+
+
+class HSETombstoneManager:
+    """Quản lý các bản ghi đã xóa (Tombstones) để chống phục hồi lại từ file cũ/Git/cache/GAS."""
+
+    @staticmethod
+    def load_tombstones() -> Dict[str, Any]:
+        if TOMBSTONES_FILE.exists():
+            try:
+                with open(TOMBSTONES_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {
+            "deleted_report_ids": [],
+            "deleted_report_filenames": [],
+            "deleted_defect_ids": [],
+            "deleted_source_item_keys": [],
+            "cleared_all_defects": False,
+            "cleared_all_defects_at": None
+        }
+
+    @staticmethod
+    def save_tombstones(data: Dict[str, Any]):
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            with open(TOMBSTONES_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not save tombstones: {e}")
+
+    @classmethod
+    def add_deleted_report(cls, report_id: str, filename: str = ""):
+        tb = cls.load_tombstones()
+        rep_ids = set(tb.get("deleted_report_ids", []))
+        rep_files = set(tb.get("deleted_report_filenames", []))
+        if report_id:
+            rep_ids.add(str(report_id).strip())
+        if filename:
+            rep_files.add(str(filename).strip())
+        tb["deleted_report_ids"] = list(rep_ids)
+        tb["deleted_report_filenames"] = list(rep_files)
+        cls.save_tombstones(tb)
+
+    @classmethod
+    def is_report_deleted(cls, report_id: str = "", filename: str = "") -> bool:
+        tb = cls.load_tombstones()
+        del_ids = [str(x).strip().lower() for x in tb.get("deleted_report_ids", [])]
+        del_files = [str(x).strip().lower() for x in tb.get("deleted_report_filenames", [])]
+        r_id = str(report_id).strip().lower() if report_id else ""
+        f_name = str(filename).strip().lower() if filename else ""
+        if r_id and (r_id in del_ids or any(r_id in df for df in del_files)):
+            return True
+        if f_name and (f_name in del_files or any(f_name in df for df in del_files)):
+            return True
+        return False
+
+    @classmethod
+    def add_deleted_defect(cls, defect_id: str, source_item_key: str = ""):
+        tb = cls.load_tombstones()
+        def_ids = set(tb.get("deleted_defect_ids", []))
+        src_keys = set(tb.get("deleted_source_item_keys", []))
+        if defect_id:
+            def_ids.add(str(defect_id).strip().upper())
+        if source_item_key:
+            src_keys.add(str(source_item_key).strip())
+        tb["deleted_defect_ids"] = list(def_ids)
+        tb["deleted_source_item_keys"] = list(src_keys)
+        cls.save_tombstones(tb)
+
+    @classmethod
+    def is_defect_deleted(cls, defect_id: str = "", source_item_key: str = "", source_report_id: str = "") -> bool:
+        tb = cls.load_tombstones()
+        if tb.get("cleared_all_defects") is True:
+            return True
+        del_def_ids = [str(x).strip().upper() for x in tb.get("deleted_defect_ids", [])]
+        if defect_id and str(defect_id).strip().upper() in del_def_ids:
+            return True
+        if source_item_key and str(source_item_key).strip() in tb.get("deleted_source_item_keys", []):
+            return True
+        if source_report_id and cls.is_report_deleted(source_report_id):
+            return True
+        return False
+
+    @classmethod
+    def record_clear_all_defects(cls):
+        tb = cls.load_tombstones()
+        tb["cleared_all_defects"] = True
+        tb["cleared_all_defects_at"] = datetime.now().isoformat()
+        cls.save_tombstones(tb)
+
+    @classmethod
+    def reset_clear_all_for_new_report(cls):
+        tb = cls.load_tombstones()
+        tb["cleared_all_defects"] = False
+        cls.save_tombstones(tb)
+
+
 class DefectAggregatorService:
-    """Master defect aggregator with 2-way sync and persistent caching."""
+    """Master defect aggregator with 2-way sync, tombstone filtering and persistent caching."""
 
     @staticmethod
     def get_gas_url() -> str:
@@ -146,17 +245,14 @@ class DefectAggregatorService:
         """Chuẩn hóa mọi định dạng ngày nhập vào về chuẩn (YYYY-MM-DD, YYYY-MM)."""
         if raw_date:
             s = str(raw_date).split("T")[0].strip()
-            # YYYY-MM-DD hoặc YYYY/MM/DD
             m = re.match(r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$", s)
             if m:
                 clean = f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
                 return clean, clean[:7]
-            # DD-MM-YYYY hoặc DD/MM/YYYY
             m = re.match(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$", s)
             if m:
                 clean = f"{int(m.group(3)):04d}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
                 return clean, clean[:7]
-            # Timestamp (ms hoặc s)
             try:
                 ts = float(s)
                 if ts > 1000000000000:
@@ -203,34 +299,22 @@ class DefectAggregatorService:
 
     @classmethod
     def reconcile_all_reports_to_tracker(cls) -> Dict[str, Any]:
-        """Quét và hòa giải toàn bộ vi phạm từ data/hse_reports vào Tracker."""
-        logger.info("[HSE_TRACKER] Bắt đầu quét & hòa giải toàn bộ báo cáo vào Defect Tracker...")
-        try:
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
-                json.dump({"cleared": False, "reconciled_at": datetime.now().isoformat()}, sf, indent=2)
-        except Exception as e:
-            logger.warning(f"Could not update tracker state file: {e}")
-
+        """Quét và hòa giải toàn bộ vi phạm từ data/hse_reports vào Tracker (tôn trọng tombstones)."""
+        logger.info("[HSE_TRACKER] Chạy quét & hòa giải báo cáo vào Defect Tracker...")
         data = cls.aggregate_all_defects(force_reconcile=True)
-        logger.info(f"[HSE_TRACKER] Đã hòa giải thành công {data.get('total', 0)} sự cố.")
         return {
             "success": True,
             "total_defects": data.get("total", 0),
             "kpis": data.get("kpis", {}),
             "available_months": data.get("available_months", []),
-            "message": f"Đã hòa giải thành công {data.get('total', 0)} sự cố từ báo cáo đã lưu."
+            "message": f"Đã hòa giải thành công {data.get('total', 0)} sự cố hợp lệ."
         }
 
     @classmethod
     def sync_report_to_defect_tracker(cls, report_data: Dict[str, Any], filename: str = "") -> Dict[str, Any]:
         """Tự động đồng bộ tức thì khi lưu hoặc cập nhật báo cáo trong HSE Report Studio."""
-        try:
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
-                json.dump({"cleared": False, "updated_at": datetime.now().isoformat()}, sf, indent=2)
-        except Exception:
-            pass
+        # Khi lưu báo cáo mới, gỡ cờ cleared để sự cố của báo cáo mới được hiển thị
+        HSETombstoneManager.reset_clear_all_for_new_report()
 
         rep_mode = report_data.get("reportType") or report_data.get("mode", "inspection")
         rep_id = report_data.get("id") or (filename.replace(".json", "") if filename else "")
@@ -262,15 +346,108 @@ class DefectAggregatorService:
 
     @classmethod
     def remove_report_from_defect_tracker(cls, report_identifier: str) -> Dict[str, Any]:
-        """Gỡ bỏ các sự cố thuộc báo cáo bị xóa khỏi Defect Tracker."""
+        """Gỡ bỏ các sự cố thuộc báo cáo bị xóa khỏi Defect Tracker và ghi nhận Tombstone."""
         rep_stem = report_identifier.replace(".json", "")
+        HSETombstoneManager.add_deleted_report(rep_stem, report_identifier)
+
+        # Xóa các overrides liên quan
         overrides = cls.load_overrides()
         keys_to_remove = [k for k in overrides if rep_stem in k]
         for k in keys_to_remove:
             del overrides[k]
         if keys_to_remove:
             cls.save_overrides(overrides)
+
         return cls.aggregate_all_defects(force_reconcile=True)
+
+    @classmethod
+    def delete_single_defect(cls, defect_id: str) -> Dict[str, Any]:
+        """Xóa vĩnh viễn 1 sự cố khỏi Master Defect Tracker, Overrides và Google Sheet."""
+        code = str(defect_id).strip()
+        all_data = cls.aggregate_all_defects(force_reconcile=True)
+        matched = next((d for d in all_data["defects"] if d.get("code") == code or d.get("id") == code), None)
+
+        src_key = matched.get("source_item_key", "") if matched else ""
+        HSETombstoneManager.add_deleted_defect(code, src_key)
+
+        # Xóa override
+        overrides = cls.load_overrides()
+        changed = False
+        if code in overrides:
+            del overrides[code]
+            changed = True
+        if src_key and src_key in overrides:
+            del overrides[src_key]
+            changed = True
+        if changed:
+            cls.save_overrides(overrides)
+
+        # Gửi lệnh xóa lên Google Apps Script
+        gas_url = cls.get_gas_url()
+        try:
+            gas_payload = {
+                "action": "deleteDefect",
+                "defectId": code,
+                "code": code,
+                "timestamp": datetime.now().isoformat()
+            }
+            requests.post(
+                gas_url,
+                data=json.dumps(gas_payload, ensure_ascii=False),
+                headers={"Content-Type": "text/plain;charset=utf-8"},
+                allow_redirects=True,
+                timeout=5.0
+            )
+        except Exception:
+            pass
+
+        return cls.aggregate_all_defects(force_reconcile=True)
+
+    @classmethod
+    def clear_all_defects(cls) -> Dict[str, Any]:
+        """Xóa vĩnh viễn toàn bộ sự cố lỗi HSE Tracker, lưu Tombstone và xóa Google Sheet."""
+        # 1. Đặt cờ cleared trong Tombstones và Tracker State
+        HSETombstoneManager.record_clear_all_defects()
+        try:
+            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
+                json.dump({"cleared": True, "cleared_at": datetime.now().isoformat()}, sf, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Could not write tracker state file: {e}")
+
+        # 2. Xóa sạch file overrides
+        try:
+            with open(OVERRIDES_FILE, "w", encoding="utf-8") as of:
+                json.dump({}, of, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Could not clear overrides file: {e}")
+
+        # 3. Gửi lệnh xóa sạch lên Google Apps Script
+        gas_url = cls.get_gas_url()
+        try:
+            gas_payload = {
+                "action": "clearAllDefects",
+                "timestamp": datetime.now().isoformat()
+            }
+            requests.post(
+                gas_url,
+                data=json.dumps(gas_payload, ensure_ascii=False),
+                headers={"Content-Type": "text/plain;charset=utf-8"},
+                allow_redirects=True,
+                timeout=5.0
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": "Đã xóa sạch toàn bộ sự cố HSE Tracker thành công!",
+            "cleared": True,
+            "total": 0,
+            "defects": [],
+            "available_months": [],
+            "available_departments": [],
+            "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
+        }
 
     @classmethod
     def aggregate_all_defects(
@@ -281,12 +458,24 @@ class DefectAggregatorService:
         search_query: Optional[str] = None,
         force_reconcile: bool = False
     ) -> Dict[str, Any]:
-        """Tổng hợp toàn diện danh sách sự cố Master Defect Tracker & chỉ số KPIs."""
+        """Tổng hợp danh sách sự cố Master Defect Tracker (tôn trọng 100% Tombstones)."""
+        tb = HSETombstoneManager.load_tombstones()
+
+        # Nếu người dùng đã xóa tất cả, trả về rỗng TUYỆT ĐỐI không phục hồi
+        if not force_reconcile and tb.get("cleared_all_defects") is True:
+            return {
+                "total": 0,
+                "defects": [],
+                "available_months": [],
+                "available_departments": [],
+                "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
+            }
+
         overrides = cls.load_overrides()
         baseline_defects: List[Dict[str, Any]] = []
 
-        # Nguồn 1: Sự cố nền tháng 09/2026 (17 lỗi chuẩn)
-        if EXTRACTED_DEFECTS_JSON.exists():
+        # Nguồn 1: Sự cố nền tháng 09/2026 (chỉ nạp nếu chưa bị xóa)
+        if not tb.get("cleared_all_defects") and EXTRACTED_DEFECTS_JSON.exists():
             try:
                 with open(EXTRACTED_DEFECTS_JSON, "r", encoding="utf-8") as jf:
                     extracted = json.load(jf)
@@ -301,6 +490,10 @@ class DefectAggregatorService:
 
                 for idx, item in enumerate(extracted, 1):
                     code = f"DEF-202609-{idx:02d}"
+                    src_key = f"baseline_202609_{idx}"
+                    if HSETombstoneManager.is_defect_deleted(code, src_key, "hse_report_2026_09"):
+                        continue
+
                     dept_full, dept_k, dept_icon = cls.normalize_department(item.get("zh_dept", ""), item.get("vn_dept", ""))
                     zh_issue = cls.clean_text(item.get("zh_issue", ""))
                     vn_issue = cls.clean_text(item.get("vn_issue", ""))
@@ -335,7 +528,7 @@ class DefectAggregatorService:
                         "source_type": "baseline",
                         "source_file": "extracted_defects.json",
                         "source_report_id": "hse_report_2026_09",
-                        "source_item_key": f"baseline_202609_{idx}",
+                        "source_item_key": src_key,
                         "report_id": "hse_report_2026_09"
                     }
                     baseline_defects.append(defect_obj)
@@ -348,9 +541,16 @@ class DefectAggregatorService:
 
         if HSE_REPORTS_DIR.exists():
             for report_file in sorted(HSE_REPORTS_DIR.glob("*.json")):
+                if HSETombstoneManager.is_report_deleted(report_file.stem, report_file.name):
+                    continue
+
                 try:
                     with open(report_file, "r", encoding="utf-8") as rf:
                         rep = json.load(rf)
+
+                    rep_id = rep.get("id") or report_file.stem
+                    if HSETombstoneManager.is_report_deleted(rep_id, report_file.name):
+                        continue
 
                     rep_mode = rep.get("reportType") or rep.get("mode", "inspection")
                     if rep_mode == "improvement":
@@ -358,13 +558,18 @@ class DefectAggregatorService:
                         continue
 
                     meta = rep.get("metadata", {})
-                    rep_id = rep.get("id") or report_file.stem
                     raw_date = meta.get("date") or rep.get("date")
                     rep_date, rep_month = cls.normalize_date(raw_date, report_file.name)
 
-                    # Bóc tách hạng mục vi phạm từ findings (SSOT khớp 100% cột Phát Hiện)
+                    # Bóc tách hạng mục vi phạm từ findings
                     findings = rep.get("findings", [])
                     for f_idx, f in enumerate(findings, 1):
+                        f_id = f.get("id") or f"finding_{f_idx}"
+                        source_item_key = f"{rep_id}_{f_id}"
+
+                        if HSETombstoneManager.is_defect_deleted("", source_item_key, rep_id):
+                            continue
+
                         zh_issue = cls.clean_text(f.get("issueZh") or f.get("suggestion") or "")
                         vn_issue = cls.clean_text(f.get("issueVi") or "")
                         img_b = cls.clean_image_uri(f.get("imageData") or f.get("driveDirectUrl") or f.get("driveViewUrl") or "")
@@ -372,9 +577,6 @@ class DefectAggregatorService:
 
                         if not zh_issue and not vn_issue and not img_b:
                             continue
-
-                        f_id = f.get("id") or f"finding_{f_idx}"
-                        source_item_key = f"{rep_id}_{f_id}"
 
                         dept_full, dept_k, dept_icon = cls.normalize_department(
                             f.get("departmentZh", "") or meta.get("departmentZh", ""),
@@ -415,8 +617,10 @@ class DefectAggregatorService:
                 except Exception as e:
                     logger.warning(f"Error parsing report {report_file}: {e}")
 
-        # Hòa giải các báo cáo Phục Tra Cải Thiện vào lỗi tương ứng của báo cáo gốc
+        # Hòa giải các báo cáo Phục Tra Cải Thiện
         for imp_filename, imp_rep in improvement_records:
+            if HSETombstoneManager.is_report_deleted(imp_rep.get("id", ""), imp_filename):
+                continue
             imp_meta = imp_rep.get("metadata", {})
             orig_id = imp_meta.get("originalReportId") or imp_rep.get("originalReportId")
             imp_raw_date = imp_meta.get("date") or imp_rep.get("date")
@@ -464,9 +668,21 @@ class DefectAggregatorService:
                 code = f"DEF-{month_compact}-{seq:02d}"
                 item["id"] = code
                 item["code"] = code
-                coded_report_defects.append(item)
+                if not HSETombstoneManager.is_defect_deleted(code, item.get("source_item_key"), item.get("source_report_id")):
+                    coded_report_defects.append(item)
 
         raw_defects = baseline_defects + coded_report_defects
+
+        # Lọc lại lần cuối theo Tombstones
+        final_defects: List[Dict[str, Any]] = []
+        for d in raw_defects:
+            c = d.get("code") or d.get("id")
+            sk = d.get("source_item_key", "")
+            s_rep = d.get("source_report_id", "")
+            if not HSETombstoneManager.is_defect_deleted(c, sk, s_rep):
+                final_defects.append(d)
+
+        raw_defects = final_defects
 
         # Áp dụng ghi đè người dùng (Overrides) theo source_item_key và code
         for d in raw_defects:
@@ -481,26 +697,6 @@ class DefectAggregatorService:
                     d["note"] = ov["note"]
                 if ov.get("img_after"):
                     d["img_after"] = cls.clean_image_uri(ov["img_after"])
-
-        # Kiểm tra cờ cleared trong TRACKER_STATE_FILE
-        if not force_reconcile and TRACKER_STATE_FILE.exists():
-            try:
-                with open(TRACKER_STATE_FILE, "r", encoding="utf-8") as sf:
-                    st = json.load(sf)
-                    if st.get("cleared") is True:
-                        if len(raw_defects) > 0:
-                            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf_out:
-                                json.dump({"cleared": False, "auto_recovered_at": datetime.now().isoformat()}, sf_out, indent=2)
-                        else:
-                            return {
-                                "total": 0,
-                                "defects": [],
-                                "available_months": [],
-                                "available_departments": [],
-                                "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
-                            }
-            except Exception:
-                pass
 
         # Sắp xếp danh sách: Ngày giảm dần, Mã giảm dần
         raw_defects.sort(key=lambda x: (x.get("date", ""), x.get("code", "")), reverse=True)
@@ -643,43 +839,6 @@ class DefectAggregatorService:
             "improved": payload.improved,
             "improveDate": now_str if payload.improved else "",
             "gas_synced": gas_synced
-        }
-
-    @classmethod
-    def clear_all_defects(cls) -> Dict[str, Any]:
-        """Xóa toàn bộ sự cố lỗi HSE Tracker và đặt cờ trạng thái trống."""
-        try:
-            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
-                json.dump({"cleared": True, "cleared_at": datetime.now().isoformat()}, sf, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Could not write tracker state file: {e}")
-
-        try:
-            with open(OVERRIDES_FILE, "w", encoding="utf-8") as of:
-                json.dump({}, of, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Could not clear overrides file: {e}")
-
-        gas_url = cls.get_gas_url()
-        try:
-            gas_payload = {
-                "action": "clearAllDefects",
-                "timestamp": datetime.now().isoformat()
-            }
-            requests.post(
-                gas_url,
-                data=json.dumps(gas_payload, ensure_ascii=False),
-                headers={"Content-Type": "text/plain;charset=utf-8"},
-                allow_redirects=True,
-                timeout=5.0
-            )
-        except Exception:
-            pass
-
-        return {
-            "success": True,
-            "message": "Đã xóa sạch toàn bộ sự cố HSE Tracker thành công!",
-            "cleared": True
         }
 
     @classmethod

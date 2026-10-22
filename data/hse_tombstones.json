@@ -1,0 +1,12 @@
+{
+  "deleted_report_ids": [],
+  "deleted_report_filenames": [],
+  "deleted_defect_ids": [
+    "DEF-202609-01"
+  ],
+  "deleted_source_item_keys": [
+    "baseline_202609_1"
+  ],
+  "cleared_all_defects": true,
+  "cleared_all_defects_at": "2026-10-22T16:26:41.094835"
+}

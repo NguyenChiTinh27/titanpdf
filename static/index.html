@@ -5001,9 +5001,14 @@
                 </div>
             </div>
 
-            <footer class="hse-modal-footer">
-                <button type="button" class="hse-modal-btn-cancel" id="modal-cancel-btn">Đóng</button>
-                <button type="button" class="hse-modal-btn-save" id="modal-save-btn">💾 Lưu & Cập Nhật</button>
+            <footer class="hse-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" id="modal-delete-defect-btn" class="hse-btn-delete-defect" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:8px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="Xóa vĩnh viễn sự cố này khỏi Tracker và Google Sheet">
+                    🗑️ Xóa Sự Cố Này
+                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="hse-modal-btn-cancel" id="modal-cancel-btn">Đóng</button>
+                    <button type="button" class="hse-modal-btn-save" id="modal-save-btn">💾 Lưu & Cập Nhật</button>
+                </div>
             </footer>
         </div>
     </div>
