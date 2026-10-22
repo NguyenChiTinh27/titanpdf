@@ -72,4 +72,5 @@ run_*.vbs
 data/HSE_ZhanChen_Storage/
 data/hse_reports/*
 !data/hse_reports/.gitkeep
+!data/hse_reports/HSE_Report_2026-09-30_*.json
 
