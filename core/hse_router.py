@@ -344,7 +344,52 @@ class HSEStorageManager:
 
 @hse_router.get("/health")
 def get_hse_health():
-    return {"status": "ok", "module": "hse_report_studio"}
+    from core.msds_gas_sync import MSDSGASSyncService, GAS_SYNC_STATE
+    from core.msds_intelligence import MSDSDatabase
+
+    try:
+        with MSDSDatabase.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT count(*) FROM chemicals WHERE deleted_at IS NULL")
+            row = cursor.fetchone()
+            local_db_records = row[0] if row else 0
+    except Exception:
+        local_db_records = 0
+
+    token_configured = MSDSGASSyncService.is_token_configured_from_env()
+    last_status = GAS_SYNC_STATE.get("last_sync_status", "uninitialized")
+
+    if last_status in ("auth_failed", "network_error", "error"):
+        health_status = "degraded"
+    else:
+        health_status = "ok"
+
+    return {
+        "status": health_status,
+        "module": "hse_report_studio",
+        "gas_sync_status": {
+            "status": last_status,
+            "last_sync_time": GAS_SYNC_STATE.get("last_sync_time"),
+            "last_sync_error": GAS_SYNC_STATE.get("last_sync_error"),
+            "retry_count": GAS_SYNC_STATE.get("retry_count", 0),
+            "token_source": GAS_SYNC_STATE.get("token_source", "none")
+        },
+        "token_configured": token_configured,
+        "local_db_records": local_db_records
+    }
+
+
+@hse_router.post("/reconcile")
+def post_hse_reconcile():
+    """Endpoint kick hoat hoa giai thu cong du lieu Google Sheets ve SQLite cache."""
+    from core.msds_gas_sync import MSDSGASSyncService, GAS_SYNC_STATE
+    result = MSDSGASSyncService.reconcile_on_startup()
+    is_ok = result.get("status") in ("reconciled_sync", "reconciled_empty", "success", "skipped", "ok")
+    return {
+        "status": "ok" if is_ok else "degraded",
+        "result": result,
+        "gas_sync_state": GAS_SYNC_STATE
+    }
 
 
 @hse_router.get("/checklist_schema")

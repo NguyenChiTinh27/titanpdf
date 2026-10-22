@@ -1,6 +1,6 @@
 {
   "webhook_url": "https://script.google.com/macros/s/AKfycbzc2q-vTj-8xCykJqEiH8a7rkfaLLpkpl6bOUuvJOBv86a5QpeqzT46twZuuyQkePg/exec",
-  "secret_token": "LUV_PDF_SYNC_KEY_2026",
+  "secret_token": "LUV_MSDS_SECURE_TOKEN_2026",
   "auto_sync": true,
   "drive_folder": "LUV_PDF_Exports/MSDS_Originals"
 }
