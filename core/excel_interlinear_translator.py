@@ -473,7 +473,7 @@ class ExcelInterlinearTranslator:
         )
 
         if is_valid_deepseek:
-            engine_used = "Động cơ Bảng tính Excel DOC-TRAN (openpyxl + DeepSeek-V4.1-Flash)"
+            engine_used = "Động cơ Bảng tính Excel DOC-TRAN (openpyxl + DeepSeek AI)"
             for i in range(0, total_unique, batch_size):
                 batch = unique_to_translate[i : i + batch_size]
                 try:

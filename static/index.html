@@ -1244,8 +1244,10 @@
                                 Mô hình Trí Tuệ Nhân Tạo (AI Model):
                             </label>
                             <select id="global-deepseek-model-select" class="select-box" onchange="handleAiModelChange()" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;">
-                                <option value="deepseek-chat" selected>⚡ DeepSeek-V4.1-Flash (Tốc độ cao - Viết &amp; Dịch HSE)</option>
-                                <option value="deepseek-reasoner">🧠 DeepSeek-V4.1-Reasoner (Suy luận chuyên sâu)</option>
+                                <option value="deepseek-chat" selected>🌟 gemini-2.5-flash (Google Multimodal Vision)</option>
+                                <option value="deepseek-chat">⚡ deepseek-chat (DeepSeek Official - Viết &amp; Dịch HSE)</option>
+                                <option value="deepseek-reasoner">🧠 deepseek-reasoner (DeepSeek Official - Suy luận R1)</option>
+                                <option value="gpt-4o-mini">🤖 gpt-4o-mini (OpenAI Multimodal Vision)</option>
                                 <option value="custom">✍️ Nhập mã Model tùy chỉnh...</option>
                             </select>
                             <div id="global-ai-custom-model-box" class="hidden" style="margin-top:8px;">
@@ -2401,7 +2403,7 @@
                 var clientSettings = {
                     theme: localStorage.getItem("luv_theme") || "clean",
                     deepseek_api_key: localStorage.getItem("deepseek_api_key") || "",
-                    deepseek_model: localStorage.getItem("deepseek_model") || "DeepSeek-V4.1-Flash",
+                    deepseek_model: localStorage.getItem("deepseek_model") || "deepseek-chat",
                     deepseek_provider: localStorage.getItem("deepseek_provider") || "deepseek"
                 };
 
@@ -3637,7 +3639,7 @@
                         </select>
                         <div id="msds-ai-key-status" style="margin-top:6px; font-size:11.5px; display:flex; align-items:center; justify-content:space-between; padding:5px 8px; border-radius:6px; background:#f1f5f9; border:1px solid #e2e8f0;">
                             <span id="msds-ai-key-text" style="color:#64748b; display:flex; align-items:center; gap:4px;">⏳ Đang kiểm tra API Key...</span>
-                            <button type="button" onclick="openSecurityModal(); switchSecTab('ai');" style="background:none; border:none; color:#0284c7; font-weight:700; font-size:11px; cursor:pointer; text-decoration:underline;">[Cài đặt Key]</button>
+                            
                         </div>
                     </div>
 
@@ -3701,7 +3703,7 @@
                         <div class="msds-guest-desc">Tra cứu 16 mục GHS, xem trước In-App & tải tệp an toàn hóa chất.</div>
                     </div>
                     <div class="msds-sidebar-danger-zone admin-only-ctrl" style="margin-top:12px; padding-top:10px; border-top:1px dashed #e2e8f0;">
-                        <button type="button" class="msds-btn-delete-all" onclick="openMsdsDeleteAllModal()" title="Xóa toàn bộ CSDL hóa chất CIL (yêu cầu mật khẩu quản trị: 270120)">
+                        <button type="button" class="msds-btn-delete-all admin-only-ctrl" id="btn-msds-delete-all" data-owner-only="true" onclick="openMsdsDeleteAllModal()" title="Xóa toàn bộ CSDL hóa chất CIL (yêu cầu mật khẩu quản trị: 270120)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                             <span>🗑️ Xóa Tất Cả CSDL</span>
                         </button>
@@ -4042,6 +4044,9 @@
                     <a id="modal-btn-download-original" class="btn-secondary" href="#" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; font-weight:700; color:#1d4ed8; border-color:#bfdbfe; background:#eff6ff;">
                         <span>📥 Tải File MSDS Gốc</span>
                     </a>
+                    <button type="button" id="modal-btn-preview-original" class="btn-secondary" onclick="openCurrentModalDriveViewer()" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; font-weight:700; color:#0369a1; border-color:#bae6fd; background:#f0f9ff; cursor:pointer;" title="Xem trực tiếp file Word hoặc PDF trên Google Drive Embed Viewer">
+                        <span>👁️ Xem Nhanh File Gốc</span>
+                    </button>
                     <a id="modal-btn-download-word" class="btn-primary" href="#" target="_blank" style="background:#1B365D; text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:8px 16px;">
                         <span>📄 Tải Thẻ Word (.docx)</span>
                     </a>

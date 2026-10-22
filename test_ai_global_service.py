@@ -86,7 +86,7 @@ class TestAIGlobalService(unittest.TestCase):
             "/api/settings/deepseek/test",
             data={
                 "api_key": "sk-mock-key-testing",
-                "model": "DeepSeek-V4.1-Flash",
+                "model": "deepseek-chat",
                 "provider": "deepseek"
             },
             headers={"Authorization": "Bearer verified"}

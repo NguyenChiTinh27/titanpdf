@@ -20,7 +20,7 @@ class DeepSeekOCR:
     """
 
     DEFAULT_API_URL = "https://api.deepseek.com/chat/completions"
-    DEFAULT_MODEL = "DeepSeek-V4.1-Flash"
+    DEFAULT_MODEL = "deepseek-chat"
     FALLBACK_MODEL = "deepseek-chat"
 
     @staticmethod
@@ -105,7 +105,7 @@ class DeepSeekOCR:
             return False
 
     @classmethod
-    def ocr_single_image(cls, image_bytes: bytes, api_key: str, model: str = "DeepSeek-V4.1-Flash") -> str:
+    def ocr_single_image(cls, image_bytes: bytes, api_key: str, model: str = "deepseek-chat") -> str:
         """Gửi một ảnh tài liệu lên DeepSeek Vision API để nhận diện OCR."""
         if not api_key or not api_key.strip():
             raise ValueError("Chưa có DeepSeek API Key. Vui lòng nhập API Key để sử dụng tính năng OCR AI!")
@@ -185,7 +185,7 @@ class DeepSeekOCR:
         output_path: str, 
         api_key: Optional[str] = None, 
         output_format: str = "docx",
-        model: str = "DeepSeek-V4.1-Flash",
+        model: str = "deepseek-chat",
         dpi: int = 200,
         page_range: Optional[str] = "all"
     ) -> Dict[str, Any]:

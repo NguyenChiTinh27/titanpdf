@@ -253,62 +253,57 @@ def classify_department_from_text(hint: str) -> tuple[str, str, str]:
 def professionalize_hse(text: str, context: str = "") -> list[str]:
     """
     Soạn thảo biên bản HSE chuyên nghiệp bằng AI (3 phương án: Ngắn gọn, Tập trung Rủi ro, Hành động CAPA).
-    Tuyệt đối không dùng template nối chuỗi thô thiển.
+    Tuyệt đối không dùng template nối chuỗi thô thiển hay mock string.
     """
     raw = normalize_space(text)
     if not raw:
         raise ValueError("Hãy nhập nội dung ghi nhận trước khi tạo câu chuyên nghiệp.")
 
-    # 1. Thử gọi LLM AI chuyên nghiệp nếu hệ thống đã có API Key
-    try:
-        from core.ai_text_engine import AITextEngine
-        creds = AITextEngine.get_ai_credentials()
-        if creds.get("api_key"):
-            system_prompt = (
-                "Bạn là Chuyên gia Soạn thảo Biên bản An toàn EHS & PCCC nhà máy.\n"
-                "Nhiệm vụ: Dựa vào ý ghi nhận nháp của người dùng và tiêu chí kiểm tra (nếu có), "
-                "soạn thảo lại thành 3 phương án câu văn phong chuyên nghiệp, sắc bén, chuẩn mực EHS:\n"
-                "- Phương án 1: Ngắn gọn, trực tiếp, mô tả đúng trọng tâm vi phạm.\n"
-                "- Phương án 2: Nêu rõ hiện trạng lỗi và phân tích nguy cơ/rủi ro mất an toàn (cháy nổ, tai nạn, vi phạm luật).\n"
-                "- Phương án 3: Định hướng hành động khắc phục (CAPA) và yêu cầu bộ phận liên quan xử lý triệt để.\n\n"
-                "BẮT BUỘC chỉ trả về DUY NHẤT một mảng JSON 3 phần tử string dạng [\"...\": \"...\", \"...\"], không giải thích thêm."
-            )
-            user_prompt = f"GHI NHẬN HIỆN TRƯỜNG: {raw}\nTIÊU CHÍ KIỂM TRA (NGỮ CẢNH): {context or 'Không có'}"
-            ai_res = AITextEngine.call_universal_chat(
-                messages=[{"role": "user", "content": user_prompt}],
-                system_prompt=system_prompt,
-                temperature=0.2
-            )
-            # Parse JSON
-            m_json = re.search(r"\[[\s\S]*\]", ai_res)
-            if m_json:
-                opts = json.loads(m_json.group(0))
-                if isinstance(opts, list) and len(opts) >= 3 and all(isinstance(x, str) for x in opts):
-                    return [normalize_space(opts[0]), normalize_space(opts[1]), normalize_space(opts[2])]
-    except Exception as e:
-        logger.warning(f"Không thể gọi AI viết chuyên nghiệp ({e}), sử dụng bộ tinh chỉnh ngữ pháp tự nhiên.")
+    from core.ai_text_engine import AITextEngine
+    creds = AITextEngine.get_ai_credentials()
+    if not creds.get("api_key"):
+        raise ValueError(
+            "Chưa cấu hình API Key. Vui lòng vào 'Cài Đặt Quản Trị' -> 'Cấu Hình API Key & Trí Tuệ Nhân Tạo' "
+            "để nhập API Key (Google Gemini, OpenAI hoặc DeepSeek) cho tính năng Viết Chuyên Nghiệp EHS!"
+        )
 
-    # 2. Tinh chỉnh ngữ pháp tự nhiên chuẩn mực khi offline (Không nối chuỗi sáo rỗng)
-    statement = re.sub(r"^(?:vấn đề|ghi nhận|hiện trạng)\s*[:\-–]\s*", "", raw, flags=re.IGNORECASE)
-    replacements = (
-        (r"\bkhông gọn gàng\b", "chưa được sắp xếp gọn gàng"),
-        (r"\bkhông đậy nắp\b", "chưa được đậy kín nắp bảo quản"),
-        (r"\bnắp mở\b", "chưa được đậy kín nắp"),
-        (r"\bnhiều bụi\b", "có tình trạng tích tụ bụi bẩn chưa vệ sinh"),
-        (r"\bbị che\b", "đang bị che khuất lối tiếp cận"),
-        (r"\bbị vướng\b", "đang bị cản trở lối đi lại"),
+    system_prompt = (
+        "Bạn là Chuyên gia Soạn thảo Biên bản An toàn EHS & PCCC nhà máy sản xuất chuyên nghiệp.\n"
+        "Nhiệm vụ: Dựa vào (1) Ý ghi nhận hiện trường của người dùng + (2) Tiêu chuẩn/ngữ cảnh kiểm tra an toàn PCCC/EHS,\n"
+        "hãy soạn thảo lại thành 3 phương án câu văn phong kỹ thuật EHS sắc bén, chuẩn mực theo đúng quy chuẩn an toàn:\n"
+        "- Phương án 1 (Ngắn gọn & Trực tiếp): Mô tả chính xác hiện trạng lỗi và điểm không phù hợp tại hiện trường.\n"
+        "- Phương án 2 (Phân tích Rủi ro & Vi phạm): Nêu rõ hiện trạng lỗi -> Phân tích nguy cơ mất an toàn, rủi ro cháy nổ hoặc vi phạm quy chuẩn PCCC/EHS.\n"
+        "- Phương án 3 (Hành động Khắc phục CAPA): Nêu rõ yêu cầu biện pháp khắc phục (CAPA) cụ thể và chỉ đạo bộ phận liên quan chấn chỉnh dứt điểm.\n\n"
+        "YÊU CẦU ĐỊNH DẠNG BẮT BUỘC:\n"
+        "Chỉ trả về DUY NHẤT một mảng JSON 3 phần tử chuỗi tiếng Việt dạng [\"Phương án 1...\", \"Phương án 2...\", \"Phương án 3...\"], tuyệt đối không giải thích thêm."
     )
-    for pattern, replacement in replacements:
-        statement = re.sub(pattern, replacement, statement, flags=re.IGNORECASE)
-    statement = normalize_space(statement).strip(" .;,:-–")
-    if not statement:
-        statement = raw
-    statement = statement[0].upper() + statement[1:]
+    user_prompt = (
+        f"GHI NHẬN HIỆN TRƯỜNG: {raw}\n"
+        f"TIÊU CHUẨN KIỂM TRA / HẠNG MỤC: {context or 'Kiểm tra hiện trường An toàn PCCC & EHS'}"
+    )
 
-    concise = f"Ghi nhận tại hiện trường: {statement}."
-    risk_focused = f"Phát hiện {statement[0].lower() + statement[1:]}; tiềm ẩn rủi ro mất an toàn lao động và PCCC khu vực."
-    action_focused = f"Yêu cầu đơn vị phụ trách khẩn trương chấn chỉnh tình trạng {statement[0].lower() + statement[1:]} và duy trì kiểm tra định kỳ."
-    return [concise, risk_focused, action_focused]
+    try:
+        ai_res = AITextEngine.call_universal_chat(
+            messages=[{"role": "user", "content": user_prompt}],
+            system_prompt=system_prompt,
+            temperature=0.2,
+            timeout=25
+        )
+        m_json = re.search(r"\[[\s\S]*\]", ai_res)
+        if m_json:
+            opts = json.loads(m_json.group(0))
+            if isinstance(opts, list) and len(opts) >= 3 and all(isinstance(x, str) for x in opts):
+                return [normalize_space(opts[0]), normalize_space(opts[1]), normalize_space(opts[2])]
+            elif isinstance(opts, list) and len(opts) > 0:
+                cleaned_opts = [normalize_space(x) for x in opts if isinstance(x, str) and x.strip()]
+                if cleaned_opts:
+                    while len(cleaned_opts) < 3:
+                        cleaned_opts.append(cleaned_opts[-1])
+                    return cleaned_opts[:3]
+    except Exception as exc:
+        raise RuntimeError(f"Lỗi gọi AI viết chuyên nghiệp: {exc}")
+
+    raise RuntimeError("AI không trả về định dạng 3 phương án hợp lệ. Vui lòng thử lại!")
 
 
 def translate_vi_to_zh(text: str, kind: str = "text") -> str:
@@ -334,22 +329,23 @@ def translate_vi_to_zh(text: str, kind: str = "text") -> str:
         creds = AITextEngine.get_ai_credentials()
         if creds.get("api_key"):
             if is_chinese_input:
-                sys_prompt = "Bạn là dịch giả chuyên nghiệp. Hãy dịch đoạn văn bản sau sang TIẾNG VIỆT chuẩn kỹ thuật EHS/PCCC nhà máy. Chỉ trả về bản dịch thuần túy, không thêm bất kỳ tiền tố hay giải thích."
+                sys_prompt = "Bạn là dịch giả chuyên nghiệp. Hãy dịch đoạn văn bản sau sang TIẾNG VIỆT chuẩn kỹ thuật EHS/PCCC nhà máy. Chỉ trả về bản dịch tiếng Việt thuần túy, TUYỆT ĐỐI KHÔNG thêm bất kỳ tiền tố hay giải thích nào."
             else:
-                sys_prompt = "Bạn là dịch giả chuyên nghiệp. Hãy dịch đoạn văn bản sau sang TIẾNG TRUNG GIẢN THỂ (简体中文) chuẩn thuật ngữ an toàn sản xuất EHS/PCCC. Chỉ trả về bản dịch tiếng Trung thuần túy, TUYỆT ĐỐI KHÔNG thêm tiền tố '问题:' hay '现场问题:'."
+                sys_prompt = "Bạn là dịch giả chuyên nghiệp. Hãy dịch đoạn văn bản sau sang TIẾNG TRUNG GIẢN THỂ (简体中文) chuẩn thuật ngữ an toàn sản xuất EHS/PCCC. Chỉ trả về bản dịch tiếng Trung thuần túy, TUYỆT ĐỐI KHÔNG thêm tiền tố '问题:' hay '现场问题:' hay '隐患:'."
 
             res = AITextEngine.call_universal_chat(
                 messages=[{"role": "user", "content": clean_text}],
                 system_prompt=sys_prompt,
                 temperature=0.1,
-                timeout=15
+                timeout=20
             )
             if res and res.strip():
-                # Dọn dẹp tiền tố thừa nếu có
-                cleaned = re.sub(r"^(?:问题|现场问题|隐患|整改要求)\s*[:：]\s*", "", res.strip())
+                cleaned = re.sub(r"^(?:问题|现场问题|隐患|整改要求|整改措施)\s*[:：]\s*", "", res.strip())
+                # Loại bỏ hoàn toàn tiền tố lặp lại
+                cleaned = re.sub(r"^(?:问题|现场问题|隐患)\s*[:：]\s*", "", cleaned)
                 return cleaned
     except Exception as e:
-        logger.warning(f"Lỗi gọi AI dịch ({e}), chuyển sang động cơ dịch trực tuyến...")
+        logger.warning(f"Lỗi gọi AI dịch ({e}), chuyển sang Google Translate...")
 
     # 2. Dịch qua Google Translate API trực tuyến
     try:
@@ -366,24 +362,17 @@ def translate_vi_to_zh(text: str, kind: str = "text") -> str:
             f"https://translate.googleapis.com/translate_a/single?{query}",
             headers={"User-Agent": "Mozilla/5.0 HSE-Report-App/2.0"},
         )
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=8) as response:
             data = json.loads(response.read().decode("utf-8"))
         translated = "".join(part[0] for part in data[0] if part and part[0])
         if translated and translated.strip():
-            cleaned = re.sub(r"^(?:问题|现场问题|隐患)\s*[:：]\s*", "", translated.strip())
+            cleaned = re.sub(r"^(?:问题|现场问题|隐患|整改要求)\s*[:：]\s*", "", translated.strip())
             return cleaned
     except Exception as e:
         logger.warning(f"Lỗi Google Translate: {e}")
 
-    # 3. Kiểm tra từ điển mẫu offline
-    if not is_chinese_input:
-        folded = clean_text.casefold()
-        for keywords, translation in OFFLINE_HSE_PATTERNS:
-            if all(keyword in folded for keyword in keywords):
-                return re.sub(r"^(?:问题|现场问题)\s*[:：]\s*", "", translation)
-
-    # Nếu hoàn toàn không thể dịch và không có mạng, báo lỗi rõ ràng chứ không ghép chuỗi giả!
-    raise ValueError(f"Không thể kết nối dịch vụ dịch thuật để dịch: '{clean_text[:40]}...'. Vui lòng kiểm tra lại kết nối mạng hoặc cấu hình API Key!")
+    # Báo lỗi rõ ràng chứ không ghép chuỗi giả!
+    raise ValueError(f"Không thể kết nối dịch vụ dịch thuật để dịch: '{clean_text[:40]}...'. Vui lòng kiểm tra lại kết nối mạng hoặc cấu hình API Key trong Cài đặt Hệ thống!")
 
 
 def analyze_image_ai(
@@ -478,15 +467,6 @@ def analyze_image_ai(
         "issueVi": issue_vi,
         "issueZh": issue_zh,
         "suggestion": suggestion
-    }
-
-    return {
-        "departmentKey": dept_key,
-        "departmentVi": dept_vi,
-        "departmentZh": dept_zh,
-        "issueVi": issue_vi,
-        "issueZh": issue_zh,
-        "suggestion": suggestion,
     }
 
 

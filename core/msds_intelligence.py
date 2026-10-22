@@ -651,6 +651,21 @@ class MSDSDatabase:
             return item
 
     @classmethod
+    def update_drive_links(cls, chem_id: str, drive_file_id: str = "", drive_view_url: str = "", drive_download_url: str = "") -> bool:
+        """Cập nhật liên kết Google Drive cho hóa chất sau khi đồng bộ lên đám mây."""
+        cls.init_db()
+        with cls.get_connection() as conn:
+            conn.execute("""
+                UPDATE chemicals
+                SET drive_file_id = COALESCE(NULLIF(?, ''), drive_file_id),
+                    drive_view_url = COALESCE(NULLIF(?, ''), drive_view_url),
+                    drive_download_url = COALESCE(NULLIF(?, ''), drive_download_url)
+                WHERE UPPER(chemical_id) = UPPER(?) OR UPPER(product_code) = UPPER(?)
+            """, (drive_file_id, drive_view_url, drive_download_url, chem_id, chem_id))
+            conn.commit()
+        return True
+
+    @classmethod
     def delete_chemical(cls, chem_id: str) -> bool:
         """Xóa hóa chất khỏi CSDL và đồng bộ xóa vĩnh viễn trên Google Sheet."""
         cls.init_db()
@@ -761,8 +776,66 @@ class MSDSDatabase:
                     new_supp.lower().startswith("address") or
                     "township" in new_supp.lower() or
                     "rd." in new_supp.lower() or
-                    "no. 1-" in new_supp.lower()
+                    "no. 1-" in new_supp.lower() or
+                    "tel:" in new_supp.lower() or
+                    "fax:" in new_supp.lower()
                 )
+
+                # 2. Clean product name
+                new_name = orig_name.strip()
+                is_name_generic = (
+                    not new_name or
+                    new_name == f"Hóa chất {chem_id}" or
+                    new_name == chem_id or
+                    new_name == "Hóa chất mới" or
+                    new_name.startswith("Hóa chất 0000") or
+                    bool(re.match(r"^(?:Hóa chất\s+)?(?:FTU\d+|A\d+|ZW\d+|[A-Z0-9]{5,10})$", new_name, re.I))
+                )
+
+                # 3. Clean date
+                new_date = orig_date.strip()
+
+                # Gọi AI trích xuất chuẩn hóa nếu phát hiện dữ liệu lỗi và hệ thống có API Key
+                if (is_supp_dirty or is_name_generic) and text:
+                    try:
+                        from core.ai_text_engine import AITextEngine
+                        creds = AITextEngine.get_ai_credentials()
+                        if creds.get("api_key"):
+                            ai_extract_prompt = (
+                                f"Đọc đoạn văn bản đầu hồ sơ MSDS sau và trích xuất đúng 3 trường thông tin dạng JSON:\n"
+                                f"1. 'chemical_name': Tên thương phẩm / tên hóa chất chính xác (vd: Sơn phủ bóng UV, BYK-333). TUYỆT ĐỐI KHÔNG lấy mã file ({chem_id}, FTU..., A1935...).\n"
+                                f"2. 'supplier_name': CHỈ LẤY ĐÚNG TÊN CÔNG TY của nhà sản xuất hoặc nhà cung cấp. TUYỆT ĐỐI LOẠI BỎ '- Product Name', 'Address:', địa chỉ đường phố, số điện thoại hay email.\n"
+                                f"3. 'revision_date': Ngày phát hành hoặc cập nhật tài liệu (YYYY-MM-DD hoặc DD/MM/YYYY).\n\n"
+                                f"VĂN BẢN MSDS:\n{text[:3500]}\n\n"
+                                f"Chỉ trả về DUY NHẤT một chuỗi JSON hợp lệ: {{\"chemical_name\": \"...\", \"supplier_name\": \"...\", \"revision_date\": \"...\"}}"
+                            )
+                            ai_clean_res = AITextEngine.call_universal_chat(
+                                messages=[{"role": "user", "content": ai_extract_prompt}],
+                                system_prompt="Bạn là chuyên gia thẩm định hồ sơ MSDS. Trích xuất chính xác tên sản phẩm và tên công ty.",
+                                api_key=creds["api_key"],
+                                provider=creds.get("provider"),
+                                model=creds.get("model"),
+                                temperature=0.1,
+                                timeout=20
+                            )
+                            m_j = re.search(r"\{[\s\S]*\}", ai_clean_res)
+                            if m_j:
+                                p_ai = json.loads(m_j.group(0))
+                                cand_ai_name = str(p_ai.get("chemical_name") or "").strip()
+                                cand_ai_supp = str(p_ai.get("supplier_name") or "").strip()
+                                cand_ai_date = str(p_ai.get("revision_date") or "").strip()
+                                if cand_ai_name and not any(k in cand_ai_name.lower() for k in ("ftu", "a1935", chem_id.lower())):
+                                    new_name = cand_ai_name
+                                    is_name_generic = False
+                                if cand_ai_supp and not any(k in cand_ai_supp.lower() for k in ("- product name", "address", "township")):
+                                    new_supp = cand_ai_supp
+                                    is_supp_dirty = False
+                                if cand_ai_date and not new_date:
+                                    new_date = cand_ai_date
+                    except Exception as _ai_clean_err:
+                        pass
+
+                # Fallback Heuristic nếu AI chưa xử lý hết
                 if is_supp_dirty and text:
                     co_matches = re.findall(
                         r'([A-Z0-9\s,\.\-—&]+(?:CO\.,\s*LTD|LIMITED|GMBH|INC\.|CORP|INDUSTRIES\s+AG|COMPANY\s+LIMITED|CORPORATION|S\.A\.|MATERIALS\s+CO\.,\s*LTD|CÔNG TY TNHH[^\n,]+))',
@@ -775,18 +848,12 @@ class MSDSDatabase:
                             new_supp = cand[:120]
                             break
 
-                # 2. Clean product name
-                new_name = orig_name.strip()
-                is_name_generic = (
-                    not new_name or
-                    new_name == f"Hóa chất {chem_id}" or
-                    new_name == chem_id or
-                    new_name == "Hóa chất mới" or
-                    new_name.startswith("Hóa chất 0000")
-                )
+                # Lọc sạch triệt để nhãn thừa trong supplier
+                new_supp = re.sub(r"^(?:-\s*Product\s*Name|Product\s*Name|Address)\s*[:：\-–]?\s*", "", new_supp, flags=re.I).strip()
+                new_supp = re.sub(r"^Address\s*:\s*", "", new_supp, flags=re.I).strip()
+
                 if is_name_generic:
                     cand_name = ""
-                    # Check text
                     if text:
                         m_th = re.search(r'Hóa chất:\s*([^|\n]+)', text[:500], re.I)
                         if m_th and len(m_th.group(1).strip()) > 2:
@@ -797,7 +864,6 @@ class MSDSDatabase:
                                 cp = m_pn.group(1).strip().strip(":- ")
                                 if cp and cp.lower() not in ("na", "none", "n/a"):
                                     cand_name = cp
-                    # Check filename
                     if not cand_name and sfile:
                         base_fn = re.sub(r'^\d+_', '', sfile)
                         base_fn = re.sub(r'-(?:MSDS|SDS)(?:-[A-Za-z0-9]+)?(?:\.pdf|\.docx|\.doc)$', '', base_fn, flags=re.I)
@@ -809,10 +875,10 @@ class MSDSDatabase:
                     if cand_name:
                         new_name = cand_name
 
-                # 3. Clean date
-                new_date = orig_date.strip()
                 if not new_date and text:
                     m_d = re.search(r'(?:revision|issue|creation|date|ngày)[^\n:]{0,20}[:\s]+(\d{1,4}[./\-]\d{1,2}[./\-]\d{2,4}|\d{1,2}\s+[a-zA-Z]{3,9}\s+\d{4})', text[:3000], re.I)
+                    if m_d:
+                        new_date = m_d.group(1).strip()
                     if m_d:
                         new_date = m_d.group(1).strip()
 
@@ -1382,9 +1448,10 @@ class MSDSExtractorEngine:
 
     @classmethod
     def parse_with_deepseek(cls, text: str, api_key: Optional[str] = None, visual_ghs_hint: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-        """Sử dụng AI DeepSeek-V4.1-Flash để trích xuất 16 mục GHS và dữ liệu có cấu trúc từ MSDS."""
+        """Sử dụng AI Đa Phương Thức (Gemini / OpenAI / DeepSeek) trích xuất chuẩn 16 mục GHS và dữ liệu có cấu trúc từ MSDS."""
         from core.ai_text_engine import AITextEngine
-        actual_key = AITextEngine.get_deepseek_key(api_key)
+        creds = AITextEngine.get_ai_credentials(api_key=api_key)
+        actual_key = creds.get("api_key")
         if not actual_key or len(text.strip()) < 50:
             return None
 
@@ -1402,23 +1469,34 @@ class MSDSExtractorEngine:
             )
 
         system_prompt = (
-            "Bạn là chuyên gia phân tích an toàn hóa chất (EHS / MSDS Specialist) hàng đầu thế giới. "
-            "Nhiệm vụ của bạn là đọc hiểu toàn văn bản MSDS/SDS được cung cấp và trích xuất dữ liệu chuẩn 16 mục GHS thành định dạng JSON hợp lệ duy nhất.\n"
-            "QUY TẮC BẮT BUỘC TỐI THƯỢNG (TUYỆT ĐỐI TUÂN THỦ THEO YÊU CẦU NGƯỜI DÙNG):\n"
-            "1. Trong file ở Mục 2 có hiển thị hình đồ GHS thì hiển thị lại đúng hình đồ cảnh báo GHS đó, TUYỆT ĐỐI KHÔNG HIỂN THỊ DƯ. Tuyệt đối không tự ý suy diễn hoặc gán thêm bất kỳ hình đồ nào khác từ câu chữ mô tả nguy cơ hay các phép thử phân loại (ví dụ: file ở Mục 2 chỉ có hình đồ ngọn lửa thì trường 'ghs_codes' CHỈ ĐƯỢC CHỨA ['GHS02'], TUYỆT ĐỐI KHÔNG hiển thị dư GHS05, GHS06, GHS07, GHS08).\n"
-            "2. Trường 'ghs_codes' và 'signal_word' CHỈ ĐƯỢC XÁC ĐỊNH DỰA TRÊN MỤC 2 (Nhận dạng đặc tính nguy hiểm / Section 2: Hazards Identification) của MSDS áp dụng cho SẢN PHẨM CHÍNH (dựa trên hàng Yếu tố nhãn / Hình đồ cảnh báo). TUYỆT ĐỐI KHÔNG suy diễn hoặc lấy nhầm mã GHS của từng chất phụ gia/thành phần ở Mục 3.\n"
-            "3. NẾU SẢN PHẨM CÓ TÍNH DỄ CHÁY (Flammable liquid/gas/solid, H220-H228, Dễ cháy, Điểm chớp cháy <= 60°C), BẮT BUỘC PHẢI CÓ MÃ GHS02 TRONG 'ghs_codes'. TUYỆT ĐỐI KHÔNG TRẢ VỀ NON DG KHI SẢN PHẨM CÓ ĐẶC TÍNH DỄ CHÁY HOẶC NGUY HIỂM.\n"
-            "4. Nếu ở Mục 2 ghi rõ 'Không phải là chất hay hỗn hợp nguy hại', 'Not classified as hazardous', 'Not a hazardous substance or mixture', 'No symbol', và hoàn toàn không có bất kỳ mối nguy hại nào, BẮT BUỘC trả về: \"ghs_codes\": [\"NON DG\"] và \"signal_word\": \"NON DG\".\n"
+            "Bạn là Chuyên gia Thẩm định An toàn Hóa chất (EHS / MSDS Specialist) hàng đầu thế giới.\n"
+            "Nhiệm vụ: Đọc hiểu toàn văn bản MSDS/SDS được cung cấp và trích xuất dữ liệu chuẩn 16 mục GHS thành định dạng JSON hợp lệ duy nhất.\n\n"
+            "CÁC QUY TẮC BÓC TÁCH BẮT BUỘC TUÂN THỦ:\n"
+            "1. TÊN HÓA CHẤT (product_name_vi / chemicalName):\n"
+            "   - Trích xuất tên thương mại / tên hóa chất chính xác từ Mục 1 (Section 1: Identification).\n"
+            "   - Viết hoa chữ cái đầu chuẩn mực (vd: 'Sơn Phủ Bóng UV Không Dung Môi', 'Phụ Gia Chống Lắng BYK-333').\n"
+            "   - TUYỆT ĐỐI KHÔNG lấy mã file (FTU0005, A1935, ZW55019) làm tên hóa chất trừ khi toàn bộ tài liệu hoàn toàn không có tên sản phẩm.\n"
+            "2. NHÀ SẢN XUẤT / NHÀ CUNG CẤP (manufacturer / supplierName):\n"
+            "   - CHỈ LẤY ĐÚNG TÊN CÔNG TY của Nhà sản xuất hoặc Nhà cung cấp từ Mục 1 (vd: 'ZhanChen New Materials Co., Ltd', 'BYK-Chemie GmbH', 'Công ty TNHH Hóa Chất ABC').\n"
+            "   - TUYỆT ĐỐI LOẠI BỎ các nhãn thừa như '- Product Name', 'Product Name:', 'Address:', địa chỉ đường phố, số điện thoại, fax, email, website.\n"
+            "3. SỐ CAS CHÍNH (cas_primary / casNumber):\n"
+            "   - Trích xuất mã CAS chính từ Mục 3 (Section 3: Composition). Nếu là hỗn hợp, lấy số CAS của hoạt chất nguy hại chính hoặc chất có nồng độ lớn nhất. Không để trống nếu Mục 3 có số CAS.\n"
+            "4. MÃ GHS VÀ TỪ CẢNH BÁO (ghs_codes, signal_word):\n"
+            "   - Xác định dựa trên hình đồ Mục 2 (Section 2: Hazards Identification) của sản phẩm chính.\n"
+            "   - Nếu sản phẩm có tính dễ cháy (Flammable, H220-H228, điểm chớp cháy <= 60°C), bắt buộc phải có 'GHS02'.\n"
+            "   - Nếu Mục 2 ghi rõ 'Không phải là chất hay hỗn hợp nguy hại', 'Not classified as hazardous', 'No symbol', trả về: \"ghs_codes\": [\"NON DG\"] và \"signal_word\": \"NON DG\".\n"
             f"{ghs_visual_instruction}"
-            "5. Toàn bộ các trường mô tả an toàn, tên tiếng Việt, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n"
-            "Yêu cầu các trường dữ liệu:\n"
+            "5. NGÀY PHÁT HÀNH / CẬP NHẬT (revision_date / issueDate):\n"
+            "   - Lấy ngày phát hành hoặc ngày sửa đổi gần nhất từ Mục 1 hoặc đầu/cuối tài liệu (YYYY-MM-DD hoặc DD/MM/YYYY).\n"
+            "6. Toàn bộ các trường mô tả an toàn, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n\n"
+            "YÊU CẦU CẤU TRÚC JSON ĐẦU RA:\n"
             "{\n"
             '  "product_code": "Mã sản phẩm hoặc mã hiệu hóa chất (vd: FTU0005, ZW55019)",\n'
-            '  "product_name_vi": "Tên tiếng Việt hoặc mô tả sản phẩm bằng tiếng Việt (vd: Sơn màu tia cực tím UV, Phụ gia bề mặt BYK-333)",\n'
+            '  "product_name_vi": "Tên tiếng Việt hoặc tên thương mại chuẩn của sản phẩm",\n'
             '  "product_name_original": "Tên gốc của hóa chất trên tài liệu",\n'
             '  "intended_use": "Mục đích sử dụng / Công dụng bằng tiếng Việt (vd: Sơn phủ gỗ công nghiệp)",\n'
-            '  "manufacturer": "Tên công ty sản xuất / Nhà cung ứng",\n'
-            '  "revision_date": "Ngày sửa đổi / Ngày phát hành SDS (YYYY-MM-DD hoặc DD-MM-YYYY)",\n'
+            '  "manufacturer": "Tên công ty sản xuất / Nhà cung ứng (CHỈ TÊN CÔNG TY, KHÔNG KÈM ĐỊA CHỈ HAY PRODUCT NAME)",\n'
+            '  "revision_date": "Ngày sửa đổi / Ngày phát hành SDS (YYYY-MM-DD hoặc DD/MM/YYYY)",\n'
             '  "cas_primary": "Số CAS chính (vd: 67-64-1)",\n'
             '  "un_no": "Mã số UN (vd: UN 1263, UN 1090)",\n'
             '  "transport_class": "Nhóm nguy hiểm vận chuyển (vd: 3, 8)",\n'
@@ -1458,24 +1536,39 @@ class MSDSExtractorEngine:
         )
 
         try:
-            data = AITextEngine.call_deepseek_api(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": sample_text}
-                ],
+            ai_res = AITextEngine.call_universal_chat(
+                messages=[{"role": "user", "content": sample_text}],
+                system_prompt=system_prompt,
                 api_key=actual_key,
-                model="DeepSeek-V4.1-Flash",
+                provider=creds.get("provider"),
+                model=creds.get("model"),
+                base_url=creds.get("base_url"),
                 temperature=0.1,
-                response_format={"type": "json_object"},
                 timeout=90
             )
-            content = data["choices"][0]["message"]["content"].strip()
-            content = re.sub(r"^```(?:json)?\s*", "", content)
+            content = ai_res.strip()
+            content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
             content = re.sub(r"\s*```$", "", content)
-            parsed = json.loads(content)
+            m_json = re.search(r"\{[\s\S]*\}", content)
+            if not m_json:
+                return None
+            parsed = json.loads(m_json.group(0))
+
+            # Hậu kiểm và làm sạch dữ liệu
+            if parsed.get("manufacturer"):
+                supp = str(parsed["manufacturer"]).strip()
+                supp = re.sub(r"^(?:-\s*Product\s*Name|Product\s*Name|Address)\s*[:：\-–]?\s*", "", supp, flags=re.IGNORECASE).strip()
+                supp = re.sub(r"^Address\s*:\s*", "", supp, flags=re.IGNORECASE).strip()
+                parsed["manufacturer"] = supp[:120]
+
+            if parsed.get("product_name_vi"):
+                pname = str(parsed["product_name_vi"]).strip()
+                pname = re.sub(r"^Hóa chất\s+([A-Z0-9]{4,10})$", r"\1", pname)
+                parsed["product_name_vi"] = pname
+
             return parsed
         except Exception as e:
-            print(f"[DEEPSEEK_MSDS_PARSE_ERROR] {e}", flush=True)
+            print(f"[AI_MSDS_PARSE_ERROR] {e}", flush=True)
             return None
 
     @staticmethod
@@ -1883,7 +1976,7 @@ class MSDSExtractorEngine:
             data["product_name_vi"] = lines[0][:80]
 
         # Quét bổ sung tên công ty chuẩn quốc tế nếu chưa có hoặc bị dirty
-        if not data["manufacturer"] or any(k in data["manufacturer"].lower() for k in ["- product name", "address", "township"]):
+        if not data["manufacturer"] or any(k in data["manufacturer"].lower() for k in ["- product name", "address", "township", "tel:"]):
             co_matches = re.findall(
                 r'([A-Z0-9\s,\.\-—&]+(?:CO\.,\s*LTD|LIMITED|GMBH|INC\.|CORP|INDUSTRIES\s+AG|COMPANY\s+LIMITED|CORPORATION|S\.A\.|MATERIALS\s+CO\.,\s*LTD|CÔNG TY TNHH[^\n,]+))',
                 text[:3500],
@@ -1894,6 +1987,11 @@ class MSDSExtractorEngine:
                 if len(cand) > 4 and not cand.lower().startswith("address") and "product name" not in cand.lower():
                     data["manufacturer"] = cand[:120]
                     break
+
+        if data.get("manufacturer"):
+            clean_mfg = re.sub(r"^(?:-\s*Product\s*Name|Product\s*Name|Address)\s*[:：\-–]?\s*", "", str(data["manufacturer"]), flags=re.I).strip()
+            clean_mfg = re.sub(r"^Address\s*:\s*", "", clean_mfg, flags=re.I).strip()
+            data["manufacturer"] = clean_mfg[:120]
 
         # 2. Bóc tách bảng Thành phần & Số CAS (Mục 3)
         parsed_cas_set = set()

@@ -24,10 +24,10 @@
     class LuvAIServiceManager {
         constructor() {
             this.config = {
-                provider: "deepseek", // 'deepseek' | 'openai' | 'custom'
+                provider: "gemini", // 'gemini' | 'deepseek' | 'openai' | 'custom'
                 apiKey: "",
-                model: "DeepSeek-V4.1-Flash",
-                baseUrl: "https://api.deepseek.com/v1"
+                model: "gemini-2.5-flash",
+                baseUrl: "https://generativelanguage.googleapis.com/v1beta"
             };
             this._registeredBadgeContainers = new Set();
             this._isInitialized = false;
@@ -200,21 +200,21 @@
          * Lấy tên Model hiện tại
          */
         getModel() {
-            return this.config.model || "DeepSeek-V4.1-Flash";
+            return this.config.model || (this.config.provider === "gemini" ? "gemini-2.5-flash" : "deepseek-chat");
         }
 
         /**
-         * Lấy Provider (deepseek, openai, custom)
+         * Lấy Provider (gemini, deepseek, openai, custom)
          */
         getProvider() {
-            return this.config.provider || "deepseek";
+            return this.config.provider || "gemini";
         }
 
         /**
          * Lấy Base URL của API
          */
         getBaseUrl() {
-            return this.config.baseUrl || "https://api.deepseek.com/v1";
+            return this.config.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
         }
 
         /**
@@ -226,9 +226,9 @@
             }
 
             const cleanKey = (apiKey || "").trim();
-            const cleanModel = (model || "").trim() || "DeepSeek-V4.1-Flash";
-            const cleanProvider = (provider || "").trim() || "deepseek";
-            const cleanBaseUrl = (baseUrl || "").trim() || "https://api.deepseek.com/v1";
+            const cleanProvider = (provider || "").trim() || "gemini";
+            const cleanModel = (model || "").trim() || (cleanProvider === "gemini" ? "gemini-2.5-flash" : "deepseek-chat");
+            const cleanBaseUrl = (baseUrl || "").trim() || (cleanProvider === "gemini" ? "https://generativelanguage.googleapis.com/v1beta" : "https://api.deepseek.com/v1");
 
             if (!cleanKey) {
                 throw new Error("Vui lòng nhập API Key hợp lệ!");

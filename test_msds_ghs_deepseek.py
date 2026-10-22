@@ -15,11 +15,11 @@ from core.interlinear_translator import InterlinearTranslator
 from core.msds_intelligence import MSDSExtractorEngine
 
 def test_ai_model_standardization():
-    print("=== [TEST 1] Kiểm tra chuẩn hóa duy nhất model AI DeepSeek-V4.1-Flash ===")
-    assert AITextEngine.PRIMARY_MODEL == "DeepSeek-V4.1-Flash", f"Expected DeepSeek-V4.1-Flash, got {AITextEngine.PRIMARY_MODEL}"
-    assert DeepSeekOCR.DEFAULT_MODEL == "DeepSeek-V4.1-Flash", f"Expected DeepSeek-V4.1-Flash, got {DeepSeekOCR.DEFAULT_MODEL}"
-    assert InterlinearTranslator.DEFAULT_MODEL == "DeepSeek-V4.1-Flash", f"Expected DeepSeek-V4.1-Flash, got {InterlinearTranslator.DEFAULT_MODEL}"
-    print("  ✓ Toàn bộ các module AI đều chuẩn hóa về model: DeepSeek-V4.1-Flash!")
+    print("=== [TEST 1] Kiểm tra chuẩn hóa model AI chuẩn quốc tế deepseek-chat ===")
+    assert AITextEngine.PRIMARY_MODEL == "deepseek-chat", f"Expected deepseek-chat, got {AITextEngine.PRIMARY_MODEL}"
+    assert DeepSeekOCR.DEFAULT_MODEL == "deepseek-chat", f"Expected deepseek-chat, got {DeepSeekOCR.DEFAULT_MODEL}"
+    assert InterlinearTranslator.DEFAULT_MODEL == "deepseek-chat", f"Expected deepseek-chat, got {InterlinearTranslator.DEFAULT_MODEL}"
+    print("  ✓ Toàn bộ các module AI đều chuẩn hóa về model: deepseek-chat!")
 
 def test_word_msds_flammable_ghs02_not_non_dg():
     print("=== [TEST 2] Kiểm tra bóc tách file Word MSDS có tính dễ cháy không bị gán NON DG ===")

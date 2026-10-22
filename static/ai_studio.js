@@ -41,6 +41,10 @@ function applyMsdsRbacVisibility() {
     document.querySelectorAll(".admin-only-ctrl").forEach(el => {
         el.style.display = isGuest ? "none" : "";
     });
+    const delAllBtn = document.getElementById("btn-msds-delete-all") || document.querySelector(".msds-btn-delete-all");
+    if (delAllBtn) {
+        delAllBtn.style.display = isGuest ? "none" : "";
+    }
 
     const guestCard = document.getElementById("msds-guest-badge-card");
     if (guestCard) {
@@ -1118,6 +1122,21 @@ async function runMsdsAnalysis() {
                         if (gasResult.item.drive_view_url) chemObj.drive_view_url = gasResult.item.drive_view_url;
                         if (gasResult.item.drive_download_url) chemObj.drive_download_url = gasResult.item.drive_download_url;
                         if (gasResult.item.drive_file_id) chemObj.drive_file_id = gasResult.item.drive_file_id;
+
+                        // Đồng bộ liên kết Google Drive vào SQLite trên máy chủ
+                        await fetch("/api/msds/update-drive-links", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                chemical_id: savedCode,
+                                drive_file_id: gasResult.item.drive_file_id || "",
+                                drive_view_url: gasResult.item.drive_view_url || "",
+                                drive_download_url: gasResult.item.drive_download_url || ""
+                            })
+                        }).catch(() => {});
+                    }
+                    if (window.MsdsGasSync && typeof window.MsdsGasSync.updateBadge === "function") {
+                        window.MsdsGasSync.updateBadge("synced", "Đã đồng bộ Drive");
                     }
                 } catch (gasErr) {
                     console.warn("GAS auto-sync in runMsdsAnalysis warning:", gasErr);
@@ -2277,8 +2296,11 @@ async function openMsdsSafetyModal(chemId) {
             btnDownloadWord.download = `SafetyCard_${codeDisplay}.docx`;
             btnDownloadWord.title = "Tải Thẻ An Toàn Word (.docx) chuẩn 4 cột Mục 3 GHS và Thẩm Định Checksum";
         }
+        window.CURRENT_SAFETY_MODAL_CHEM = chem;
+        window.CURRENT_SAFETY_MODAL_CHEM_ID = chem.chem_id || codeDisplay;
+        const driveDownloadUrl = chem.drive_download_url || (chem.drive_file_id ? `https://drive.google.com/uc?export=download&id=${chem.drive_file_id}` : "");
         if (btnDownloadOriginal) {
-            btnDownloadOriginal.href = `/api/msds/download-original/${encodeURIComponent(chem.chem_id || codeDisplay)}`;
+            btnDownloadOriginal.href = driveDownloadUrl || `/api/msds/download-original/${encodeURIComponent(chem.chem_id || codeDisplay)}`;
             btnDownloadOriginal.download = chem.source_file || `MSDS-${codeDisplay}`;
         }
 
@@ -4684,3 +4706,13 @@ async function sanitizeMsdsCatalogWithAi() {
     }
 }
 window.sanitizeMsdsCatalogWithAi = sanitizeMsdsCatalogWithAi;
+
+function openCurrentModalDriveViewer() {
+    if (!window.CURRENT_SAFETY_MODAL_CHEM_ID) return;
+    const chem = window.CURRENT_SAFETY_MODAL_CHEM || {};
+    const chemId = window.CURRENT_SAFETY_MODAL_CHEM_ID;
+    const driveFileId = chem.drive_file_id || "";
+    const filename = chem.source_file || `MSDS-${chemId}.pdf`;
+    openMsdsDriveViewer(chemId, driveFileId, filename);
+}
+window.openCurrentModalDriveViewer = openCurrentModalDriveViewer;

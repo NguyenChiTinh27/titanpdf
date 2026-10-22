@@ -3870,7 +3870,7 @@ function renderOptions() {
                         <div>
                             <label class="form-label" style="font-weight: 600;">Mô hình Vision AI:</label>
                             <select id="opt-ocr-model" class="select-box">
-                                <option value="DeepSeek-V4.1-Flash" selected>DeepSeek-V4.1-Flash (Siêu tốc & Chuẩn)</option>
+                                <option value="deepseek-chat" selected>deepseek-chat (DeepSeek Official)</option>
                             </select>
                         </div>
                     </div>
@@ -4364,7 +4364,7 @@ async function appendToolSpecificOptions(formData) {
             if (ocrEngine === "deepseek") {
                 const apiKey = document.getElementById("opt-deepseek-key")?.value.trim() || localStorage.getItem("deepseek_api_key") || "";
                 const outFmt = document.getElementById("opt-ocr-format")?.value || "reconstructed_pdf";
-                const model = document.getElementById("opt-ocr-model")?.value || "DeepSeek-V4.1-Flash";
+                const model = document.getElementById("opt-ocr-model")?.value || "deepseek-chat";
                 const range = document.getElementById("opt-ocr-range")?.value.trim() || "all";
                 if (apiKey) {
                     formData.append("api_key", apiKey);
@@ -4660,7 +4660,7 @@ async function executeProcess() {
                     }
                 }
                 const outFmt = document.getElementById("opt-ocr-format")?.value || "reconstructed_pdf";
-                const model = document.getElementById("opt-ocr-model")?.value || "DeepSeek-V4.1-Flash";
+                const model = document.getElementById("opt-ocr-model")?.value || "deepseek-chat";
                 const range = document.getElementById("opt-ocr-range")?.value.trim() || "all";
                 if (apiKey) {
                     formData.append("api_key", apiKey);
@@ -6076,8 +6076,8 @@ window.handleAiProviderChange = function (selectedModel = null) {
     // Danh sách model chuẩn theo từng provider
     const modelsByProvider = {
         deepseek: [
-            { value: "deepseek-chat", label: "⚡ DeepSeek-V4.1-Flash (Tốc độ cao - Viết & Dịch HSE)", default: true },
-            { value: "deepseek-reasoner", label: "🧠 DeepSeek-V4.1-Reasoner (Suy luận chuyên sâu)" },
+            { value: "deepseek-chat", label: "⚡ deepseek-chat (DeepSeek Official - Viết & Dịch HSE)", default: true },
+            { value: "deepseek-reasoner", label: "🧠 deepseek-reasoner (DeepSeek Official - Suy luận R1)" },
             { value: "custom", label: "✍️ Nhập mã Model tùy chỉnh..." }
         ],
         gemini: [

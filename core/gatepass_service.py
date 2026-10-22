@@ -2029,7 +2029,7 @@ class GatePassService:
             "Content-Type": "application/json"
         }
 
-        target_model = "DeepSeek-V4.1-Flash"
+        target_model = "deepseek-chat"
         fallback_model = "deepseek-chat"
         api_url = "https://api.deepseek.com/chat/completions"
 
@@ -2168,7 +2168,7 @@ class GatePassService:
         }
 
         payload = {
-            "model": "DeepSeek-V4.1-Flash",
+            "model": "deepseek-chat",
             "messages": [{"role": "user", "content": content_elements}],
             "temperature": 0.1,
             "max_tokens": 2048

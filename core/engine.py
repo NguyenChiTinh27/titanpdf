@@ -153,7 +153,7 @@ class PDFEngine:
         output_path: str, 
         mode: str = "auto",
         api_key: Optional[str] = None,
-        model: str = "DeepSeek-V4.1-Flash",
+        model: str = "deepseek-chat",
         ai_control: bool = False
     ) -> dict:
         """Convert PDF to editable DOCX using Microsoft Word Native COM with safe offline fallback to pdf2docx."""

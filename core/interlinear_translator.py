@@ -727,7 +727,7 @@ class InterlinearTranslator:
 
     DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 
-    DEFAULT_MODEL = "DeepSeek-V4.1-Flash"
+    DEFAULT_MODEL = "deepseek-chat"
     FALLBACK_MODEL = "deepseek-chat"
 
     @classmethod
@@ -737,7 +737,7 @@ class InterlinearTranslator:
         api_key: str, 
         source_lang: str = "en",
         target_lang: str = "vi",
-        model: str = "DeepSeek-V4.1-Flash"
+        model: str = "deepseek-chat"
     ) -> List[str]:
         """Dịch danh sách các đoạn văn bản bằng DeepSeek AI JSON mode."""
         if not texts:
@@ -1076,7 +1076,7 @@ class InterlinearTranslator:
         source_lang: str = "en",
         target_lang: str = "vi",
         output_mode: str = "bilingual",
-        model: str = "DeepSeek-V4.1-Flash",
+        model: str = "deepseek-chat",
         dpi: int = 200,
         page_range: str = "all"
     ) -> Dict[str, Any]:

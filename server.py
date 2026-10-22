@@ -1406,7 +1406,7 @@ def process_pdf_to_word(
     mode: str = Form("auto"),
     ai_control: bool = Form(False),
     api_key: Optional[str] = Form(None),
-    model: str = Form("DeepSeek-V4.1-Flash")
+    model: str = Form("deepseek-chat")
 ):
     saved_path = save_upload_file(file, TEMP_DIR)
     base_name = os.path.splitext(file.filename)[0]
@@ -1738,7 +1738,7 @@ def process_ocr(
     engine: str = Form("deepseek"),
     api_key: Optional[str] = Form(None),
     output_format: Optional[str] = Form(None),
-    model: str = Form("DeepSeek-V4.1-Flash"),
+    model: str = Form("deepseek-chat"),
     lang: str = Form("vie+eng"),
     page_range: str = Form("all")
 ):
@@ -2687,9 +2687,29 @@ def api_msds_export_safety_card(chem_id: str):
         raise HTTPException(status_code=500, detail=f"Lỗi xuất Thẻ an toàn Word: {str(e)}")
 
 
+class UpdateDriveLinksRequest(BaseModel):
+    chemical_id: str
+    drive_file_id: Optional[str] = ""
+    drive_view_url: Optional[str] = ""
+    drive_download_url: Optional[str] = ""
+
+
+@app.post("/api/msds/update-drive-links")
+def api_msds_update_drive_links(payload: UpdateDriveLinksRequest):
+    """Cập nhật ID và đường dẫn tệp Google Drive cho hóa chất sau khi đồng bộ đám mây."""
+    from core.msds_intelligence import MSDSDatabase
+    success = MSDSDatabase.update_drive_links(
+        payload.chemical_id,
+        payload.drive_file_id or "",
+        payload.drive_view_url or "",
+        payload.drive_download_url or ""
+    )
+    return {"success": success, "chemical_id": payload.chemical_id}
+
+
 @app.get("/api/msds/download-original/{chem_id}")
 def api_msds_download_original(chem_id: str):
-    """Tải nhanh tệp MSDS gốc: Ưu tiên kho data/msds_files cục bộ; Tự động chuyển hướng tải từ Google Drive nếu ổ cứng Render bị xóa sau khởi động lại."""
+    """Tải nhanh tệp MSDS gốc: Ưu tiên kho data/msds_files cục bộ; Tự động kết nối Google Drive (Stream / Redirect) nếu ổ cứng Render bị xóa sau khởi động lại."""
     from core.msds_intelligence import MSDSDatabase
     try:
         file_path = MSDSDatabase.resolve_msds_file_path(chem_id)
@@ -2700,15 +2720,47 @@ def api_msds_download_original(chem_id: str):
                 media_type="application/octet-stream"
             )
 
-        # Tự động chuyển hướng Google Drive nếu mất file cục bộ trên Render
+        # 1. Tìm bản ghi trong SQLite
         chem = MSDSDatabase.get_chemical(chem_id)
+
+        # 2. Nếu SQLite chưa có (do Render vừa redeploy), truy vấn từ Google Sheets / GAS
+        if not chem or (not chem.get("drive_file_id") and not chem.get("drive_download_url")):
+            try:
+                from core.msds_gas_sync import MSDSGASSyncService
+                if MSDSGASSyncService.is_configured():
+                    remote_chems = MSDSGASSyncService.fetch_chemicals_from_sheet()
+                    for rc in remote_chems:
+                        if (
+                            str(rc.get("chemical_id") or "").upper() == chem_id.upper() or
+                            str(rc.get("chem_id") or "").upper() == chem_id.upper() or
+                            str(rc.get("product_code") or "").upper() == chem_id.upper()
+                        ):
+                            chem = rc
+                            MSDSDatabase.save_chemical(rc)
+                            break
+            except Exception:
+                pass
+
+        # 3. Stream trực tiếp từ Google Drive hoặc chuyển hướng tải
         if chem:
             drive_download_url = chem.get("drive_download_url") or ""
             drive_file_id = chem.get("drive_file_id") or ""
-            if drive_download_url:
-                return RedirectResponse(url=drive_download_url, status_code=302)
-            if drive_file_id:
-                return RedirectResponse(url=f"https://drive.google.com/uc?export=download&id={drive_file_id}", status_code=302)
+            target_url = drive_download_url or (f"https://drive.google.com/uc?export=download&id={drive_file_id}" if drive_file_id else "")
+            if target_url:
+                try:
+                    import requests
+                    from fastapi.responses import StreamingResponse
+                    r = requests.get(target_url, stream=True, timeout=12)
+                    if r.status_code == 200:
+                        fn = chem.get("source_file") or f"MSDS_{chem_id}.pdf"
+                        return StreamingResponse(
+                            r.iter_content(chunk_size=8192),
+                            media_type=r.headers.get("content-type", "application/octet-stream"),
+                            headers={"Content-Disposition": f'attachment; filename="{fn}"'}
+                        )
+                except Exception:
+                    pass
+                return RedirectResponse(url=target_url, status_code=302)
 
         raise HTTPException(status_code=404, detail=f"Không tìm thấy tệp MSDS gốc của mã '{chem_id}'.")
     except HTTPException:

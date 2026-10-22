@@ -128,7 +128,7 @@ class AIAnalyzeRequest(BaseModel):
     imageData: Optional[str] = Field(default="")
     hint: Optional[str] = Field(default="")
     aiHint: Optional[str] = Field(default="")
-    model: Optional[str] = Field(default="DeepSeek-V4.1-Flash")
+    model: Optional[str] = Field(default="gemini-2.5-flash")
     context: Optional[str] = Field(default="")
 
     def get_image_data(self) -> str:
@@ -158,6 +158,7 @@ class AIBatchAnalyzeRequest(BaseModel):
 
 class PolishRequest(BaseModel):
     text: str = Field(...)
+    context: Optional[str] = Field(default="")
 
 
 class TranslateRequest(BaseModel):
@@ -167,8 +168,9 @@ class TranslateRequest(BaseModel):
 
 class AIConfigModel(BaseModel):
     api_key: Optional[str] = Field(default="")
-    base_url: Optional[str] = Field(default="https://api.deepseek.com/v1")
-    model: Optional[str] = Field(default="DeepSeek-V4.1-Flash")
+    base_url: Optional[str] = Field(default="")
+    model: Optional[str] = Field(default="gemini-2.5-flash")
+    provider: Optional[str] = Field(default="gemini")
 
 
 class UploadImageRequest(BaseModel):
@@ -663,10 +665,15 @@ def save_ai_config(cfg: AIConfigModel, _: str = Depends(require_owner)):
             pass
     if cfg.api_key:
         data["deepseek_api_key"] = cfg.api_key
+        data["ai_api_key"] = cfg.api_key
     if cfg.base_url:
         data["deepseek_base_url"] = cfg.base_url
+        data["ai_base_url"] = cfg.base_url
     if cfg.model:
         data["deepseek_model"] = cfg.model
+        data["ai_model"] = cfg.model
+    if getattr(cfg, "provider", None):
+        data["ai_provider"] = cfg.provider
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return {"success": True, "message": "Đã lưu cấu hình AI thành công."}

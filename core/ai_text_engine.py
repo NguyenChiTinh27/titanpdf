@@ -19,7 +19,7 @@ class AITextEngine:
 
     GOOGLE_TRANSLATE_API = "https://translate.googleapis.com/translate_a/single"
     DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-    PRIMARY_MODEL = "DeepSeek-V4.1-Flash"
+    PRIMARY_MODEL = "deepseek-chat"
     FALLBACK_MODEL = "deepseek-chat"
 
     @classmethod
@@ -349,9 +349,8 @@ class AITextEngine:
 
         # 3. DEEPSEEK (Text-Only Model)
         else:
-            # DeepSeek (deepseek-chat) là mô hình Text-only, tuyệt đối không gửi image_url trực tiếp vào endpoint DeepSeek.
-            # Xử lý thông minh 2 bước:
-            # Bước 1: Kiểm tra xem hệ thống có phụ Gemini Vision Key hoặc OpenAI Key để trích xuất đặc điểm ảnh không
+            # DeepSeek (deepseek-chat) là mô hình Text-only, không hỗ trợ nhận diện hình ảnh trực tiếp.
+            # Kiểm tra xem hệ thống có phụ Gemini Vision Key hoặc OpenAI Key để trích xuất đặc điểm ảnh không
             gemini_key = os.getenv("GEMINI_API_KEY", "")
             if not gemini_key:
                 for s_path in ["settings.json", "data/settings.json"]:
@@ -369,22 +368,25 @@ class AITextEngine:
                 try:
                     visual_context = cls.call_vision_api(
                         image_data=image_data,
-                        prompt="Hãy mô tả chi tiết các hiện vật, thiết bị, tình trạng vi phạm an toàn PCCC/EHS trong ảnh hiện trường này.",
+                        prompt="Hãy quan sát chi tiết hiện vật, thiết bị, tình trạng vi phạm an toàn PCCC/EHS trong ảnh hiện trường này và mô tả rõ các điểm không phù hợp.",
                         api_key=gemini_key,
                         provider="gemini",
                         model="gemini-2.5-flash",
                         timeout=30
                     )
-                except Exception:
+                except Exception as g_err:
                     visual_context = ""
 
-            # Bước 2: Chuyển dữ liệu trích xuất + tiêu chuẩn PCCC/HSE sang DeepSeek (deepseek-chat) để suy luận và dịch song ngữ
-            combined_prompt = prompt
-            if visual_context:
-                combined_prompt += f"\n\n[ĐẶC ĐIỂM HÌNH ẢNH HIỆN TRƯỜNG]:\n{visual_context}"
-            else:
-                combined_prompt += "\n\n[GHI NHẬN HIỆN TRƯỜNG]: Bức ảnh chụp tại vị trí kiểm tra ghi nhận điểm không phù hợp với tiêu chuẩn an toàn PCCC và EHS."
+            if not visual_context:
+                raise ValueError(
+                    "Mô hình DeepSeek hiện tại là văn bản thuần túy (Text-only). "
+                    "Để sử dụng tính năng 'Đọc ảnh & tự soạn' (Multimodal Vision), "
+                    "vui lòng vào 'Cài Đặt Quản Trị' -> 'Cấu Hình API Key & Trí Tuệ Nhân Tạo' "
+                    "và cấu hình API Key Google Gemini (gemini-2.5-flash) hoặc OpenAI (gpt-4o / gpt-4o-mini)!"
+                )
 
+            # Chuyển đặc điểm ảnh đã trích xuất qua DeepSeek để suy luận sâu và định dạng song ngữ
+            combined_prompt = f"{prompt}\n\n[ĐẶC ĐIỂM HÌNH ẢNH HIỆN TRƯỜNG THỰC TẾ]:\n{visual_context}"
             sys_msg = system_prompt or (
                 "Bạn là Chuyên gia Kiểm toán An toàn EHS & PCCC nhà máy ZhanChen.\n"
                 "Hãy phân tích hiện trường, suy luận nguyên nhân gốc rễ và đề xuất biện pháp khắc phục.\n"
