@@ -12,13 +12,14 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 import os
 import re
 import sys
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 import openpyxl
 from openpyxl.chart import BarChart, DoughnutChart, Reference
@@ -26,11 +27,70 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
+logger = logging.getLogger("hse_excel_exporter")
+
 # Paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 HSE_DATA_DIR = Path(__file__).resolve().parent / "data" / "hse"
 DEFAULT_DEFECTS_JSON = HSE_DATA_DIR / "extracted_defects.json"
 DEFAULT_IMAGES_DIR = HSE_DATA_DIR / "extracted_images"
+
+# Standard departmental theme styles (Tab color, Banner BG, Sub BG, Sub Text, Icon)
+DEPT_STYLES = [
+    ("F97316", "C2410C", "FFEDD5", "9A3412", "🏭"),  # Orange (Production)
+    ("10B981", "047857", "D1FAE5", "065F46", "📦"),  # Emerald (Sales/Warehouse)
+    ("8B5CF6", "6D28D9", "EDE9FE", "5B21B6", "🔬"),  # Purple (Tech/Lab)
+    ("0284C7", "0369A1", "E0F2FE", "075985", "🔧"),  # Blue (Maintenance)
+    ("EC4899", "BE185D", "FCE7F3", "9D174D", "🏢"),  # Pink (Admin/HR)
+    ("F59E0B", "B45309", "FEF3C7", "78350F", "⚡"),  # Amber (Electrical/EHS)
+    ("DC2626", "991B1B", "FEE2E2", "7F1D1D", "🧯"),  # Red (Fire/Emergency)
+]
+
+
+def sanitize_sheet_title(name: str, max_length: int = 31) -> str:
+    """
+    Sanitize worksheet title for Excel:
+    - Replaces '/' with ' - ' or formats 'A / B' as 'B (A)'.
+    - Strips forbidden characters: \\ / ? * : [ ]
+    - Slices to max_length (<= 31 characters).
+    - Cleans single quotes and leading/trailing whitespace.
+    """
+    if not name or not isinstance(name, str):
+        return "Sheet"
+
+    s = name.strip()
+    if "/" in s:
+        parts = [p.strip() for p in s.split("/") if p.strip()]
+        if len(parts) == 2:
+            s = f"{parts[1]} ({parts[0]})"
+        else:
+            s = " - ".join(parts)
+
+    s = re.sub(r'[\\/*?:\[\]]', '-', s)
+    s = s.strip(" '\"")
+    s = re.sub(r'\s*-\s*', '-', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+
+    if not s:
+        s = "Bộ phận"
+
+    return s[:max_length].strip()
+
+
+def get_unique_sheet_title(base_title: str, existing_titles: Set[str], max_length: int = 31) -> str:
+    """Ensure worksheet title is unique among existing sheets and strictly <= 31 chars."""
+    cleaned = sanitize_sheet_title(base_title, max_length)
+    if cleaned not in existing_titles:
+        existing_titles.add(cleaned)
+        return cleaned
+
+    for i in range(2, 100):
+        suffix = f"_{i}"
+        truncated = cleaned[: max_length - len(suffix)] + suffix
+        if truncated not in existing_titles:
+            existing_titles.add(truncated)
+            return truncated
+    return cleaned[:max_length]
 
 
 def clean_zh(s: str) -> str:
@@ -133,24 +193,31 @@ class HSEExcelExporter:
                 improve_date = f.get("recheckDate", "") if improved else ""
                 note = clean_vn(f.get("note") or f.get("suggestion") or "")
 
-                # Handle image
+                # Handle image null-safely
                 img_path = ""
-                img_data = f.get("imageData", "")
-                if img_data and img_data.startswith("data:image/") and temp_dir:
+                img_data = f.get("imageData") or ""
+                if img_data and isinstance(img_data, str) and temp_dir:
                     try:
-                        header, b64 = img_data.split(",", 1)
-                        img_bytes = base64.b64decode(b64)
-                        ext = ".jpg"
-                        if "png" in header:
-                            ext = ".png"
-                        tmp_img = os.path.join(temp_dir, f"finding_{idx}{ext}")
-                        with open(tmp_img, "wb") as ifile:
-                            ifile.write(img_bytes)
-                        img_path = tmp_img
-                    except Exception:
-                        pass
-                elif f.get("imagePath") and os.path.exists(f["imagePath"]):
-                    img_path = f["imagePath"]
+                        clean_data = img_data.strip()
+                        if "," in clean_data:
+                            header, b64 = clean_data.split(",", 1)
+                        else:
+                            header, b64 = "", clean_data
+                        clean_b64 = re.sub(r"\s+", "", b64)
+                        if clean_b64:
+                            img_bytes = base64.b64decode(clean_b64)
+                            if len(img_bytes) > 0 and len(img_bytes) <= 30 * 1024 * 1024:
+                                ext = ".png" if "png" in header.lower() else ".jpg"
+                                tmp_img = os.path.join(temp_dir, f"finding_{idx}{ext}")
+                                with open(tmp_img, "wb") as ifile:
+                                    ifile.write(img_bytes)
+                                if os.path.exists(tmp_img) and os.path.getsize(tmp_img) > 0:
+                                    img_path = tmp_img
+                    except Exception as e:
+                        logger.warning(f"Failed to decode defect image safely: {e}")
+                        img_path = ""
+                elif f.get("imagePath") and os.path.exists(str(f["imagePath"])):
+                    img_path = str(f["imagePath"])
 
                 processed_defects.append({
                     "idx": idx,
@@ -540,13 +607,19 @@ class HSEExcelExporter:
                         img_obj.width = 118
                         img_obj.height = 80
                         ws_all.add_image(img_obj, f"H{r_num}")
-                    except Exception:
-                        pass
+                        ws_all[f"H{r_num}"] = ""
+                    except Exception as img_err:
+                        logger.warning(f"Failed to embed defect image: {img_err}")
+                        ws_all[f"H{r_num}"] = "Không có ảnh\n无图片"
+                else:
+                    ws_all[f"H{r_num}"] = "Không có ảnh\n无图片"
 
                 for col_l, _, _ in data_headers:
                     cell = ws_all[f"{col_l}{r_num}"]
                     cell.font = Font(name=self.font_family, size=9.5)
                     cell.border = self.thin_border
+                    if col_l == "H" and ws_all[f"H{r_num}"].value == "Không có ảnh\n无图片":
+                        cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
                     if col_l in ["A", "B", "C", "H", "J"]:
                         cell.alignment = Alignment(horizontal="center", vertical="center")
                     elif col_l in ["D", "E"]:
@@ -569,18 +642,46 @@ class HSEExcelExporter:
             ws_all.auto_filter.ref = f"A4:K{last_row}"
 
             # =================================================================
-            # SHEETS 3+: MULTI-SHEET PER DEPARTMENT
+            # SHEETS 3+: MULTI-SHEET PER DEPARTMENT (DYNAMIC & SANITIZED)
             # =================================================================
-            dept_configs = [
-                ("生产部 / Sản xuất", "🏭 Sản xuất (生产部)", "F97316", "C2410C", "FFEDD5", "9A3412"),
-                ("营业部 / Bán hàng", "📦 Bán hàng (营业部)", "10B981", "047857", "D1FAE5", "065F46"),
-                ("技术部 / Kỹ thuật", "🔬 Kỹ thuật (技术部)", "8B5CF6", "6D28D9", "EDE9FE", "5B21B6")
-            ]
+            existing_titles = {ws_dash.title, ws_all.title}
 
-            for dept_key, sheet_title, tab_col, banner_bg, sub_bg, sub_text in dept_configs:
-                dept_items = [d for d in processed_defects if d["department"] == dept_key]
+            # Discover unique departments from processed defects
+            unique_depts: List[str] = []
+            for item in processed_defects:
+                d = item.get("department") or "生产部 / Sản xuất"
+                if d not in unique_depts:
+                    unique_depts.append(d)
+
+            if not unique_depts:
+                unique_depts = ["生产部 / Sản xuất"]
+
+            for d_idx, dept_key in enumerate(unique_depts):
+                dept_items = [d for d in processed_defects if d.get("department") == dept_key]
                 if not dept_items:
                     continue
+
+                style_idx = d_idx % len(DEPT_STYLES)
+                tab_col, banner_bg, sub_bg, sub_text, default_icon = DEPT_STYLES[style_idx]
+
+                # Match specialized theme based on department keywords
+                dept_lower = dept_key.lower()
+                icon = default_icon
+                if any(k in dept_lower for k in ["sản xuất", "生产"]):
+                    tab_col, banner_bg, sub_bg, sub_text, icon = DEPT_STYLES[0]
+                elif any(k in dept_lower for k in ["bán hàng", "kho", "vận chuyển", "仓储", "营业"]):
+                    tab_col, banner_bg, sub_bg, sub_text, icon = DEPT_STYLES[1]
+                elif any(k in dept_lower for k in ["kỹ thuật", "thí nghiệm", "lab", "rd", "技术"]):
+                    tab_col, banner_bg, sub_bg, sub_text, icon = DEPT_STYLES[2]
+                elif any(k in dept_lower for k in ["bảo trì", "cơ điện", "sửa chữa", "维修"]):
+                    tab_col, banner_bg, sub_bg, sub_text, icon = DEPT_STYLES[3]
+                elif any(k in dept_lower for k in ["hành chính", "nhân sự", "văn phòng", "行政"]):
+                    tab_col, banner_bg, sub_bg, sub_text, icon = DEPT_STYLES[4]
+
+                # Sanitize sheet title strictly <= 31 chars without forbidden characters (/ \ ? * : [ ])
+                clean_dept = sanitize_sheet_title(dept_key, max_length=26)
+                raw_sheet_title = f"{icon} {clean_dept}".strip()
+                sheet_title = get_unique_sheet_title(raw_sheet_title, existing_titles, max_length=31)
 
                 ws_dept = wb.create_sheet(title=sheet_title)
                 ws_dept.sheet_properties.tabColor = tab_col
@@ -623,8 +724,8 @@ class HSEExcelExporter:
                     ws_dept.column_dimensions[col_l].width = width
 
                 # Data Rows
-                for d_idx, item in enumerate(dept_items, 1):
-                    r_num = 4 + d_idx
+                for d_i, item in enumerate(dept_items, 1):
+                    r_num = 4 + d_i
                     ws_dept.row_dimensions[r_num].height = 70
 
                     ws_dept[f"A{r_num}"] = item["code"]
@@ -645,13 +746,19 @@ class HSEExcelExporter:
                             img_dept.width = 118
                             img_dept.height = 80
                             ws_dept.add_image(img_dept, f"H{r_num}")
-                        except Exception:
-                            pass
+                            ws_dept[f"H{r_num}"] = ""
+                        except Exception as img_err:
+                            logger.warning(f"Failed to embed dept image: {img_err}")
+                            ws_dept[f"H{r_num}"] = "Không có ảnh\n无图片"
+                    else:
+                        ws_dept[f"H{r_num}"] = "Không có ảnh\n无图片"
 
                     for col_l, _, _ in data_headers:
                         cell = ws_dept[f"{col_l}{r_num}"]
                         cell.font = Font(name=self.font_family, size=9.5)
                         cell.border = self.thin_border
+                        if col_l == "H" and ws_dept[f"H{r_num}"].value == "Không có ảnh\n无图片":
+                            cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
                         if col_l in ["A", "B", "C", "H", "J"]:
                             cell.alignment = Alignment(horizontal="center", vertical="center")
                         elif col_l in ["D", "E"]:

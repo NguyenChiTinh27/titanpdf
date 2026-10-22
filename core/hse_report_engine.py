@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 import os
 import re
 import sys
@@ -25,6 +26,8 @@ import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+logger = logging.getLogger("hse_report_engine")
 
 from docx import Document
 from docx.enum.section import WD_SECTION
@@ -663,26 +666,32 @@ def add_page_field(paragraph) -> None:
 # =============================================================================
 
 def fit_image(
-    data_url: str,
+    data_url: Optional[str],
     max_width: float = 3.38,
     max_height: float = 4.25,
-) -> tuple[io.BytesIO, float, float]:
+) -> tuple[Optional[io.BytesIO], float, float]:
     """
     Fits base64 image proportionally within max bounding box using Lanczos resampling.
     Auto-corrects EXIF orientation and outputs high-quality JPEG (90%).
+    Null-safe: Never raises ValueError, returns (None, 0.0, 0.0) if missing or invalid.
     """
-    if not data_url or "," not in data_url:
-        img = Image.new("RGB", (600, 750), color="#F0F4F8")
-        out = io.BytesIO()
-        img.save(out, format="JPEG", quality=90)
-        out.seek(0)
-        return out, max_width, max_height
+    if not data_url or not isinstance(data_url, str) or not data_url.strip():
+        return None, 0.0, 0.0
 
-    header, encoded = data_url.split(",", 1)
     try:
-        raw = base64.b64decode(encoded)
-        if len(raw) > 20 * 1024 * 1024:
-            raise ValueError("Ảnh vượt quá giới hạn 20MB.")
+        if "," in data_url:
+            _, encoded = data_url.split(",", 1)
+        else:
+            encoded = data_url.strip()
+
+        clean_encoded = re.sub(r"\s+", "", encoded)
+        if not clean_encoded:
+            return None, 0.0, 0.0
+
+        raw = base64.b64decode(clean_encoded)
+        if len(raw) == 0 or len(raw) > 30 * 1024 * 1024:
+            return None, 0.0, 0.0
+
         img = Image.open(io.BytesIO(raw))
         img = ImageOps.exif_transpose(img)
         if img.mode != "RGB":
@@ -702,7 +711,8 @@ def fit_image(
             w_in = max_height * aspect
         return out, w_in, h_in
     except Exception as exc:
-        raise ValueError(f"Dữ liệu ảnh không hợp lệ: {exc}") from exc
+        logger.warning(f"fit_image failed safely: {exc}")
+        return None, 0.0, 0.0
 
 
 def extract_cell_image_base64(cell, doc: Document) -> str:
@@ -1005,8 +1015,25 @@ def populate_finding_row(
     stream, w_in, h_in = fit_image(target_img, max_width=3.38, max_height=4.25)
     p_img = right.paragraphs[0]
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    set_paragraph_layout(p_img, space_before_pt=0, space_after_pt=0, line_spacing=1.0)
-    p_img.add_run().add_picture(stream, width=Inches(w_in), height=Inches(h_in))
+    if stream:
+        try:
+            set_paragraph_layout(p_img, space_before_pt=0, space_after_pt=0, line_spacing=1.0)
+            p_img.add_run().add_picture(stream, width=Inches(w_in), height=Inches(h_in))
+        except Exception as pic_err:
+            logger.warning(f"Failed to add picture to cell: {pic_err}")
+            set_paragraph_layout(p_img, space_before_pt=30, space_after_pt=0, line_spacing=1.2)
+            run = p_img.add_run("(Không có ảnh / 无图片)")
+            run.font.italic = True
+            run.font.color.rgb = RGBColor(140, 140, 140)
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(10.5)
+    else:
+        set_paragraph_layout(p_img, space_before_pt=30, space_after_pt=0, line_spacing=1.2)
+        run = p_img.add_run("(Không có ảnh / 无图片)")
+        run.font.italic = True
+        run.font.color.rgb = RGBColor(140, 140, 140)
+        run.font.name = "Times New Roman"
+        run.font.size = Pt(10.5)
 
 
 def format_separator_row(row) -> None:

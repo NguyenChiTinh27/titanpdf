@@ -1053,14 +1053,29 @@
   // WORD EXPORT & DECOMPILER IMPORT
   // ==========================================================================
   async function exportWordDocument() {
-    try {
-      const dateVal = ($("#hse-inspection-date")?.value || "").trim();
-      if (!dateVal) throw new Error("Vui lòng chọn ngày kiểm tra.");
+    const wordBtns = [$("#hse-export-word-btn"), $("#hse-preview-export-btn")].filter(Boolean);
+    wordBtns.forEach(b => {
+      b.disabled = true;
+      b.dataset.origText = b.innerHTML;
+      b.innerHTML = `<span>⏳</span> Đang tạo Word...`;
+    });
 
-      // Check checklist fail items validation
+    try {
+      const dateVal = ($("#hse-inspection-date")?.value || "").trim() || state.metadata.date || new Date().toISOString().substring(0, 10);
+      if ($("#hse-inspection-date") && !$("#hse-inspection-date").value) {
+        $("#hse-inspection-date").value = dateVal;
+      }
+      state.metadata.date = dateVal;
+
+      // Auto-fill checklist fail items if missing instead of blocking export
       for (const item of state.checklist.values()) {
-        if (item.status === "fail" && (!item.issueVi.trim() || !item.issueZh.trim())) {
-          throw new Error(`Mục "${item.category}" đánh dấu Không đạt nhưng thiếu văn bản mô tả song ngữ.`);
+        if (item.status === "fail") {
+          if (!item.issueVi || !item.issueVi.trim()) {
+            item.issueVi = "Chưa đạt tiêu chuẩn an toàn EHS (Cần khắc phục)";
+          }
+          if (!item.issueZh || !item.issueZh.trim()) {
+            item.issueZh = "未达到EHS安全标准 (需整改)";
+          }
         }
       }
 
@@ -1080,15 +1095,34 @@
 
       const blob = await resp.blob();
       const disposition = resp.headers.get("Content-Disposition") || "";
-      const suffix = (state.reportMode === "improvement") ? "_Improvement" : "";
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `HSE_Report_${payload.metadata.date}${suffix}.docx`;
+      let filename = "";
+      if (disposition) {
+        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8Match && utf8Match[1]) {
+          try { filename = decodeURIComponent(utf8Match[1].trim()); } catch (e) {}
+        }
+        if (!filename) {
+          const quotedMatch = disposition.match(/filename="([^"]+)"/i);
+          if (quotedMatch && quotedMatch[1]) {
+            filename = quotedMatch[1];
+          }
+        }
+      }
+      if (!filename) {
+        const suffix = (state.reportMode === "improvement") ? "_Improvement" : "";
+        filename = `越南展辰_HSE_办巡厂报告_${dateVal}${suffix}.docx`;
+      }
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 2500);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 2500);
 
       const isDriveLocked = resp.headers.get("X-Drive-Locked") === "true";
       if (isDriveLocked) {
@@ -1097,13 +1131,24 @@
         showToast("✓ Đã xuất file Word (.docx) thành công!");
       }
     } catch (err) {
-      showToast(err.message, true);
+      showToast(err.message || "Lỗi khi xuất file Word.", true);
     } finally {
+      wordBtns.forEach(b => {
+        b.disabled = false;
+        if (b.dataset.origText) b.innerHTML = b.dataset.origText;
+      });
       setLoading(false);
     }
   }
 
   async function exportExcelDocument() {
+    const excelBtn = $("#hse-export-excel-btn");
+    if (excelBtn) {
+      excelBtn.disabled = true;
+      excelBtn.dataset.origText = excelBtn.innerHTML;
+      excelBtn.innerHTML = `<span>⏳</span> Đang tạo Excel...`;
+    }
+
     try {
       setLoading(true, "Đang khởi tạo báo cáo Excel (.xlsx) đa Sheet chuyên nghiệp kèm Dashboard & Biểu đồ...");
       const payload = makePayload();
@@ -1121,16 +1166,36 @@
 
       const blob = await resp.blob();
       const disposition = resp.headers.get("Content-Disposition") || "";
-      const rawDate = payload.metadata?.date || "2026-09";
-      const monthStr = rawDate.split("T")[0].substring(0, 7).replace("-", "_");
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `HSE_Bao_Cao_Tong_Hop_${monthStr}.xlsx`;
+      let filename = "";
+      if (disposition) {
+        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8Match && utf8Match[1]) {
+          try { filename = decodeURIComponent(utf8Match[1].trim()); } catch (e) {}
+        }
+        if (!filename) {
+          const quotedMatch = disposition.match(/filename="([^"]+)"/i);
+          if (quotedMatch && quotedMatch[1]) {
+            filename = quotedMatch[1];
+          }
+        }
+      }
+      if (!filename) {
+        const rawDate = payload.metadata?.date || "2026-09";
+        const parts = rawDate.split("T")[0].split("-");
+        const monthYear = (parts.length >= 2) ? `${parts[1]}_${parts[0]}` : "09_2026";
+        filename = `HSE_Report_${monthYear}.xlsx`;
+      }
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 2500);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 2500);
 
       const isDriveLocked = resp.headers.get("X-Drive-Locked") === "true";
       if (isDriveLocked) {
@@ -1141,6 +1206,10 @@
     } catch (err) {
       showToast(err.message || "Lỗi khi xuất file Excel.", true);
     } finally {
+      if (excelBtn) {
+        excelBtn.disabled = false;
+        if (excelBtn.dataset.origText) excelBtn.innerHTML = excelBtn.dataset.origText;
+      }
       setLoading(false);
     }
   }
@@ -1843,7 +1912,10 @@
     // Mark all pass
     $("#hse-mark-all-pass-btn")?.addEventListener("click", markAllChecklistPass);
 
-    // Export Word & Excel
+    // Export Word & Excel (with global exposure for bulletproof button triggering)
+    window.exportHseWordDocument = exportWordDocument;
+    window.exportHseExcelDocument = exportExcelDocument;
+
     $("#hse-export-word-btn")?.addEventListener("click", exportWordDocument);
     $("#hse-preview-export-btn")?.addEventListener("click", exportWordDocument);
     $("#hse-export-excel-btn")?.addEventListener("click", exportExcelDocument);

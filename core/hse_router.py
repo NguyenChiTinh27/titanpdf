@@ -228,7 +228,6 @@ def get_checklist_schema():
 def generate_docx_endpoint(payload: GenerateReportRequest):
     from core.hse_report_engine import build_docx, safe_write_bytes
 
-    payload_dict = payload.model_dump()
     raw_date = payload.metadata.date
     if raw_date:
         try:
@@ -237,9 +236,15 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Ngày kiểm tra không hợp lệ: {raw_date}")
 
+    # Auto-fill missing bilingual issues for failed checklist items instead of failing
     for item in payload.checklist:
-        if item.status == "fail" and not item.issueVi and not item.issueZh:
-            raise HTTPException(status_code=400, detail=f"Mục checklist dòng {item.row} chưa đủ vấn đề Việt–Trung.")
+        if item.status == "fail":
+            if not item.issueVi or not item.issueVi.strip():
+                item.issueVi = "Chưa đạt tiêu chuẩn an toàn EHS (Cần khắc phục)"
+            if not item.issueZh or not item.issueZh.strip():
+                item.issueZh = "未达到EHS安全标准 (需整改)"
+
+    payload_dict = payload.model_dump()
 
     try:
         docx_bytes = build_docx(payload_dict)
@@ -252,6 +257,8 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
     clean_date = insp_date.split("T")[0]
     suffix = "_Improvement" if payload.get_effective_mode() == "improvement" else ""
     filename = f"HSE_Report_{clean_date}{suffix}.docx"
+    bilingual_filename = f"越南展辰_HSE_办巡厂报告_{clean_date}{suffix}.docx"
+    quoted_bilingual = urllib.parse.quote(bilingual_filename)
     target_path = REPORTS_DIR / filename
 
     actual_path, was_locked = safe_write_bytes(target_path, docx_bytes)
@@ -272,7 +279,7 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
             pass
 
     headers = {
-        "Content-Disposition": f'attachment; filename="{actual_path.name}"',
+        "Content-Disposition": f'attachment; filename="{actual_path.name}"; filename*=UTF-8\'\'{quoted_bilingual}',
         "X-Drive-Locked": "true" if was_locked else "false",
         "X-Drive-File": urllib.parse.quote(drive_filename),
         "X-Drive-Backup": "true" if drive_backup else "false",
@@ -309,11 +316,16 @@ async def export_excel_endpoint(request: Request):
     meta = (payload_dict or {}).get("metadata", {})
     raw_date = meta.get("date") or "2026-09-30"
     clean_date = raw_date.split("T")[0]
-    month_str = clean_date[:7].replace("-", "_") if len(clean_date) >= 7 else "2026_09"
-    filename = f"HSE_Bao_Cao_Tong_Hop_{month_str}.xlsx"
+    parts = clean_date.split("-")
+    if len(parts) >= 2:
+        month_year_str = f"{parts[1]}_{parts[0]}"
+    else:
+        month_year_str = "09_2026"
+    filename = f"HSE_Report_{month_year_str}.xlsx"
     target_path = REPORTS_DIR / filename
 
     actual_path, was_locked = safe_write_bytes(target_path, excel_bytes)
+    quoted_filename = urllib.parse.quote(filename)
 
     # Google Drive auto-backup check
     drive_backup = False
@@ -331,7 +343,7 @@ async def export_excel_endpoint(request: Request):
             pass
 
     headers = {
-        "Content-Disposition": f'attachment; filename="{actual_path.name}"',
+        "Content-Disposition": f'attachment; filename="{actual_path.name}"; filename*=UTF-8\'\'{quoted_filename}',
         "X-Drive-Locked": "true" if was_locked else "false",
         "X-Drive-File": urllib.parse.quote(drive_filename),
         "X-Drive-Backup": "true" if drive_backup else "false",

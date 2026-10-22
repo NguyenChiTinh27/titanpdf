@@ -4582,10 +4582,10 @@
                     📄 Nhập Word cũ (.docx)
                     <input type="file" id="hse-import-docx-input" accept=".docx" style="display: none;" />
                 </label>
-                <button type="button" class="hse-btn hse-btn-primary" id="hse-export-word-btn" title="Xuất tài liệu Word (.docx) chuẩn A4">
+                <button type="button" class="hse-btn hse-btn-primary" id="hse-export-word-btn" title="Xuất tài liệu Word (.docx) chuẩn A4" onclick="window.exportHseWordDocument && window.exportHseWordDocument()">
                     📄 Xuất file Word (.docx)
                 </button>
-                <button type="button" class="hse-btn" id="hse-export-excel-btn" title="Xuất báo cáo Excel (.xlsx) đa Sheet chuyên nghiệp kèm Dashboard & Biểu đồ" style="background: linear-gradient(135deg, #10b981, #047857); color: #fff; font-weight: 700; border: none; box-shadow: 0 2px 6px rgba(16,185,129,0.3); display: inline-flex; align-items: center; gap: 6px;">
+                <button type="button" class="hse-btn" id="hse-export-excel-btn" title="Xuất báo cáo Excel (.xlsx) đa Sheet chuyên nghiệp kèm Dashboard & Biểu đồ" onclick="window.exportHseExcelDocument && window.exportHseExcelDocument()" style="background: linear-gradient(135deg, #10b981, #047857); color: #fff; font-weight: 700; border: none; box-shadow: 0 2px 6px rgba(16,185,129,0.3); display: inline-flex; align-items: center; gap: 6px;">
                     📊 Xuất file Excel (.xlsx)
                 </button>
             </div>
@@ -4709,7 +4709,7 @@
                         </button>
                     </div>
                     <span id="hse-page-summary" style="font-size: 11.5px; font-weight: 700; color: #475569;">Tổng 5 trang A4</span>
-                    <button type="button" class="hse-btn hse-btn-primary" id="hse-preview-export-btn" style="padding: 5px 12px; font-size: 11.5px;">
+                    <button type="button" class="hse-btn hse-btn-primary" id="hse-preview-export-btn" onclick="window.exportHseWordDocument && window.exportHseWordDocument()" style="padding: 5px 12px; font-size: 11.5px;">
                         Xuất Word
                     </button>
                 </div>
