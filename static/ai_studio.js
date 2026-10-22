@@ -1669,6 +1669,18 @@ class CILCloudSync {
     const drive_view_url = item.drive_view_url || (drive_file_id ? `https://drive.google.com/file/d/${drive_file_id}/preview` : "");
     const drive_download_url = item.drive_download_url || (drive_file_id ? `https://drive.google.com/uc?export=download&id=${drive_file_id}` : "");
 
+    const hazard_classification = item.hazard_classification || item.hazardClassification || "Không phân loại";
+    const physical_state = item.physical_state || item.physicalState || item.appearance || "Chất lỏng";
+    const flash_point = item.flash_point || item.flashPoint || "KCDL (N/A)";
+    const boiling_point = item.boiling_point || item.boilingPoint || "KCDL (N/A)";
+    const density = item.density || item.specific_gravity || item.specificGravity || "KCDL (N/A)";
+    const un_no = item.un_no || item.un_number || item.unNumber || "Không áp dụng";
+    const acute_toxicity = item.acute_toxicity || item.acuteToxicity || "Không phân loại";
+    const stot = item.stot || "KCDL (N/A)";
+    const aquatic_hazard = item.aquatic_hazard || item.aquaticHazard || "Không phân loại";
+    const self_reactive_peroxide = item.self_reactive_peroxide || item.selfReactivePeroxide || "Không phân loại";
+    const other_hazards = item.other_hazards || item.otherHazards || "KCDL (N/A)";
+
     return {
       id,
       product_code,
@@ -1686,6 +1698,31 @@ class CILCloudSync {
       drive_view_url,
       drive_download_url,
       last_synced_at: item.last_synced_at || new Date().toISOString(),
+
+      // 11 Trường Thông Số MSDS & CIL Nâng Cao
+      hazard_classification,
+      hazardClassification: hazard_classification,
+      physical_state,
+      physicalState: physical_state,
+      flash_point,
+      flashPoint: flash_point,
+      boiling_point,
+      boilingPoint: boiling_point,
+      density,
+      specific_gravity: density,
+      specificGravity: density,
+      un_no,
+      un_number: un_no,
+      unNumber: un_no,
+      acute_toxicity,
+      acuteToxicity: acute_toxicity,
+      stot,
+      aquatic_hazard,
+      aquaticHazard: aquatic_hazard,
+      self_reactive_peroxide,
+      selfReactivePeroxide: self_reactive_peroxide,
+      other_hazards,
+      otherHazards: other_hazards,
 
       // Aliases
       chemical_id: id,
@@ -2080,6 +2117,18 @@ const MsdsGasSync = {
         const drive_view_url = item.drive_view_url || (drive_file_id ? `https://drive.google.com/file/d/${drive_file_id}/preview` : "");
         const drive_download_url = item.drive_download_url || (drive_file_id ? `https://drive.google.com/uc?export=download&id=${drive_file_id}` : "");
 
+        const hazard_classification = item.hazard_classification || item.hazardClassification || "Không phân loại";
+        const physical_state = item.physical_state || item.physicalState || item.appearance || "Chất lỏng";
+        const flash_point = item.flash_point || item.flashPoint || "KCDL (N/A)";
+        const boiling_point = item.boiling_point || item.boilingPoint || "KCDL (N/A)";
+        const density = item.density || item.specific_gravity || item.specificGravity || "KCDL (N/A)";
+        const un_no = item.un_no || item.un_number || item.unNumber || "Không áp dụng";
+        const acute_toxicity = item.acute_toxicity || item.acuteToxicity || "Không phân loại";
+        const stot = item.stot || "KCDL (N/A)";
+        const aquatic_hazard = item.aquatic_hazard || item.aquaticHazard || "Không phân loại";
+        const self_reactive_peroxide = item.self_reactive_peroxide || item.selfReactivePeroxide || "Không phân loại";
+        const other_hazards = item.other_hazards || item.otherHazards || "KCDL (N/A)";
+
         const normalized = {
             id,
             product_code,
@@ -2097,6 +2146,31 @@ const MsdsGasSync = {
             drive_view_url,
             drive_download_url,
             last_synced_at: item.last_synced_at || new Date().toISOString(),
+
+            // 11 Trường Thông Số MSDS & CIL Nâng Cao
+            hazard_classification,
+            hazardClassification: hazard_classification,
+            physical_state,
+            physicalState: physical_state,
+            flash_point,
+            flashPoint: flash_point,
+            boiling_point,
+            boilingPoint: boiling_point,
+            density,
+            specific_gravity: density,
+            specificGravity: density,
+            un_no,
+            un_number: un_no,
+            unNumber: un_no,
+            acute_toxicity,
+            acuteToxicity: acute_toxicity,
+            stot,
+            aquatic_hazard,
+            aquaticHazard: aquatic_hazard,
+            self_reactive_peroxide,
+            selfReactivePeroxide: self_reactive_peroxide,
+            other_hazards,
+            otherHazards: other_hazards,
 
             // Backward compatibility aliases
             chem_id: id,
@@ -2513,6 +2587,60 @@ async function loadMsdsChemicalsList(query = "") {
     }
 }
 
+function renderMsdsFlashPointBadge(fpRaw) {
+    const s = String(fpRaw || "").trim();
+    if (!s || s === "-" || s === "KCDL (N/A)" || s.toLowerCase().includes("không")) {
+        return `<span style="color:#94a3b8; font-size:11px;">Chớp cháy: -</span>`;
+    }
+    const m = s.match(/([<>]?\s*-?\d+(?:\.\d+)?)/);
+    const val = m ? parseFloat(m[1].replace(/[^\d.-]/g, "")) : null;
+    if (val !== null && val <= 60) {
+        return `<span style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:10px; font-weight:700; padding:1px 5px; border-radius:3px; display:inline-flex; align-items:center; gap:2px;" title="Điểm chớp cháy nguy hiểm <= 60°C">🔥 ${escapeHtml(s)}</span>`;
+    }
+    return `<span style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; font-size:10.5px; font-weight:600; padding:1px 5px; border-radius:3px;">Chớp: ${escapeHtml(s)}</span>`;
+}
+
+function renderMsdsUnBadge(unRaw) {
+    const s = String(unRaw || "").trim();
+    if (!s || s === "-" || s === "N/A" || s === "KCDL (N/A)" || s.toLowerCase().includes("không áp dụng") || s.toLowerCase().includes("không thuộc")) {
+        return `<span style="color:#94a3b8; font-size:10.5px;">UN: K/Áp dụng</span>`;
+    }
+    return `<span style="background:#ffedd5; color:#c2410c; border:1px solid #fdba74; font-size:10px; font-weight:700; padding:1px 5px; border-radius:3px; display:inline-flex; align-items:center; gap:2px;" title="Số UN hàng nguy hiểm vận chuyển">🚚 ${escapeHtml(s)}</span>`;
+}
+
+function renderMsdsToxHazardBadges(item) {
+    const badges = [];
+    // Acute toxicity
+    const ac = String(item.acute_toxicity || item.acuteToxicity || "").trim();
+    if (ac && ac !== "-" && ac !== "KCDL (N/A)" && !ac.toLowerCase().includes("không phân loại")) {
+        badges.push(`<span style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:9.5px; font-weight:700; padding:1px 4px; border-radius:3px;" title="${escapeHtml(ac)}">☠️ Độc cấp tính</span>`);
+    }
+    // STOT
+    const st = String(item.stot || "").trim();
+    if (st && st !== "-" && st !== "KCDL (N/A)" && !st.toLowerCase().includes("không")) {
+        badges.push(`<span style="background:#fef3c7; color:#b45309; border:1px solid #fcd34d; font-size:9.5px; font-weight:700; padding:1px 4px; border-radius:3px;" title="${escapeHtml(st)}">🎯 STOT</span>`);
+    }
+    // Aquatic Hazard
+    const aq = String(item.aquatic_hazard || item.aquaticHazard || "").trim();
+    if (aq && aq !== "-" && aq !== "KCDL (N/A)" && !aq.toLowerCase().includes("không phân loại")) {
+        badges.push(`<span style="background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; font-size:9.5px; font-weight:700; padding:1px 4px; border-radius:3px;" title="${escapeHtml(aq)}">🐟 Thủy sinh</span>`);
+    }
+    // Self-reactive / Organic Peroxide
+    const sr = String(item.self_reactive_peroxide || item.selfReactivePeroxide || "").trim();
+    if (sr && sr !== "-" && sr !== "KCDL (N/A)" && !sr.toLowerCase().includes("không phân loại")) {
+        badges.push(`<span style="background:#ffedd5; color:#c2410c; border:1px solid #fdba74; font-size:9.5px; font-weight:700; padding:1px 4px; border-radius:3px;" title="${escapeHtml(sr)}">💥 Tự P/Ứ-Peroxyt</span>`);
+    }
+    // Other hazards
+    const oth = String(item.other_hazards || item.otherHazards || "").trim();
+    if (oth && oth !== "-" && oth !== "KCDL (N/A)" && !oth.toLowerCase().includes("không")) {
+        badges.push(`<span style="background:#f8fafc; color:#475569; border:1px solid #cbd5e1; font-size:9.5px; font-weight:600; padding:1px 4px; border-radius:3px;" title="${escapeHtml(oth)}">⚠️ Nguy cơ khác</span>`);
+    }
+    if (badges.length === 0) {
+        return `<span style="color:#94a3b8; font-size:10.5px;">Ít/không độc tính đặc biệt</span>`;
+    }
+    return badges.join("");
+}
+
 function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
     const tbody = document.getElementById("msds-table-body");
     const emptyNotice = document.getElementById("msds-table-empty");
@@ -2726,6 +2854,25 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
                 <td class="msds-col-supplier">${escapeHtml(supplierName)}</td>
                 <td class="msds-col-ghs">
                     <div class="msds-ghs-wrap">${ghsBadges}</div>
+                </td>
+                <td class="msds-col-physchem" style="font-size:11.5px; line-height:1.45;">
+                    <div style="font-weight:700; color:#0f172a;">${escapeHtml(item.physical_state || item.physicalState || "Chất lỏng")}</div>
+                    <div style="margin-top:2px; display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                        ${renderMsdsFlashPointBadge(item.flash_point || item.flashPoint)}
+                        ${renderMsdsUnBadge(item.un_no || item.un_number || item.unNumber)}
+                    </div>
+                    <div style="font-size:11px; color:#64748b; margin-top:2px;">
+                        <span>Sôi: <b>${escapeHtml(item.boiling_point || item.boilingPoint || "-")}</b></span> ·
+                        <span>T/Trọng: <b>${escapeHtml(item.density || item.specificGravity || "-")}</b></span>
+                    </div>
+                </td>
+                <td class="msds-col-toxhazard" style="font-size:11.5px; line-height:1.45;">
+                    <div style="font-weight:600; color:#334155; max-width:210px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(item.hazard_classification || item.hazardClassification || "-")}">
+                        ${escapeHtml(item.hazard_classification || item.hazardClassification || "-")}
+                    </div>
+                    <div style="margin-top:3px; display:flex; gap:3px; flex-wrap:wrap;">
+                        ${renderMsdsToxHazardBadges(item)}
+                    </div>
                 </td>
                 <td class="msds-col-file">
                     <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
@@ -2969,7 +3116,7 @@ async function openMsdsSafetyModal(chemId) {
         cardBody.innerHTML = `
             <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                 <!-- Section: General & Identifiers -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; margin-bottom:16px;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; margin-bottom:14px;">
                     <div>
                         <div style="font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase;">Mã Sản Phẩm / MSDS</div>
                         <div style="font-size:14px; font-weight:800; color:#0F5C78; font-family:monospace; margin-top:2px;">${escapeHtml(codeDisplay)}</div>
@@ -2985,8 +3132,136 @@ async function openMsdsSafetyModal(chemId) {
                         <div style="font-size:14px; font-weight:700; color:#0F5C78; font-family:monospace; margin-top:2px;">${escapeHtml(chem.cas_numbers || "Hỗn hợp")}</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase;">Ngoại Quan & Điểm Chớp Cháy</div>
-                        <div style="font-size:13px; font-weight:600; color:#334155; margin-top:2px;">${escapeHtml(chem.physical_state || chem.appearance || "Chất lỏng")} · <span style="color:#b91c1c; font-weight:700;">${escapeHtml(chem.flash_point || "K/XĐ")}</span></div>
+                        <div style="font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase;">Nhà Sản Xuất / Cung Cấp</div>
+                        <div style="font-size:13px; font-weight:600; color:#334155; margin-top:2px;">${escapeHtml(supplierDisplay)}</div>
+                    </div>
+                </div>
+
+                <!-- CARD 1: THÔNG SỐ ĐẶC TÍNH LÝ - HÓA & VẬN CHUYỂN (MỤC 9 & 14 GHS) -->
+                <div id="msds-view-card-physchem" style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:12px 16px; margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div style="font-weight:700; color:#0369a1; font-size:13px; display:flex; align-items:center; gap:6px;">
+                            <span>🧪 THÔNG SỐ LÝ - HÓA &amp; VẬN CHUYỂN (MỤC 9 &amp; MỤC 14 GHS)</span>
+                        </div>
+                        <span style="font-size:11px; color:#0284c7; background:#e0f2fe; padding:2px 8px; border-radius:4px; font-weight:600;">Tiêu Chuẩn Quốc Tế</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:12.5px;">
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #e0f2fe;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Trạng Thái (State)</div>
+                            <div style="font-weight:700; color:#0f172a; margin-top:2px;">${escapeHtml(chem.physical_state || chem.physicalState || chem.appearance || "Chất lỏng")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #e0f2fe;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Điểm Chớp Cháy</div>
+                            <div style="margin-top:2px;">${renderMsdsFlashPointBadge(chem.flash_point || chem.flashPoint)}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #e0f2fe;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Nhiệt Độ Sôi</div>
+                            <div style="font-weight:700; color:#0f172a; margin-top:2px;">${escapeHtml(chem.boiling_point || chem.boilingPoint || "KCDL (N/A)")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #e0f2fe;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Tỷ Trọng / KLR</div>
+                            <div style="font-weight:700; color:#0f172a; margin-top:2px;">${escapeHtml(chem.density || chem.specificGravity || "KCDL (N/A)")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #e0f2fe;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Mã Số UN Vận Chuyển</div>
+                            <div style="margin-top:2px;">${renderMsdsUnBadge(chem.un_no || chem.un_number || chem.unNumber)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARD 2: PHÂN LOẠI NGUY HIỂM & ĐỘC TÍNH CHUYÊN SÂU (MỤC 2, 10, 11, 12 GHS) -->
+                <div id="msds-view-card-toxhazard" style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:12px 16px; margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div style="font-weight:700; color:#c2410c; font-size:13px; display:flex; align-items:center; gap:6px;">
+                            <span>⚠️ PHÂN LOẠI NGUY HIỂM &amp; ĐỘC TÍNH CHUYÊN SÂU (MỤC 2, 10, 11, 12 GHS)</span>
+                        </div>
+                        <span style="font-size:11px; color:#ea580c; background:#ffedd5; padding:2px 8px; border-radius:4px; font-weight:600;">Kiểm Định An Toàn</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; font-size:12.5px;">
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #ffedd5;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Phân Loại Nguy Hiểm Sản Phẩm (Mục 2)</div>
+                            <div style="font-weight:700; color:#1e293b; margin-top:2px; line-height:1.4;">${escapeHtml(chem.hazard_classification || chem.hazardClassification || "Không phân loại")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #ffedd5;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Độc Cấp Tính (Acute Toxicity - Mục 11)</div>
+                            <div style="font-weight:600; color:#1e293b; margin-top:2px; line-height:1.4;">${escapeHtml(chem.acute_toxicity || chem.acuteToxicity || "Không phân loại")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #ffedd5;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">STOT - Độc Tính Cơ Quan Đích (Mục 11)</div>
+                            <div style="font-weight:600; color:#1e293b; margin-top:2px; line-height:1.4;">${escapeHtml(chem.stot || "KCDL (N/A)")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #ffedd5;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Nguy Hại Môi Trường Thủy Sinh (Mục 12)</div>
+                            <div style="font-weight:600; color:#1e293b; margin-top:2px; line-height:1.4;">${escapeHtml(chem.aquatic_hazard || chem.aquaticHazard || "Không phân loại")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #ffedd5;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Tự Phản Ứng / Peroxyt Hữu Cơ (Mục 10)</div>
+                            <div style="font-weight:600; color:#1e293b; margin-top:2px; line-height:1.4;">${escapeHtml(chem.self_reactive_peroxide || chem.selfReactivePeroxide || "Không phân loại")}</div>
+                        </div>
+                        <div style="background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #ffedd5;">
+                            <div style="color:#64748b; font-size:11px; font-weight:600;">Nguy Cơ Khác (Da, Mắt, Mẫn Cảm, CMR, Hít Phải)</div>
+                            <div style="font-weight:600; color:#1e293b; margin-top:2px; line-height:1.4;">${escapeHtml(chem.other_hazards || chem.otherHazards || "KCDL (N/A)")}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KHUNG CHỈNH SỬA THÔNG SỐ (INLINE EDIT MODE - BAN ĐẦU ẨN) -->
+                <div id="msds-specs-edit-form" class="hidden" style="background:#f8fafc; border:2px dashed #0d9488; border-radius:8px; padding:16px; margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="font-weight:800; color:#0f766e; font-size:14px; display:flex; align-items:center; gap:6px;">
+                            <span>✏️ HIỆU CHỈNH 11 THÔNG SỐ LÝ - HÓA, UN, PHÂN LOẠI &amp; ĐỘC TÍNH</span>
+                        </div>
+                        <span style="font-size:11.5px; color:#64748b;">Chỉnh sửa trực tiếp và lưu đồng bộ vào CSDL &amp; Báo cáo CIL</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; font-size:12px;">
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Trạng Thái (Mục 9) *</label>
+                            <input id="edit-spec-physical-state" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.physical_state || chem.physicalState || "Chất lỏng")}" placeholder="Chất lỏng, Chất rắn, Khí..." />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Điểm Chớp Cháy (Mục 9) *</label>
+                            <input id="edit-spec-flash-point" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.flash_point || chem.flashPoint || "KCDL (N/A)")}" placeholder="vd: 25 °C hoặc KCDL (N/A)" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Nhiệt Độ Sôi (Mục 9)</label>
+                            <input id="edit-spec-boiling-point" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.boiling_point || chem.boilingPoint || "KCDL (N/A)")}" placeholder="vd: 78 - 82 °C" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Tỷ Trọng / KLR (Mục 9)</label>
+                            <input id="edit-spec-density" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.density || chem.specificGravity || "KCDL (N/A)")}" placeholder="vd: 0.85 g/cm³" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Số UN Vận Chuyển (Mục 14)</label>
+                            <input id="edit-spec-un-no" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.un_no || chem.un_number || chem.unNumber || "Không áp dụng")}" placeholder="vd: UN 1263 hoặc Không áp dụng" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Phân Loại Nguy Hiểm Sản Phẩm (Mục 2)</label>
+                            <input id="edit-spec-hazard-classification" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.hazard_classification || chem.hazardClassification || "Không phân loại")}" placeholder="Phân loại GHS và mã cảnh báo nguy cơ" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Độc Cấp Tính (Mục 11)</label>
+                            <input id="edit-spec-acute-toxicity" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.acute_toxicity || chem.acuteToxicity || "Không phân loại")}" placeholder="Độc cấp tính miệng, da, hô hấp" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">STOT - Độc Tính Cơ Quan Đích (Mục 11)</label>
+                            <input id="edit-spec-stot" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.stot || "KCDL (N/A)")}" placeholder="STOT SE / RE hoặc KCDL (N/A)" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Nguy Hại Thủy Sinh (Mục 12)</label>
+                            <input id="edit-spec-aquatic-hazard" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.aquatic_hazard || chem.aquaticHazard || "Không phân loại")}" placeholder="Aquatic Acute / Chronic hoặc Không phân loại" />
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Tự Phản Ứng / Peroxyt Hữu Cơ (Mục 10)</label>
+                            <input id="edit-spec-self-reactive" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.self_reactive_peroxide || chem.selfReactivePeroxide || "Không phân loại")}" placeholder="Tự phản ứng / Peroxyt hữu cơ hoặc Không phân loại" />
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <label style="display:block; font-weight:700; color:#334155; margin-bottom:3px;">Nguy Cơ Khác (Da, Mắt, Mẫn Cảm, CMR, Hít Phải)</label>
+                            <input id="edit-spec-other-hazards" type="text" class="form-input" style="width:100%; padding:6px 10px; font-size:12.5px;" value="${escapeHtml(chem.other_hazards || chem.otherHazards || "KCDL (N/A)")}" placeholder="Kích ứng da/mắt, mẫn cảm, CMR... hoặc KCDL (N/A)" />
+                        </div>
+                    </div>
+                    <div style="margin-top:14px; display:flex; justify-content:flex-end; gap:8px;">
+                        <button type="button" onclick="toggleMsdsSpecsEditMode()" class="btn-secondary" style="padding:6px 14px; font-size:12px;">Hủy</button>
+                        <button type="button" id="btn-save-specs-inline" onclick="saveMsdsSpecsInline()" class="btn-primary" style="background:#0f766e; padding:6px 16px; font-size:12px; font-weight:700;">💾 Lưu Cập Nhật Thông Số</button>
                     </div>
                 </div>
 
@@ -3071,6 +3346,123 @@ async function openMsdsSafetyModal(chemId) {
 function closeMsdsSafetyModal() {
     const modal = document.getElementById("msds-safety-modal");
     if (modal) modal.classList.add("hidden");
+    const editBtn = document.getElementById("modal-btn-edit-specs");
+    if (editBtn) {
+        editBtn.innerHTML = `<span>✏️ Hiệu Chỉnh Thông Số</span>`;
+    }
+}
+
+function toggleMsdsSpecsEditMode() {
+    const editForm = document.getElementById("msds-specs-edit-form");
+    const editBtn = document.getElementById("modal-btn-edit-specs");
+    if (!editForm) return;
+
+    const isHidden = editForm.classList.contains("hidden");
+    if (isHidden) {
+        editForm.classList.remove("hidden");
+        if (editBtn) editBtn.innerHTML = `<span>✕ Đóng Chỉnh Sửa</span>`;
+        editForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+        editForm.classList.add("hidden");
+        if (editBtn) editBtn.innerHTML = `<span>✏️ Hiệu Chỉnh Thông Số</span>`;
+    }
+}
+
+async function saveMsdsSpecsInline() {
+    const chem = window.CURRENT_SAFETY_MODAL_CHEM;
+    if (!chem) {
+        alert("Không tìm thấy thông tin hóa chất hiện tại.");
+        return;
+    }
+
+    const saveBtn = document.getElementById("btn-save-specs-inline");
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = "Đang lưu...";
+    }
+
+    const physical_state = (document.getElementById("edit-spec-physical-state")?.value || "").trim() || "Chất lỏng";
+    const flash_point = (document.getElementById("edit-spec-flash-point")?.value || "").trim() || "KCDL (N/A)";
+    const boiling_point = (document.getElementById("edit-spec-boiling-point")?.value || "").trim() || "KCDL (N/A)";
+    const density = (document.getElementById("edit-spec-density")?.value || "").trim() || "KCDL (N/A)";
+    const un_no = (document.getElementById("edit-spec-un-no")?.value || "").trim() || "Không áp dụng";
+    const hazard_classification = (document.getElementById("edit-spec-hazard-classification")?.value || "").trim() || "Không phân loại";
+    const acute_toxicity = (document.getElementById("edit-spec-acute-toxicity")?.value || "").trim() || "Không phân loại";
+    const stot = (document.getElementById("edit-spec-stot")?.value || "").trim() || "KCDL (N/A)";
+    const aquatic_hazard = (document.getElementById("edit-spec-aquatic-hazard")?.value || "").trim() || "Không phân loại";
+    const self_reactive_peroxide = (document.getElementById("edit-spec-self-reactive")?.value || "").trim() || "Không phân loại";
+    const other_hazards = (document.getElementById("edit-spec-other-hazards")?.value || "").trim() || "KCDL (N/A)";
+
+    chem.physical_state = physical_state;
+    chem.physicalState = physical_state;
+    chem.flash_point = flash_point;
+    chem.flashPoint = flash_point;
+    chem.boiling_point = boiling_point;
+    chem.boilingPoint = boiling_point;
+    chem.density = density;
+    chem.specific_gravity = density;
+    chem.specificGravity = density;
+    chem.un_no = un_no;
+    chem.un_number = un_no;
+    chem.unNumber = un_no;
+    chem.hazard_classification = hazard_classification;
+    chem.hazardClassification = hazard_classification;
+    chem.acute_toxicity = acute_toxicity;
+    chem.acuteToxicity = acute_toxicity;
+    chem.stot = stot;
+    chem.aquatic_hazard = aquatic_hazard;
+    chem.aquaticHazard = aquatic_hazard;
+    chem.self_reactive_peroxide = self_reactive_peroxide;
+    chem.selfReactivePeroxide = self_reactive_peroxide;
+    chem.other_hazards = other_hazards;
+    chem.otherHazards = other_hazards;
+
+    try {
+        const resp = await fetch("/api/msds/confirm-save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action: "overwrite",
+                target_code: chem.product_code || chem.chemical_id || chem.chem_id,
+                data: chem
+            })
+        });
+        const res = await resp.json();
+        if (!resp.ok || !res.success) {
+            throw new Error(res.error || res.message || "Lỗi lưu thông số.");
+        }
+
+        // Cập nhật CIL local cache
+        if (window.cilSync && typeof window.cilSync.saveChemical === "function") {
+            try {
+                await window.cilSync.saveChemical(chem);
+            } catch (syncErr) {
+                console.warn("Lỗi sync cache:", syncErr);
+            }
+        }
+
+        // Cập nhật ALL_MSDS_CHEMICALS_CACHE
+        if (Array.isArray(ALL_MSDS_CHEMICALS_CACHE)) {
+            const idx = ALL_MSDS_CHEMICALS_CACHE.findIndex(c =>
+                String(c.chem_id || c.chemical_id || c.product_code).toUpperCase() === String(chem.chemical_id || chem.chem_id || chem.product_code).toUpperCase()
+            );
+            if (idx >= 0) {
+                ALL_MSDS_CHEMICALS_CACHE[idx] = { ...ALL_MSDS_CHEMICALS_CACHE[idx], ...chem };
+            }
+        }
+
+        renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, "");
+        toggleMsdsSpecsEditMode();
+        openMsdsSafetyModal(chem.chemical_id || chem.chem_id || chem.product_code);
+        alert("✓ Đã cập nhật thành công 11 thông số MSDS / CIL!");
+    } catch (err) {
+        alert("Lỗi cập nhật: " + err.message);
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "💾 Lưu Cập Nhật Thông Số";
+        }
+    }
 }
 
 async function deleteMsdsChemical(chemId) {

@@ -3839,6 +3839,8 @@
                                     <th style="width:135px;">Số CAS Chính</th>
                                     <th style="width:200px;">Nhà Cung Cấp / Sản Xuất</th>
                                     <th style="min-width:200px;">Phân Loại Mối Nguy GHS (Phần 2)</th>
+                                    <th style="min-width:185px;">Đặc Tính Lý - Hóa &amp; UN</th>
+                                    <th style="min-width:215px;">Độc Tính &amp; Nguy Cơ Chuyên Sâu</th>
                                     <th style="width:145px; text-align:center;">Hồ Sơ MSDS Gốc</th>
                                     <th style="width:170px; text-align:center;">Thao Tác Nhanh</th>
                                 </tr>
@@ -4039,7 +4041,12 @@
                 <!-- Dynamically populated -->
             </div>
             <div style="background:#f8fafc; padding:12px 20px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; border-radius:0 0 12px 12px;">
-                <button type="button" class="btn-secondary" onclick="closeMsdsSafetyModal()">Đóng</button>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <button type="button" class="btn-secondary" onclick="closeMsdsSafetyModal()">Đóng</button>
+                    <button type="button" id="modal-btn-edit-specs" class="btn-secondary" onclick="toggleMsdsSpecsEditMode()" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; font-weight:700; color:#0d9488; border-color:#99f6e4; background:#f0fdfa; cursor:pointer;" title="Chỉnh sửa trực tiếp 11 thông số Lý - Hóa, UN, Phân loại nguy hiểm & Độc tính">
+                        <span>✏️ Hiệu Chỉnh Thông Số</span>
+                    </button>
+                </div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                     <a id="modal-btn-download-original" class="btn-secondary" href="#" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; font-weight:700; color:#1d4ed8; border-color:#bfdbfe; background:#eff6ff;">
                         <span>📥 Tải File MSDS Gốc</span>

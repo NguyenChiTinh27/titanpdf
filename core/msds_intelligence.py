@@ -170,6 +170,14 @@ class MSDSDatabase:
                 drive_view_url TEXT DEFAULT NULL,
                 drive_download_url TEXT DEFAULT NULL,
                 sync_status TEXT DEFAULT 'synced',
+                hazard_classification TEXT DEFAULT NULL,
+                acute_toxicity TEXT DEFAULT NULL,
+                stot TEXT DEFAULT NULL,
+                aquatic_hazard TEXT DEFAULT NULL,
+                self_reactive_peroxide TEXT DEFAULT NULL,
+                other_hazards TEXT DEFAULT NULL,
+                physical_state TEXT DEFAULT NULL,
+                boiling_point TEXT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
@@ -195,6 +203,21 @@ class MSDSDatabase:
                 conn.execute("ALTER TABLE chemicals ADD COLUMN plant_code TEXT DEFAULT 'BD'")
             if "plant_name" not in existing_cols:
                 conn.execute("ALTER TABLE chemicals ADD COLUMN plant_name TEXT DEFAULT 'Nhà máy Bình Dương'")
+
+            # Di trú 8 trường thông số MSDS / CIL chuyên sâu
+            new_spec_cols = [
+                ("hazard_classification", "TEXT DEFAULT NULL"),
+                ("acute_toxicity", "TEXT DEFAULT NULL"),
+                ("stot", "TEXT DEFAULT NULL"),
+                ("aquatic_hazard", "TEXT DEFAULT NULL"),
+                ("self_reactive_peroxide", "TEXT DEFAULT NULL"),
+                ("other_hazards", "TEXT DEFAULT NULL"),
+                ("physical_state", "TEXT DEFAULT NULL"),
+                ("boiling_point", "TEXT DEFAULT NULL"),
+            ]
+            for col_name, col_type in new_spec_cols:
+                if col_name not in existing_cols:
+                    conn.execute(f"ALTER TABLE chemicals ADD COLUMN {col_name} {col_type}")
 
             # Tự động phân loại heuristic cho các hóa chất hiện hữu
             try:
@@ -396,6 +419,55 @@ class MSDSDatabase:
         return None
 
     @classmethod
+    def _enrich_chemical_spec_fields(cls, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Chuẩn hóa và đồng bộ 11 trường thông số MSDS / CIL (cả snake_case và camelCase)."""
+        hz_cls = item.get("hazard_classification") or item.get("hazardClassification") or "Không phân loại"
+        item["hazard_classification"] = hz_cls
+        item["hazardClassification"] = hz_cls
+
+        ac_tox = item.get("acute_toxicity") or item.get("acuteToxicity") or "KCDL (N/A)"
+        item["acute_toxicity"] = ac_tox
+        item["acuteToxicity"] = ac_tox
+
+        stot_val = item.get("stot") or "KCDL (N/A)"
+        item["stot"] = stot_val
+
+        aq_hz = item.get("aquatic_hazard") or item.get("aquaticHazard") or "KCDL (N/A)"
+        item["aquatic_hazard"] = aq_hz
+        item["aquaticHazard"] = aq_hz
+
+        sr_perox = item.get("self_reactive_peroxide") or item.get("selfReactivePeroxide") or "Không phân loại"
+        item["self_reactive_peroxide"] = sr_perox
+        item["selfReactivePeroxide"] = sr_perox
+
+        oth_hz = item.get("other_hazards") or item.get("otherHazards") or "KCDL (N/A)"
+        item["other_hazards"] = oth_hz
+        item["otherHazards"] = oth_hz
+
+        phys_st = item.get("physical_state") or item.get("physicalState") or item.get("appearance") or "Chất lỏng"
+        item["physical_state"] = phys_st
+        item["physicalState"] = phys_st
+
+        fl_pt = item.get("flash_point") or item.get("flashPoint") or "KCDL (N/A)"
+        item["flash_point"] = fl_pt
+        item["flashPoint"] = fl_pt
+
+        bl_pt = item.get("boiling_point") or item.get("boilingPoint") or "KCDL (N/A)"
+        item["boiling_point"] = bl_pt
+        item["boilingPoint"] = bl_pt
+
+        dens = item.get("density") or item.get("specific_gravity") or item.get("specificGravity") or "KCDL (N/A)"
+        item["density"] = dens
+        item["specific_gravity"] = dens
+        item["specificGravity"] = dens
+
+        un_num = item.get("un_no") or item.get("un_number") or item.get("unNumber") or "Không áp dụng"
+        item["un_no"] = un_num
+        item["un_number"] = un_num
+        item["unNumber"] = un_num
+        return item
+
+    @classmethod
     def save_chemical(cls, data: Dict[str, Any], sync_gas: bool = True) -> str:
         """Lưu hoặc cập nhật thông tin hóa chất vào CSDL (ưu tiên lấy Mã sản phẩm làm Mã hóa chất & Mã MSDS)."""
         cls.init_db()
@@ -436,6 +508,19 @@ class MSDSDatabase:
             from core.plant_registry import PlantRegistry
             plant_name = PlantRegistry.get_plant_name(plant_code)
 
+        # Trích xuất và chuẩn hóa 11 trường thông số MSDS / CIL chuyên sâu
+        val_hazard_classification = str(data.get("hazard_classification") or data.get("hazardClassification") or "").strip()
+        val_acute_toxicity = str(data.get("acute_toxicity") or data.get("acuteToxicity") or "").strip()
+        val_stot = str(data.get("stot") or "").strip()
+        val_aquatic_hazard = str(data.get("aquatic_hazard") or data.get("aquaticHazard") or "").strip()
+        val_self_reactive_peroxide = str(data.get("self_reactive_peroxide") or data.get("selfReactivePeroxide") or "").strip()
+        val_other_hazards = str(data.get("other_hazards") or data.get("otherHazards") or "").strip()
+        val_physical_state = str(data.get("physical_state") or data.get("physicalState") or data.get("appearance") or "").strip()
+        val_boiling_point = str(data.get("boiling_point") or data.get("boilingPoint") or "").strip()
+        val_density = str(data.get("density") or data.get("specific_gravity") or data.get("specificGravity") or "").strip()
+        val_flash_point = str(data.get("flash_point") or data.get("flashPoint") or "").strip()
+        val_un_no = str(data.get("un_no") or data.get("un_number") or data.get("unNumber") or "").strip()
+
         with cls.get_connection() as conn:
             # Kiểm tra xem mã hóa chất đã có chưa (không phân biệt hoa thường)
             existing = conn.execute(
@@ -455,13 +540,15 @@ class MSDSDatabase:
                     first_aid_eyes = ?, first_aid_ingestion = ?, fire_measures = ?, spill_measures = ?,
                     source_file = ?, sha256 = ?, raw_summary_ai = ?, item_type = ?, mother_msds_id = ?,
                     drive_file_id = ?, drive_view_url = ?, drive_download_url = ?, sync_status = ?,
-                    plant_code = ?, plant_name = ?
+                    plant_code = ?, plant_name = ?,
+                    hazard_classification = ?, acute_toxicity = ?, stot = ?, aquatic_hazard = ?,
+                    self_reactive_peroxide = ?, other_hazards = ?, physical_state = ?, boiling_point = ?
                 WHERE chemical_id = ?
                 """, (
                     product_code, data.get("product_name_vi", ""), data.get("product_name_original", ""), data.get("intended_use", ""),
-                    data.get("manufacturer", ""), data.get("revision_date", ""), data.get("cas_primary", ""), data.get("un_no", ""), data.get("transport_class", ""),
+                    data.get("manufacturer", ""), data.get("revision_date", ""), data.get("cas_primary", ""), val_un_no or data.get("un_no", ""), data.get("transport_class", ""),
                     data.get("packing_group", ""), data.get("signal_word", ""), ghs_codes_str, data.get("hazard_statements", ""),
-                    data.get("precautionary_statements", ""), data.get("flash_point", ""), data.get("density", ""), data.get("appearance", ""),
+                    data.get("precautionary_statements", ""), val_flash_point or data.get("flash_point", ""), val_density or data.get("density", ""), data.get("appearance", ""),
                     data.get("storage_condition", ""), data.get("respiratory_protection", ""), data.get("hand_protection", ""),
                     data.get("eye_protection", ""), data.get("skin_protection", ""), data.get("first_aid_inhalation", ""), data.get("first_aid_skin", ""),
                     data.get("first_aid_eyes", ""), data.get("first_aid_ingestion", ""), data.get("fire_measures", ""), data.get("spill_measures", ""),
@@ -469,6 +556,8 @@ class MSDSDatabase:
                     raw_item_type, mother_msds_id,
                     data.get("drive_file_id", ""), data.get("drive_view_url", ""), data.get("drive_download_url", ""), data.get("sync_status", "synced"),
                     plant_code, plant_name,
+                    val_hazard_classification, val_acute_toxicity, val_stot, val_aquatic_hazard,
+                    val_self_reactive_peroxide, val_other_hazards, val_physical_state, val_boiling_point,
                     chem_id
                 ))
                 # Xóa compositions và sections cũ để ghi lại mới
@@ -486,20 +575,24 @@ class MSDSDatabase:
                     first_aid_eyes, first_aid_ingestion, fire_measures, spill_measures,
                     source_file, sha256, raw_summary_ai, item_type, mother_msds_id,
                     drive_file_id, drive_view_url, drive_download_url, sync_status,
-                    plant_code, plant_name
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    plant_code, plant_name,
+                    hazard_classification, acute_toxicity, stot, aquatic_hazard,
+                    self_reactive_peroxide, other_hazards, physical_state, boiling_point
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     chem_id, product_code, data.get("product_name_vi", ""), data.get("product_name_original", ""), data.get("intended_use", ""),
-                    data.get("manufacturer", ""), data.get("revision_date", ""), data.get("cas_primary", ""), data.get("un_no", ""), data.get("transport_class", ""),
+                    data.get("manufacturer", ""), data.get("revision_date", ""), data.get("cas_primary", ""), val_un_no or data.get("un_no", ""), data.get("transport_class", ""),
                     data.get("packing_group", ""), data.get("signal_word", ""), ghs_codes_str, data.get("hazard_statements", ""),
-                    data.get("precautionary_statements", ""), data.get("flash_point", ""), data.get("density", ""), data.get("appearance", ""),
+                    data.get("precautionary_statements", ""), val_flash_point or data.get("flash_point", ""), val_density or data.get("density", ""), data.get("appearance", ""),
                     data.get("storage_condition", ""), data.get("respiratory_protection", ""), data.get("hand_protection", ""),
                     data.get("eye_protection", ""), data.get("skin_protection", ""), data.get("first_aid_inhalation", ""), data.get("first_aid_skin", ""),
                     data.get("first_aid_eyes", ""), data.get("first_aid_ingestion", ""), data.get("fire_measures", ""), data.get("spill_measures", ""),
                     data.get("source_file", ""), data.get("sha256", ""), data.get("raw_summary_ai", "") or data.get("summary", ""),
                     raw_item_type, mother_msds_id,
                     data.get("drive_file_id", ""), data.get("drive_view_url", ""), data.get("drive_download_url", ""), data.get("sync_status", "synced"),
-                    plant_code, plant_name
+                    plant_code, plant_name,
+                    val_hazard_classification, val_acute_toxicity, val_stot, val_aquatic_hazard,
+                    val_self_reactive_peroxide, val_other_hazards, val_physical_state, val_boiling_point
                 ))
 
             # Lưu danh sách thành phần / CAS
@@ -603,6 +696,7 @@ class MSDSDatabase:
                 item["mother_msds_id"] = item.get("mother_msds_id")
                 item["plant_code"] = item.get("plant_code") or "BD"
                 item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
+                cls._enrich_chemical_spec_fields(item)
                 chem_ids.append(item["chemical_id"])
                 # Parse GHS codes
                 try:
@@ -646,6 +740,7 @@ class MSDSDatabase:
             item["mother_msds_id"] = item.get("mother_msds_id")
             item["plant_code"] = item.get("plant_code") or "BD"
             item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
+            cls._enrich_chemical_spec_fields(item)
             comps = conn.execute("SELECT * FROM compositions WHERE chemical_id = ?", (actual_id,)).fetchall()
             item["composition"] = [dict(c) for c in comps]
             sects = conn.execute("SELECT * FROM sections WHERE chemical_id = ? ORDER BY section_no ASC", (actual_id,)).fetchall()
@@ -1500,7 +1595,19 @@ class MSDSExtractorEngine:
             f"{ghs_visual_instruction}"
             "5. NGÀY PHÁT HÀNH / CẬP NHẬT (revision_date / issueDate):\n"
             "   - Lấy ngày phát hành hoặc ngày sửa đổi gần nhất từ Mục 1 hoặc đầu/cuối tài liệu (YYYY-MM-DD hoặc DD/MM/YYYY).\n"
-            "6. Toàn bộ các trường mô tả an toàn, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n\n"
+            "6. Toàn bộ các trường mô tả an toàn, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n"
+            "7. BÓC TÁCH CHUYÊN SÂU 11 THÔNG SỐ LÝ HÓA, VẬN CHUYỂN, ĐỘC TÍNH & NGUY HẠI (QUÉT KỸ MỤC 2, 9, 10, 11, 12, 14):\n"
+            "   - 'hazard_classification': Phân loại nguy hiểm tổng quát theo GHS & mã H ở Mục 2. Nếu không nguy hại ghi rõ 'Không phân loại'.\n"
+            "   - 'physical_state': Trạng thái ở Mục 9 (Chất lỏng, Chất rắn, Khí, Dạng sệt, Dạng bột, Khí dung...).\n"
+            "   - 'flash_point': Điểm chớp cháy ở Mục 9 kèm đơn vị °C. Nếu không có hoặc không áp dụng ghi 'KCDL (N/A)'.\n"
+            "   - 'boiling_point': Điểm sôi / khoảng sôi ở Mục 9 kèm đơn vị °C. Nếu không có ghi 'KCDL (N/A)'.\n"
+            "   - 'density': Tỷ trọng tương đối / Khối lượng riêng ở Mục 9. Nếu không có ghi 'KCDL (N/A)'.\n"
+            "   - 'un_no': Mã số UN vận chuyển ở Mục 14 (vd: UN 1263). Nếu không thuộc hàng nguy hiểm ghi rõ 'Không áp dụng'.\n"
+            "   - 'acute_toxicity': Độc cấp tính ở Mục 11 (qua đường miệng, da, hô hấp, LD50/LC50). Nếu không phân loại ghi 'Không phân loại'.\n"
+            "   - 'stot': Độc tính lên cơ quan đích cụ thể (STOT SE / STOT RE kèm tên cơ quan bị ảnh hưởng ở Mục 11). Nếu không có ghi 'KCDL (N/A)'.\n"
+            "   - 'aquatic_hazard': Nguy hại môi trường thủy sinh ở Mục 12 (Aquatic Acute, Aquatic Chronic). Nếu không phân loại ghi 'Không phân loại'.\n"
+            "   - 'self_reactive_peroxide': Chất tự phản ứng hoặc peroxyt hữu cơ (Mục 2, 9, 10). Nếu không phải ghi 'Không phân loại'.\n"
+            "   - 'other_hazards': Các nguy cơ còn lại (ăn mòn/kích ứng da/mắt, mẫn cảm, CMR, nguy cơ hít phải Aspiration). Nếu không có ghi 'KCDL (N/A)'.\n\n"
             "YÊU CẦU CẤU TRÚC JSON ĐẦU RA:\n"
             "{\n"
             '  "product_code": "Mã sản phẩm hoặc mã hiệu hóa chất (vd: FTU0005, ZW55019)",\n'
@@ -1510,15 +1617,23 @@ class MSDSExtractorEngine:
             '  "manufacturer": "Tên công ty sản xuất / Nhà cung ứng (CHỈ TÊN CÔNG TY, KHÔNG KÈM ĐỊA CHỈ HAY PRODUCT NAME)",\n'
             '  "revision_date": "Ngày sửa đổi / Ngày phát hành SDS (YYYY-MM-DD hoặc DD/MM/YYYY)",\n'
             '  "cas_primary": "Số CAS chính (vd: 67-64-1)",\n'
-            '  "un_no": "Mã số UN (vd: UN 1263, UN 1090)",\n'
+            '  "un_no": "Mã số UN (vd: UN 1263, hoặc Không áp dụng)",\n'
             '  "transport_class": "Nhóm nguy hiểm vận chuyển (vd: 3, 8)",\n'
             '  "packing_group": "Nhóm đóng gói (vd: II, III)",\n'
             '  "signal_word": "Từ cảnh báo ở Phần 2 (Nguy hiểm (Danger) / Cảnh báo (Warning) / NON DG)",\n'
             '  "ghs_codes": ["GHS02"] hoặc ["NON DG"] nếu Mục 2 không có mối nguy GHS,\n'
             '  "hazard_statements": "Mã và nội dung cảnh báo nguy hại ở Phần 2 bằng tiếng Việt",\n'
             '  "precautionary_statements": "Mã và nội dung phòng ngừa bằng tiếng Việt",\n'
-            '  "flash_point": "Điểm chớp cháy (kèm đơn vị °C)",\n'
-            '  "density": "Tỷ trọng / Khối lượng riêng",\n'
+            '  "hazard_classification": "Phân loại nguy hiểm tổng quát theo GHS bằng tiếng Việt",\n'
+            '  "physical_state": "Trạng thái vật lý (Chất lỏng / Chất rắn / Khí / Bột / Sệt...)",\n'
+            '  "flash_point": "Điểm chớp cháy (kèm đơn vị °C hoặc KCDL (N/A))",\n'
+            '  "boiling_point": "Nhiệt độ sôi (kèm đơn vị °C hoặc KCDL (N/A))",\n'
+            '  "density": "Tỷ trọng / Khối lượng riêng (hoặc KCDL (N/A))",\n'
+            '  "acute_toxicity": "Độc cấp tính miệng, da, hô hấp bằng tiếng Việt",\n'
+            '  "stot": "STOT - Độc tính cơ quan đích cụ thể (STOT SE / RE)",\n'
+            '  "aquatic_hazard": "Nguy hại môi trường thủy sinh cấp tính/mãn tính",\n'
+            '  "self_reactive_peroxide": "Tự phản ứng / Peroxyt hữu cơ (hoặc Không phân loại)",\n'
+            '  "other_hazards": "Nguy cơ khác: kích ứng da/mắt, mẫn cảm, CMR, hít phải...",\n'
             '  "appearance": "Ngoại quan bằng tiếng Việt (trạng thái, màu sắc, mùi)",\n'
             '  "storage_condition": "Điều kiện bảo quản bằng tiếng Việt",\n'
             '  "respiratory_protection": "Trang bị bảo vệ hô hấp bằng tiếng Việt",\n'
@@ -1578,6 +1693,31 @@ class MSDSExtractorEngine:
                 pname = re.sub(r"^Hóa chất\s+([A-Z0-9]{4,10})$", r"\1", pname)
                 parsed["product_name_vi"] = pname
 
+            # Chuẩn hóa 11 trường thông số MSDS / CIL nếu thiếu
+            if not parsed.get("hazard_classification"):
+                parsed["hazard_classification"] = parsed.get("hazard_statements") or "Không phân loại"
+            if not parsed.get("physical_state"):
+                parsed["physical_state"] = parsed.get("appearance") or "Chất lỏng"
+            if not parsed.get("flash_point"):
+                parsed["flash_point"] = "KCDL (N/A)"
+            if not parsed.get("boiling_point"):
+                parsed["boiling_point"] = "KCDL (N/A)"
+            if not parsed.get("density"):
+                parsed["density"] = "KCDL (N/A)"
+            if not parsed.get("un_no"):
+                parsed["un_no"] = "Không áp dụng"
+            if not parsed.get("acute_toxicity"):
+                parsed["acute_toxicity"] = "Không phân loại"
+            if not parsed.get("stot"):
+                parsed["stot"] = "KCDL (N/A)"
+            if not parsed.get("aquatic_hazard"):
+                parsed["aquatic_hazard"] = "Không phân loại"
+            if not parsed.get("self_reactive_peroxide"):
+                parsed["self_reactive_peroxide"] = "Không phân loại"
+            if not parsed.get("other_hazards"):
+                parsed["other_hazards"] = "KCDL (N/A)"
+
+            cls._enrich_chemical_spec_fields(parsed)
             return parsed
         except Exception as e:
             print(f"[AI_MSDS_PARSE_ERROR] {e}", flush=True)
@@ -1612,6 +1752,29 @@ class MSDSExtractorEngine:
             "colorless liquid": "Chất lỏng không màu",
             "white liquid": "Chất lỏng màu trắng",
             "milky white liquid": "Chất lỏng màu trắng sữa",
+            "not classified": "Không phân loại",
+            "not classified as hazardous": "Không phân loại nguy hại",
+            "no data available": "KCDL (N/A)",
+            "not applicable": "Không áp dụng",
+            "none": "Không có",
+            "solid": "Chất rắn",
+            "gas": "Khí",
+            "powder": "Dạng bột",
+            "paste": "Dạng sệt",
+            "aerosol": "Khí dung (Aerosol)",
+            "flammable liquid": "Chất lỏng dễ cháy",
+            "acute toxicity": "Độc cấp tính",
+            "corrosive to skin": "Ăn mòn da",
+            "serious eye damage": "Tổn thương mắt nghiêm trọng",
+            "skin irritation": "Kích ứng da",
+            "eye irritation": "Kích ứng mắt",
+            "skin sensitization": "Gây mẫn cảm da",
+            "respiratory sensitization": "Gây mẫn cảm hô hấp",
+            "hazardous to the aquatic environment": "Nguy hại môi trường thủy sinh",
+            "aquatic acute": "Nguy hại thủy sinh cấp tính",
+            "aquatic chronic": "Nguy hại thủy sinh mãn tính",
+            "organic peroxide": "Peroxyt hữu cơ",
+            "self-reactive substance": "Chất tự phản ứng",
             "trgs 510": "Bảo quản an toàn theo quy chuẩn lưu trữ hóa chất TRGS 510.",
             "wear a gas mask": "Đeo mặt nạ phòng độc / khẩu trang lọc hơi hữu cơ đạt chuẩn.",
             "wear safety glasses and chemical splash goggles.": "Đeo kính an toàn và kính bảo hộ chống văng bắn hóa chất.",
@@ -1668,6 +1831,13 @@ class MSDSExtractorEngine:
             "appearance",
             "hazard_statements",
             "precautionary_statements",
+            "hazard_classification",
+            "physical_state",
+            "acute_toxicity",
+            "stot",
+            "aquatic_hazard",
+            "self_reactive_peroxide",
+            "other_hazards",
             "first_aid_inhalation",
             "first_aid_skin",
             "first_aid_eyes",
@@ -1823,6 +1993,14 @@ class MSDSExtractorEngine:
             "flash_point": "",
             "density": "",
             "appearance": "",
+            "hazard_classification": "",
+            "physical_state": "",
+            "boiling_point": "",
+            "acute_toxicity": "",
+            "stot": "",
+            "aquatic_hazard": "",
+            "self_reactive_peroxide": "",
+            "other_hazards": "",
             "storage_condition": "",
             "respiratory_protection": "",
             "hand_protection": "",
@@ -1928,15 +2106,45 @@ class MSDSExtractorEngine:
                     data["skin_protection"] = v_clean
 
             # Tính chất lý hóa (Mục 9)
-            elif any(w in kl for w in ["ngoại quan", "trạng thái vật lý", "hình thái", "appearance", "physical state", "外观与性状"]):
+            elif any(w in kl for w in ["ngoại quan", "hình thái", "appearance", "外观与性状"]):
+                if not data["appearance"]:
+                    data["appearance"] = v_clean
+                if not data["physical_state"]:
+                    data["physical_state"] = v_clean
+            elif any(w in kl for w in ["trạng thái vật lý", "trạng thái", "physical state", "state", "物理状态", "形态"]):
+                if not data["physical_state"]:
+                    data["physical_state"] = v_clean
                 if not data["appearance"]:
                     data["appearance"] = v_clean
             elif any(w in kl for w in ["điểm chớp cháy", "flash point", "闪点"]):
                 if not data["flash_point"]:
                     data["flash_point"] = v_clean
+            elif any(w in kl for w in ["nhiệt độ sôi", "điểm sôi", "boiling point", "initial boiling point", "沸点"]):
+                if not data["boiling_point"]:
+                    data["boiling_point"] = v_clean
             elif any(w in kl for w in ["tỷ trọng", "khối lượng riêng", "mật độ", "density", "specific gravity", "相对密度", "密度"]):
                 if not data["density"]:
                     data["density"] = v_clean
+
+            # Phân loại nguy hại & Độc tính (Mục 2, 10, 11, 12)
+            elif any(w in kl for w in ["phân loại nguy hiểm", "hazard classification", "ghs classification", "phân loại theo ghs", "危险性类别", "危险分类"]):
+                if not data["hazard_classification"]:
+                    data["hazard_classification"] = v_clean
+            elif any(w in kl for w in ["độc cấp tính", "acute toxicity", "độc tính cấp", "acute tox", "急性毒性"]):
+                if not data["acute_toxicity"]:
+                    data["acute_toxicity"] = v_clean
+            elif any(w in kl for w in ["stot", "cơ quan đích", "specific target organ", "tổn thương cơ quan đích", "靶器官"]):
+                if not data["stot"]:
+                    data["stot"] = v_clean
+            elif any(w in kl for w in ["thủy sinh", "aquatic", "môi trường nước", "nguy hại thủy sinh", "môi trường thủy sinh", "水生环境"]):
+                if not data["aquatic_hazard"]:
+                    data["aquatic_hazard"] = v_clean
+            elif any(w in kl for w in ["tự phản ứng", "peroxyt", "self-reactive", "organic peroxide", "peroxide", "自反应", "过氧化物"]):
+                if not data["self_reactive_peroxide"]:
+                    data["self_reactive_peroxide"] = v_clean
+            elif any(w in kl for w in ["nguy cơ khác", "other hazards", "mối nguy khác", "nguy hiểm khác", "其他危害"]):
+                if not data["other_hazards"]:
+                    data["other_hazards"] = v_clean
 
             # Vận chuyển (Mục 14)
             elif any(w in kl for w in ["số un", "mã un", "mã số un", "un number", "un no", "联合国危险货物编号"]):
@@ -2452,7 +2660,7 @@ class CILExcelExporter:
         ws1.views.sheetView[0].showGridLines = True
         ws1.freeze_panes = "C3"
 
-        ws1.merge_cells("A1:P1")
+        ws1.merge_cells("A1:Y1")
         w1_title = ws1["A1"]
         w1_title.value = "DANH MỤC HÓA CHẤT THEO DÕI NGUY HẠI (CHEMICAL INVENTORY LIST - CIL)"
         w1_title.font = font_title
@@ -2460,10 +2668,31 @@ class CILExcelExporter:
         w1_title.alignment = align_center
 
         headers_c1 = [
-            "STT", "Mã SP / MSDS", "Mã Sản Phẩm", "Tên Hóa Chất (Tiếng Việt)", "Tên Gốc (English / Trade)",
-            "Số CAS Chính", "Nhà Cung Cấp / Sản Xuất", "Phân Loại GHS", "Từ Cảnh Báo", "Điểm Chớp Cháy",
-            "Tỷ Trọng", "Vị Trí / Điều Kiện Bảo Quản", "Bảo Hộ Lao Động (PPE)",
-            "Sơ Cứu Khẩn Cấp", "Mục Đích Sử Dụng", "Tệp MSDS Gốc"
+            "STT / 序号",
+            "Mã SP / MSDS / 产品编号",
+            "Mã Sản Phẩm / 内部料号",
+            "Tên Hóa Chất (Tiếng Việt) / 化学品名称",
+            "Tên Gốc (English / Trade) / 原名",
+            "Số CAS Chính / CAS号",
+            "Nhà Cung Cấp / Sản Xuất / 供应商",
+            "Phân Loại GHS / GHS危害分类",
+            "Từ Cảnh Báo / 信号词",
+            "Phân Loại Nguy Hiểm Sản Phẩm / 危险性分类",
+            "Trạng Thái / 物理状态",
+            "Điểm Chớp Cháy / 闪点",
+            "Nhiệt Độ Sôi / 沸点",
+            "Tỷ Trọng / 比重",
+            "Số UN (Vận Chuyển) / 联合国编号",
+            "Độc Cấp Tính / 急性毒性",
+            "STOT (Độc Cơ Quan Đích) / 靶器官毒性",
+            "Nguy Hại Thủy Sinh / 水生危害",
+            "Tự Phản Ứng / Peroxyt / 自反应物质",
+            "Nguy Cơ Khác / 其他危害",
+            "Vị Trí / Điều Kiện Bảo Quản / 储存条件",
+            "Bảo Hộ Lao Động (PPE) / 个人防护",
+            "Sơ Cứu Khẩn Cấp / 急救措施",
+            "Mục Đích Sử Dụng / 用途",
+            "Tệp MSDS Gốc / 原始文件"
         ]
 
         for col_idx, h in enumerate(headers_c1, 1):
@@ -2498,8 +2727,17 @@ class CILExcelExporter:
                 c.get("manufacturer", ""),
                 ghs_str,
                 c.get("signal_word", ""),
-                c.get("flash_point", ""),
-                c.get("density", ""),
+                c.get("hazard_classification") or c.get("hazardClassification") or "-",
+                c.get("physical_state") or c.get("physicalState") or c.get("appearance") or "-",
+                c.get("flash_point") or c.get("flashPoint") or "-",
+                c.get("boiling_point") or c.get("boilingPoint") or "-",
+                c.get("density") or c.get("specific_gravity") or c.get("specificGravity") or "-",
+                c.get("un_no") or c.get("un_number") or c.get("unNumber") or "-",
+                c.get("acute_toxicity") or c.get("acuteToxicity") or "-",
+                c.get("stot") or "-",
+                c.get("aquatic_hazard") or c.get("aquaticHazard") or "-",
+                c.get("self_reactive_peroxide") or c.get("selfReactivePeroxide") or "-",
+                c.get("other_hazards") or c.get("otherHazards") or "-",
                 c.get("storage_condition", ""),
                 ppe_str,
                 first_aid_str,
@@ -2512,7 +2750,7 @@ class CILExcelExporter:
                 cell.font = font_danger if col_idx == 9 and "danger" in str(val).lower() else font_data
                 cell.fill = fill_current
                 cell.border = thin_border
-                cell.alignment = align_center if col_idx in (1, 2, 3, 6, 9, 10, 11) else align_left
+                cell.alignment = align_center if col_idx in (1, 2, 3, 6, 9, 11, 12, 13, 14, 15) else align_left
 
         # Tự động căn chỉnh độ rộng cột sheet 1
         for col in ws1.columns:
@@ -2704,20 +2942,21 @@ class MSDSSafetyCardExporter:
         ghs_vi_str = " | ".join(cls.GHS_VI_LABELS.get(g.upper(), g) for g in ghs_list) if ghs_list else "✓ NON DG (Không phân loại nguy hại theo Phần 2 GHS)"
 
         # Bảng tóm tắt thông tin nhanh
-        table = doc.add_table(rows=9, cols=2)
-        table.style = 'Table Grid'
-
         fields = [
             ("Nhà Cung Cấp / Sản Xuất", chem_data.get('manufacturer') or 'Theo hồ sơ MSDS của nhà cung cấp'),
             ("Từ Cảnh Báo & Hình Đồ GHS", f"{chem_data.get('signal_word', '')}\n{ghs_vi_str}"),
-            ("Cảnh Báo Nguy Cơ & Phòng Ngừa", f"Nguy cơ: {chem_data.get('hazard_statements', '')}\nPhòng ngừa: {chem_data.get('precautionary_statements', '')}"),
-            ("Điểm Chớp Cháy & Ngoại Quan", f"Chớp cháy: {chem_data.get('flash_point', 'Không áp dụng')} | Ngoại quan: {chem_data.get('appearance', '')}"),
+            ("Phân Loại Nguy Hiểm & Mối Nguy", f"Phân loại GHS: {chem_data.get('hazard_classification') or chem_data.get('hazardClassification') or 'Không phân loại'}\nNguy cơ: {chem_data.get('hazard_statements', '')}\nPhòng ngừa: {chem_data.get('precautionary_statements', '')}"),
+            ("Thông Số Lý - Hóa & Vận Chuyển", f"Trạng thái: {chem_data.get('physical_state') or chem_data.get('physicalState') or 'Chất lỏng'} | Điểm chớp cháy: {chem_data.get('flash_point') or 'KCDL (N/A)'} | Điểm sôi: {chem_data.get('boiling_point') or 'KCDL (N/A)'}\nTỷ trọng: {chem_data.get('density') or 'KCDL (N/A)'} | Số UN vận chuyển: {chem_data.get('un_no') or chem_data.get('un_number') or 'Không áp dụng'}"),
+            ("Độc Tính & Nguy Hại Chuyên Sâu", f"Độc cấp tính: {chem_data.get('acute_toxicity') or 'Không phân loại'} | STOT (Cơ quan đích): {chem_data.get('stot') or 'KCDL (N/A)'}\nThủy sinh: {chem_data.get('aquatic_hazard') or 'Không phân loại'} | Tự phản ứng/Peroxyt: {chem_data.get('self_reactive_peroxide') or 'Không'}\nNguy cơ khác: {chem_data.get('other_hazards') or 'KCDL (N/A)'}"),
             ("Trang Bị Bảo Hộ Cá Nhân (PPE)", f"Mắt: {chem_data.get('eye_protection', '')}\nHô hấp: {chem_data.get('respiratory_protection', '')}\nTay: {chem_data.get('hand_protection', '')}\nDa & Thân: {chem_data.get('skin_protection', '')}"),
             ("Biện Pháp Sơ Cứu (Hít / Da)", f"Hít phải: {chem_data.get('first_aid_inhalation', '')}\nTiếp xúc da: {chem_data.get('first_aid_skin', '')}"),
             ("Biện Pháp Sơ Cứu (Mắt / Nuốt)", f"Tiếp xúc mắt: {chem_data.get('first_aid_eyes', '')}\nNuốt phải: {chem_data.get('first_aid_ingestion', '')}"),
             ("Ứng Phó Cháy Nổ", chem_data.get('fire_measures', 'Dùng bột khô, bọt chữa cháy, khí CO2 hoặc phun sương nước.')),
             ("Điều Kiện Lưu Trữ & Bảo Quản", chem_data.get('storage_condition', 'Đậy kín thùng chứa, bảo quản nơi khô ráo, thoáng mát.'))
         ]
+
+        table = doc.add_table(rows=len(fields), cols=2)
+        table.style = 'Table Grid'
 
         for i, (k, v) in enumerate(fields):
             row = table.rows[i]
