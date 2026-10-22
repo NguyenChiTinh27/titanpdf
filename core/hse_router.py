@@ -1093,6 +1093,12 @@ def sync_defects_gas_endpoint():
     return DefectAggregatorService.sync_with_gas()
 
 
+@hse_router.post("/defects/clear_all")
+def clear_all_defects_endpoint():
+    from core.hse_defect_tracker import DefectAggregatorService
+    return DefectAggregatorService.clear_all_defects()
+
+
 @hse_router.get("/defects/export_master_excel")
 @hse_router.post("/defects/export_master_excel")
 async def export_master_excel_endpoint(

@@ -28,8 +28,19 @@ var CONFIG = {
   ALT_SECRET_TOKEN: "LUV_MSDS_SECURE_TOKEN_2026",
   DRIVE_ROOT_FOLDER: "LUV_PDF_Exports",
   DRIVE_SUB_FOLDER: "MSDS_Originals",
-  SHEET_NAME_CIL: "CIL_Chemical_Inventory"
+  SHEET_NAME_CIL: "CIL_Chemical_Inventory",
+  SHEET_NAME_HSE: "HSE_Defect_Tracker"
 };
+
+/**
+ * 18 TIÊU ĐỀ CỘT CHUẨN ĐỒNG BỘ THEO DÕI SỰ CỐ & KHẮC PHỤC LỖI HSE (TRACKER)
+ */
+var HSE_DEFECT_HEADERS = [
+  "defect_id", "code", "date", "month", "department", "dept_key",
+  "category", "zh_issue", "vn_issue", "status", "improved", "improve_date",
+  "note", "img_before", "img_after", "drive_direct_url", "drive_view_url",
+  "updated_at"
+];
 
 function getCilVersion() {
   try {
@@ -93,6 +104,8 @@ function doGet(e) {
       return jsonResponse(handlePing());
     } else if (action === "getAllChemicals" || action === "list") {
       return jsonResponse(handleGetAllChemicals());
+    } else if (action === "getAllDefects" || action === "listDefects") {
+      return jsonResponse(handleGetAllDefects());
     } else if (action === "initHeaders") {
       return jsonResponse(ensureSheetStructure());
     }
@@ -279,9 +292,32 @@ function doPost(e) {
     }
 
     // 8. Xóa toàn bộ dữ liệu Hóa chất (Clear All - Xóa triệt để)
-    if (action === "deleteAllChemicals") {
+    if (action === "deleteAllChemicals" || action === "clearAll" || action === "deleteAll") {
       var delAllRes = handleDeleteAllChemicals();
+      if (action === "clearAll" || action === "deleteAll") {
+        try {
+          handleClearAllDefects();
+        } catch (eHseClear) {}
+      }
       return jsonResponse(delAllRes);
+    }
+
+    // 8b. Xóa toàn bộ sự cố HSE Tracker (Clear All HSE Defects)
+    if (action === "clearAllDefects" || action === "deleteAllDefects") {
+      var delHseRes = handleClearAllDefects();
+      return jsonResponse(delHseRes);
+    }
+
+    // 8c. Cập nhật sự cố HSE Tracker (Update / Upsert Defect)
+    if (action === "updateDefect") {
+      var upDefectRes = handleUpdateDefect(payload);
+      return jsonResponse(upDefectRes);
+    }
+
+    // 8d. Lấy toàn bộ sự cố HSE Tracker
+    if (action === "getAllDefects" || action === "listDefects") {
+      var listDefectRes = handleGetAllDefects();
+      return jsonResponse(listDefectRes);
     }
 
     // 9. Khởi tạo / Sửa lỗi tiêu đề Sheet
@@ -806,6 +842,32 @@ function getOrCreateSpreadsheet() {
 }
 
 function getOrCreateSheet(ss, sheetName) {
+  if (!ss) {
+    try {
+      ss = getOrCreateSpreadsheet();
+    } catch (e) {
+      Logger.log("getOrCreateSheet fallback getOrCreateSpreadsheet error: " + e.toString());
+    }
+  }
+  if (!ss) {
+    try {
+      var props = PropertiesService.getScriptProperties();
+      var savedId = props.getProperty("SPREADSHEET_ID");
+      if (savedId) {
+        ss = SpreadsheetApp.openById(savedId);
+      }
+    } catch (eProps) {}
+  }
+  if (!ss) {
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet();
+    } catch (eAct) {}
+  }
+  if (!ss) {
+    throw new Error("Không thể khởi tạo hoặc mở Spreadsheet. Vui lòng kiểm tra quyền truy cập hoặc cấu hình SPREADSHEET_ID.");
+  }
+
+  sheetName = sheetName || (typeof CONFIG !== 'undefined' && CONFIG.SHEET_NAME_CIL ? CONFIG.SHEET_NAME_CIL : "CIL_Chemical_Inventory");
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
@@ -1038,4 +1100,152 @@ function renderTableRows(sheet) {
     '</tr>';
   }
   return html;
+}
+
+
+// ===================================================================================
+// CÁC HÀM XỬ LÝ THEO DÕI SỰ CỐ & KHẮC PHỤC LỖI HSE (HSE DEFECT TRACKER)
+// ===================================================================================
+
+function ensureHseSheetStructure() {
+  var ss = getOrCreateSpreadsheet();
+  var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_HSE);
+  var currentHeaders = [];
+  if (sheet.getLastRow() >= 1 && sheet.getLastColumn() >= 1) {
+    currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  }
+  var needsUpdate = (currentHeaders.length < HSE_DEFECT_HEADERS.length || currentHeaders[0] !== HSE_DEFECT_HEADERS[0]);
+  if (needsUpdate) {
+    sheet.getRange(1, 1, 1, HSE_DEFECT_HEADERS.length).setValues([HSE_DEFECT_HEADERS]);
+    var headerRange = sheet.getRange(1, 1, 1, HSE_DEFECT_HEADERS.length);
+    headerRange.setBackground("#1e3a8a");
+    headerRange.setFontColor("#f8fafc");
+    headerRange.setFontWeight("bold");
+    headerRange.setFontSize(10);
+    headerRange.setHorizontalAlignment("center");
+    headerRange.setVerticalAlignment("middle");
+    sheet.setRowHeight(1, 36);
+    sheet.setFrozenRows(1);
+    sheet.setFrozenColumns(2);
+  }
+  return sheet;
+}
+
+function handleGetAllDefects() {
+  var ss = getOrCreateSpreadsheet();
+  var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_HSE);
+  ensureHseSheetStructure();
+  var lastRow = sheet.getLastRow();
+  var defects = [];
+  if (lastRow > 1) {
+    var values = sheet.getRange(2, 1, lastRow - 1, HSE_DEFECT_HEADERS.length).getValues();
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      if (!row[0] && !row[1]) continue;
+      defects.push({
+        id: String(row[0] || row[1]),
+        code: String(row[1] || row[0]),
+        date: String(row[2] || ""),
+        month: String(row[3] || ""),
+        department: String(row[4] || ""),
+        dept_key: String(row[5] || ""),
+        category: String(row[6] || ""),
+        zh_issue: String(row[7] || ""),
+        vn_issue: String(row[8] || ""),
+        status: String(row[9] || "Chờ xử lý / 待处理"),
+        improved: Boolean(row[10] === true || String(row[10]).toLowerCase() === "true" || String(row[9]).indexOf("已改善") > -1),
+        improve_date: String(row[11] || ""),
+        note: String(row[12] || ""),
+        img_before: String(row[13] || ""),
+        img_after: String(row[14] || ""),
+        drive_direct_url: String(row[15] || ""),
+        drive_view_url: String(row[16] || "")
+      });
+    }
+  }
+  return {
+    status: "ok",
+    success: true,
+    total: defects.length,
+    defects: defects
+  };
+}
+
+function handleUpdateDefect(payload) {
+  var ss = getOrCreateSpreadsheet();
+  var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_HSE);
+  ensureHseSheetStructure();
+
+  var code = String(payload.defectId || payload.code || payload.id || "").trim();
+  if (!code) {
+    return { status: "error", error: "Thiếu mã sự cố (defectId)!" };
+  }
+
+  var lastRow = sheet.getLastRow();
+  var rowIndex = -1;
+  if (lastRow > 1) {
+    var codes = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < codes.length; i++) {
+      if (String(codes[i][0]).trim().toUpperCase() === code.toUpperCase()) {
+        rowIndex = i + 2;
+        break;
+      }
+    }
+  }
+
+  var isImproved = Boolean(payload.improved);
+  var statusText = isImproved ? "Đã cải thiện / 已改善" : "Chờ xử lý / 待处理";
+  var improveDate = payload.improveDate || (isImproved ? Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd") : "");
+  var note = payload.note || "";
+  var nowStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
+
+  if (rowIndex > 1) {
+    sheet.getRange(rowIndex, 10).setValue(statusText); // status
+    sheet.getRange(rowIndex, 11).setValue(isImproved); // improved
+    sheet.getRange(rowIndex, 12).setValue(improveDate); // improve_date
+    if (note) sheet.getRange(rowIndex, 13).setValue(note); // note
+    if (payload.afterImageData) sheet.getRange(rowIndex, 15).setValue(payload.afterImageData);
+    sheet.getRange(rowIndex, 18).setValue(nowStr); // updated_at
+    return { status: "ok", success: true, action: "updated", defectId: code };
+  } else {
+    var newRow = [
+      code,
+      code,
+      payload.date || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd"),
+      payload.month || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM"),
+      payload.department || "",
+      payload.dept_key || "",
+      payload.category || "General EHS",
+      payload.zh_issue || "",
+      payload.vn_issue || "",
+      statusText,
+      isImproved,
+      improveDate,
+      note,
+      payload.img_before || "",
+      payload.afterImageData || "",
+      "",
+      "",
+      nowStr
+    ];
+    sheet.appendRow(newRow);
+    return { status: "ok", success: true, action: "inserted", defectId: code };
+  }
+}
+
+function handleClearAllDefects() {
+  var ss = getOrCreateSpreadsheet();
+  var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_HSE);
+  var lastRow = sheet.getLastRow();
+  var deletedCount = 0;
+  if (lastRow > 1) {
+    deletedCount = lastRow - 1;
+    sheet.deleteRows(2, deletedCount);
+  }
+  return {
+    status: "ok",
+    success: true,
+    deleted_count: deletedCount,
+    message: "Đã xóa sạch toàn bộ " + deletedCount + " dòng dữ liệu sự cố HSE khỏi Google Sheet."
+  };
 }

@@ -2659,6 +2659,8 @@ async def api_msds_import_json(file: UploadFile = File(...), _: str = Depends(re
 def api_msds_fallback_catalog():
     """Lấy danh mục hóa chất dự phòng khi client ngoại tuyến hoặc cần nạp bộ đệm."""
     from core.msds_intelligence import DATA_DIR
+    if (DATA_DIR / "msds_cleared.flag").exists():
+        return {"success": True, "data": []}
     fallback_file = DATA_DIR / "msds_catalog_fallback.json"
     if fallback_file.exists():
         return FileResponse(str(fallback_file), media_type="application/json")

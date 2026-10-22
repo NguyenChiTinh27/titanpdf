@@ -546,9 +546,54 @@
       if (!resp.ok) throw new Error("Lỗi kết nối Google Apps Script.");
       const res = await resp.json();
       await loadDefects(false);
-      showToast(`☁️ ${res.message || 'Đồng bộ GAS thành công!'}`);
+      if (res.message && (res.message.includes("HTML") || res.message.includes("quyền truy cập"))) {
+        showToast(`⚠️ ${res.message}`, true);
+      } else {
+        showToast(`☁️ ${res.message || 'Đồng bộ GAS thành công!'}`);
+      }
     } catch (e) {
       showToast(e.message, true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function clearAllDefects() {
+    if (!confirm("⚠️ BẠN CÓ CHẮC CHẮN MUỐN XÓA TẤT CẢ SỰ CỐ LỖI HSE?\n\nHành động này sẽ xóa sạch toàn bộ sự cố lỗi HSE trên hệ thống và làm trống Google Sheet.\n\nBấm OK để tiếp tục, hoặc Hủy để dừng.")) {
+      return;
+    }
+    const pwd = prompt("Nhập mật khẩu quản trị (270120) hoặc gõ 'XOA' để xác nhận:");
+    if (!pwd || (pwd !== "270120" && pwd.toUpperCase() !== "XOA")) {
+      alert("Mật khẩu không chính xác hoặc đã hủy thao tác.");
+      return;
+    }
+    try {
+      setLoading(true, "Đang xóa sạch toàn bộ sự cố HSE...");
+      const resp = await fetch("/api/hse/defects/clear_all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
+      const res = await resp.json();
+      if (!resp.ok || !res.success) throw new Error(res.detail || res.message || "Lỗi khi xóa dữ liệu HSE.");
+
+      try {
+        localStorage.setItem("IS_DB_CLEARED_HSE", "true");
+        localStorage.setItem("IS_DB_CLEARED", "true");
+      } catch (_) {}
+
+      state.allDefects = [];
+      state.filteredDefects = [];
+      state.kpis = { total: 0, improved: 0, pending: 0, rate: 0.0 };
+      renderKPIs();
+      renderDefectsView();
+
+      const badge = $("#nav-hse-tracker-count-badge");
+      if (badge) badge.textContent = "0 LỖI";
+
+      showToast("🗑️ Đã xóa sạch toàn bộ sự cố HSE thành công!");
+    } catch (err) {
+      showToast(err.message, true);
     } finally {
       setLoading(false);
     }
@@ -635,6 +680,7 @@
 
     // Toolbar buttons
     $("#hse-btn-sync-gas")?.addEventListener("click", syncGasNow);
+    $("#hse-btn-clear-all-defects")?.addEventListener("click", clearAllDefects);
     $("#hse-btn-excel-all")?.addEventListener("click", () => exportMasterExcel(true));
     $("#hse-btn-excel-filter")?.addEventListener("click", () => exportMasterExcel(false));
 

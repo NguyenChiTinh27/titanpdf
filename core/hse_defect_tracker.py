@@ -41,7 +41,8 @@ else:
 
 DATA_DIR = PROJECT_ROOT / "data"
 HSE_REPORTS_DIR = DATA_DIR / "hse_reports"
-OVERRIDES_FILE = DATA_DIR / "hse_defect_tracker_overrides.json"
+OVERRIDES_FILE = DATA_DIR / "hse_defect_tracker_overrides.json"
+TRACKER_STATE_FILE = DATA_DIR / "hse_tracker_state.json"
 BASE_HSE_DIR = Path(__file__).resolve().parent / "data" / "hse"
 EXTRACTED_DEFECTS_JSON = BASE_HSE_DIR / "extracted_defects.json"
 EXTRACTED_IMAGES_DIR = BASE_HSE_DIR / "extracted_images"
@@ -145,6 +146,22 @@ class DefectAggregatorService:
         search_query: Optional[str] = None
     ) -> Dict[str, Any]:
         """Scans all sources and returns unified master defects list & KPI metrics."""
+        # Check if user explicitly cleared all tracker defects
+        if TRACKER_STATE_FILE.exists():
+            try:
+                with open(TRACKER_STATE_FILE, "r", encoding="utf-8") as sf:
+                    st = json.load(sf)
+                    if st.get("cleared") is True:
+                        return {
+                            "total": 0,
+                            "defects": [],
+                            "available_months": [],
+                            "available_departments": [],
+                            "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
+                        }
+            except Exception:
+                pass
+
         overrides = cls.load_overrides()
         raw_defects: List[Dict[str, Any]] = []
         seen_codes = set()
@@ -473,6 +490,44 @@ class DefectAggregatorService:
             "improved": payload.improved,
             "improveDate": now_str if payload.improved else "",
             "gas_synced": gas_synced
+        }
+
+    @classmethod
+    def clear_all_defects(cls) -> Dict[str, Any]:
+        """Xóa toàn bộ sự cố lỗi HSE Tracker và đặt cờ trạng thái trống."""
+        try:
+            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
+                json.dump({"cleared": True, "cleared_at": datetime.now().isoformat()}, sf, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Could not write tracker state file: {e}")
+
+        try:
+            with open(OVERRIDES_FILE, "w", encoding="utf-8") as of:
+                json.dump({}, of, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Could not clear overrides file: {e}")
+
+        # Gửi lệnh xóa lên Google Apps Script
+        gas_url = cls.get_gas_url()
+        try:
+            gas_payload = {
+                "action": "clearAllDefects",
+                "timestamp": datetime.now().isoformat()
+            }
+            requests.post(
+                gas_url,
+                data=json.dumps(gas_payload, ensure_ascii=False),
+                headers={"Content-Type": "text/plain;charset=utf-8"},
+                allow_redirects=True,
+                timeout=5.0
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": "Đã xóa sạch toàn bộ sự cố HSE Tracker thành công!",
+            "cleared": True
         }
 
     @classmethod

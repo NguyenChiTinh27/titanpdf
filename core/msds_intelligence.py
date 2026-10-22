@@ -399,6 +399,12 @@ class MSDSDatabase:
     def save_chemical(cls, data: Dict[str, Any], sync_gas: bool = True) -> str:
         """Lưu hoặc cập nhật thông tin hóa chất vào CSDL (ưu tiên lấy Mã sản phẩm làm Mã hóa chất & Mã MSDS)."""
         cls.init_db()
+        try:
+            cleared_flag = DATA_DIR / "msds_cleared.flag"
+            if cleared_flag.exists():
+                cleared_flag.unlink()
+        except Exception:
+            pass
         raw_code = (data.get("chemical_id") or data.get("product_code") or "").strip()
         chem_id = raw_code if raw_code else cls.next_chemical_id()
         product_code = (data.get("product_code") or chem_id).strip()
@@ -727,6 +733,12 @@ class MSDSDatabase:
             conn.execute("DELETE FROM compositions")
             conn.execute("DELETE FROM sections")
             conn.commit()
+
+        # Đánh dấu cờ đã xóa CSDL để chống nạp lại mock data
+        try:
+            (DATA_DIR / "msds_cleared.flag").write_text("cleared", encoding="utf-8")
+        except Exception:
+            pass
 
         # Đồng bộ xóa sạch toàn bộ trên Google Sheet
         try:

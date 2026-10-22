@@ -148,20 +148,29 @@ class MSDSGASSyncService:
         try:
             resp = requests.post(
                 url,
-                json=payload,
+                data=json.dumps(payload, ensure_ascii=False),
                 timeout=timeout,
                 allow_redirects=True,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "text/plain;charset=utf-8"}
             )
+            text = resp.text or ""
+            if "<!DOCTYPE" in text or "<html" in text.lower():
+                return {
+                    "status": "error",
+                    "success": False,
+                    "is_html": True,
+                    "error": "Google Apps Script phản hồi HTML (Yêu cầu đăng nhập hoặc quyền truy cập). Vui lòng mở Google Apps Script (Code.gs), Deploy lại Web App với quyền: 'Who has access' (Ai có quyền truy cập) là 'Anyone' (Bất kỳ ai)."
+                }
             if resp.status_code == 200:
                 try:
                     return resp.json()
                 except Exception:
-                    return {"status": "ok", "success": True, "raw_response": resp.text[:500]}
+                    return {"status": "ok", "success": True, "raw_response": text[:500]}
             else:
                 return {
                     "status": "error",
-                    "error": f"GAS trả về mã HTTP {resp.status_code}: {resp.text[:300]}",
+                    "success": False,
+                    "error": f"GAS trả về mã HTTP {resp.status_code}: {text[:300]}",
                     "http_status": resp.status_code
                 }
         except requests.exceptions.Timeout:

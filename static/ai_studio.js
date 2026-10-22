@@ -1642,9 +1642,18 @@ const MsdsGasSync = {
         const url = this.getUrl();
         if (!url) return null;
         try {
-            const resp = await fetch(`${url}?action=ping&t=${Date.now()}`);
+            const resp = await fetch(`${url}?action=ping&t=${Date.now()}`, {
+                method: "GET",
+                mode: "cors",
+                redirect: "follow"
+            });
             if (!resp.ok) return null;
-            return await resp.json();
+            const text = await resp.text();
+            if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("<HTML")) {
+                console.warn("GAS Ping returned HTML login page");
+                return { status: "error", is_html: true, error: "Google Apps Script phản hồi HTML (Yêu cầu quyền truy cập). Vui lòng Deploy lại Web App với quyền: 'Who has access' là 'Anyone'." };
+            }
+            return JSON.parse(text);
         } catch (e) {
             console.warn("GAS Ping failed:", e);
             return null;
@@ -1655,16 +1664,24 @@ const MsdsGasSync = {
         const url = this.getUrl();
         if (!url) return null;
         try {
-            const resp = await fetch(`${url}?action=list&t=${Date.now()}`);
+            const resp = await fetch(`${url}?action=list&t=${Date.now()}`, {
+                method: "GET",
+                mode: "cors",
+                redirect: "follow"
+            });
             if (!resp.ok) return null;
-            const data = await resp.json();
+            const text = await resp.text();
+            if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("<HTML")) {
+                throw new Error("Google Apps Script phản hồi HTML/Yêu cầu quyền truy cập. Vui lòng mở Google Apps Script (Code.gs), Deploy lại Web App với quyền: 'Who has access' (Ai có quyền truy cập) là 'Anyone' (Bất kỳ ai).");
+            }
+            const data = JSON.parse(text);
             if (data && data.folderUrl) {
                 this.setFolderUrl(data.folderUrl);
             }
             return data;
         } catch (e) {
             console.warn("GAS FetchList failed:", e);
-            return null;
+            throw e;
         }
     },
 
@@ -1675,13 +1692,25 @@ const MsdsGasSync = {
 
         const resp = await fetch(url, {
             method: "POST",
+            mode: "cors",
+            redirect: "follow",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payload)
         });
-        if (!resp.ok) {
-            throw new Error(`GAS HTTP error ${resp.status}`);
+        const text = await resp.text();
+        if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("<HTML")) {
+            throw new Error("Google Apps Script phản hồi HTML/Yêu cầu quyền truy cập. Vui lòng mở Google Apps Script (Code.gs), Deploy lại Web App với quyền: 'Who has access' (Ai có quyền truy cập) là 'Anyone' (Bất kỳ ai).");
         }
-        return await resp.json();
+        if (!resp.ok) {
+            throw new Error(`GAS HTTP error ${resp.status}: ${text.substring(0, 100)}`);
+        }
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (err) {
+            throw new Error("Phản hồi từ Google Apps Script không hợp lệ: " + text.substring(0, 100));
+        }
+        return data;
     },
 
     async upsertChemical(item, fileBase64, fileName, mimeType) {
@@ -1908,26 +1937,34 @@ async function loadMsdsChemicalsList(query = "") {
 
     applyMsdsRbacVisibility();
 
+    const isMsdsCleared = localStorage.getItem("IS_DB_CLEARED") === "true" || localStorage.getItem("MSDS_DB_CLEARED") === "true";
+
     // 1. Instant Cache Retrieval (< 100ms)
-    try {
-        const cachedRaw = localStorage.getItem("luv_msds_cache");
-        if (cachedRaw) {
-            const cachedList = JSON.parse(cachedRaw);
-            if (Array.isArray(cachedList) && cachedList.length > 0) {
-                ALL_MSDS_CHEMICALS_CACHE = cachedList;
-                updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
-                const activeSearch = query || (document.getElementById("msds-search-input")?.value || "").trim();
-                renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
+    if (isMsdsCleared) {
+        ALL_MSDS_CHEMICALS_CACHE = [];
+        updateMsdsKpiStats([]);
+        renderMsdsFilteredTable([], query);
+    } else {
+        try {
+            const cachedRaw = localStorage.getItem("luv_msds_cache");
+            if (cachedRaw) {
+                const cachedList = JSON.parse(cachedRaw);
+                if (Array.isArray(cachedList) && cachedList.length > 0) {
+                    ALL_MSDS_CHEMICALS_CACHE = cachedList;
+                    updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+                    const activeSearch = query || (document.getElementById("msds-search-input")?.value || "").trim();
+                    renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
+                }
             }
+        } catch (_cacheErr) {
+            console.warn("Lỗi đọc cache MSDS từ localStorage:", _cacheErr);
         }
-    } catch (_cacheErr) {
-        console.warn("Lỗi đọc cache MSDS từ localStorage:", _cacheErr);
     }
 
     // 2. Fetch fresh live data: ưu tiên kéo dữ liệu đồng bộ hai chiều từ Google Sheets / Google Drive
     try {
         let syncedWithGas = false;
-        if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+        if (!isMsdsCleared && window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
             syncedWithGas = await window.MsdsGasSync.pullFromCloud(false);
         }
 
@@ -1939,6 +1976,12 @@ async function loadMsdsChemicalsList(query = "") {
             const res = await respMsds.json();
 
             if (respMsds.ok && res.success && Array.isArray(res.data) && res.data.length > 0) {
+                if (isMsdsCleared) {
+                    try {
+                        localStorage.removeItem("IS_DB_CLEARED");
+                        localStorage.removeItem("MSDS_DB_CLEARED");
+                    } catch (_) {}
+                }
                 ALL_MSDS_CHEMICALS_CACHE = res.data;
                 try {
                     localStorage.setItem("luv_msds_cache", JSON.stringify(ALL_MSDS_CHEMICALS_CACHE));
@@ -1952,17 +1995,24 @@ async function loadMsdsChemicalsList(query = "") {
                     await window.MsdsGasSync.pullFromCloud(false);
                 }
             } else if ((!res.data || res.data.length === 0) && ALL_MSDS_CHEMICALS_CACHE.length === 0) {
-                // Fallback to static catalog if SQLite is temporarily empty
-                const fallbackResp = await fetch("/api/msds/fallback-catalog");
-                if (fallbackResp.ok) {
-                    const fbJson = await fallbackResp.json();
-                    const fbList = Array.isArray(fbJson) ? fbJson : (fbJson.data || []);
-                    if (fbList.length > 0) {
-                        ALL_MSDS_CHEMICALS_CACHE = fbList;
-                        updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
-                        renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, query);
-                        if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
-                            await window.MsdsGasSync.bulkSync(ALL_MSDS_CHEMICALS_CACHE);
+                if (isMsdsCleared) {
+                    // Người dùng đã chủ động xóa sạch CSDL: giữ nguyên trạng thái trống, tuyệt đối không nạp lại mock data!
+                    ALL_MSDS_CHEMICALS_CACHE = [];
+                    updateMsdsKpiStats([]);
+                    renderMsdsFilteredTable([], query);
+                } else {
+                    // Fallback to static catalog only on virgin first install
+                    const fallbackResp = await fetch("/api/msds/fallback-catalog");
+                    if (fallbackResp.ok) {
+                        const fbJson = await fallbackResp.json();
+                        const fbList = Array.isArray(fbJson) ? fbJson : (fbJson.data || []);
+                        if (fbList.length > 0) {
+                            ALL_MSDS_CHEMICALS_CACHE = fbList;
+                            updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+                            renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, query);
+                            if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+                                await window.MsdsGasSync.bulkSync(ALL_MSDS_CHEMICALS_CACHE);
+                            }
                         }
                     }
                 }
@@ -2912,6 +2962,8 @@ async function executeDeleteAllMsds() {
         try {
             localStorage.removeItem("luv_msds_cache");
             localStorage.setItem("cil_sync_outbox", "[]");
+            localStorage.setItem("IS_DB_CLEARED", "true");
+            localStorage.setItem("MSDS_DB_CLEARED", "true");
         } catch (_) {}
 
         if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
@@ -2920,7 +2972,9 @@ async function executeDeleteAllMsds() {
                     token: window.MsdsGasSync.getToken(),
                     action: "deleteAllChemicals"
                 });
-            } catch (_) {}
+            } catch (gErr) {
+                console.warn("GAS delete error:", gErr);
+            }
         }
 
         await loadMsdsChemicalsList();
@@ -4071,15 +4125,26 @@ async function testMsdsGasConnection() {
             statusMsg.textContent = "Đang gửi tín hiệu ping tới Google Apps Script...";
         }
 
-        // Kiểm tra ping trực tiếp qua GET (không lo CORS preflight)
+        // Kiểm tra ping trực tiếp qua GET (kèm redirect follow và kiểm tra HTML)
         let pingData = null;
         try {
-            const directResp = await fetch(`${webhookUrl}?action=ping&t=${Date.now()}`);
-            if (directResp.ok) {
-                pingData = await directResp.json();
+            const directResp = await fetch(`${webhookUrl}?action=ping&t=${Date.now()}`, {
+                method: "GET",
+                mode: "cors",
+                redirect: "follow"
+            });
+            const text = await directResp.text();
+            if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("<HTML")) {
+                throw new Error("HTML_AUTH_REQUIRED");
             }
-        } catch (_corsErr) {
-            console.warn("Direct ping warning, falling back to backend proxy:", _corsErr);
+            if (directResp.ok) {
+                pingData = JSON.parse(text);
+            }
+        } catch (pingErr) {
+            if (pingErr.message === "HTML_AUTH_REQUIRED") {
+                throw new Error("Google Apps Script phản hồi trang HTML (Yêu cầu quyền truy cập). Vui lòng mở Google Apps Script (Code.gs), Deploy lại Web App với quyền: 'Who has access' (Ai có quyền truy cập) là 'Anyone' (Bất kỳ ai).");
+            }
+            console.warn("Direct ping warning, falling back to backend proxy:", pingErr);
         }
 
         // Nếu direct ping không qua được thì gọi qua proxy Backend
