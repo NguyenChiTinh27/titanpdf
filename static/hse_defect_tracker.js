@@ -324,15 +324,15 @@
   // INLINE TABLE ACTIONS (AUTO-SAVE)
   // ==========================================================================
   async function handleInlineStatusChange(defectId, newStatusVal, rowEl) {
-    const isImproved = newStatusVal === "Cải thiện";
+    const isImproved = (newStatusVal.includes("Cải thiện") && !newStatusVal.includes("Chưa")) || (newStatusVal.includes("已改善") && !newStatusVal.includes("未改善"));
     const nowIsoDate = new Date().toISOString().substring(0, 10);
     const improveDateVal = isImproved ? nowIsoDate : "";
 
     const statusSelect = rowEl ? rowEl.querySelector(".hse-table-status-select") : null;
     if (statusSelect) {
-      statusSelect.style.background = isImproved ? "#dcfce7" : "#ffedd5";
-      statusSelect.style.color = isImproved ? "#166534" : "#9a3412";
-      statusSelect.style.borderColor = isImproved ? "#86efac" : "#fdba74";
+      statusSelect.style.background = isImproved ? "#dcfce7" : "#fef9c3";
+      statusSelect.style.color = isImproved ? "#166534" : "#854d0e";
+      statusSelect.style.borderColor = isImproved ? "#86efac" : "#fde047";
     }
 
     const dateInput = rowEl ? rowEl.querySelector(".hse-table-improve-date") : null;
@@ -348,7 +348,7 @@
     const target = state.allDefects.find(d => d.id === defectId || d.code === defectId);
     if (target) {
       target.improved = isImproved;
-      target.status = isImproved ? "Cải thiện" : "Chưa cải thiện";
+      target.status = isImproved ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善";
       target.improve_date = improveDateVal;
     }
 
@@ -364,7 +364,7 @@
     try {
       const payload = {
         defectId: defectId,
-        status: isImproved ? "Cải thiện" : "Chưa cải thiện",
+        status: isImproved ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善",
         improved: isImproved,
         improveDate: improveDateVal,
         improve_date: improveDateVal
@@ -375,7 +375,7 @@
         body: JSON.stringify(payload)
       });
       if (!resp.ok) throw new Error("Không thể cập nhật trạng thái");
-      showToast(isImproved ? `✓ Đã lưu trạng thái: CẢI THIỆN (${defectId})` : `⚠️ Đã lưu trạng thái: CHƯA CẢI THIỆN (${defectId})`);
+      showToast(isImproved ? `✓ Đã lưu trạng thái: CẢI THIỆN / 已改善 (${defectId})` : `⚠️ Đã lưu trạng thái: CHƯA CẢI THIỆN / 未改善 (${defectId})`);
     } catch (err) {
       showToast("Lỗi lưu trạng thái: " + err.message, true);
     }
@@ -428,13 +428,13 @@
   }
 
   function updateFormStatusStyling(statusVal) {
-    const isImp = statusVal === "Cải thiện";
+    const isImp = (statusVal.includes("Cải thiện") && !statusVal.includes("Chưa")) || (statusVal.includes("已改善") && !statusVal.includes("未改善"));
     const select = $("#hse-form-status-select");
     if (select) {
-      select.value = statusVal;
-      select.style.background = isImp ? "#dcfce7" : "#ffedd5";
-      select.style.color = isImp ? "#166534" : "#9a3412";
-      select.style.borderColor = isImp ? "#86efac" : "#fdba74";
+      select.value = isImp ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善";
+      select.style.background = isImp ? "#dcfce7" : "#fef9c3";
+      select.style.color = isImp ? "#166534" : "#854d0e";
+      select.style.borderColor = isImp ? "#86efac" : "#fde047";
     }
   }
 
@@ -488,7 +488,7 @@
       updateFormImageDisplay(d.img_before || d.img_after || "");
 
       const isImp = Boolean(d.improved);
-      updateFormStatusStyling(isImp ? "Cải thiện" : "Chưa cải thiện");
+      updateFormStatusStyling(isImp ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善");
       if (improveDateInp) improveDateInp.value = d.improve_date || "";
     } else {
       // Thêm mới lỗi
@@ -503,7 +503,7 @@
       if (issueVnInp) issueVnInp.value = "";
       if (issueZhInp) issueZhInp.value = "";
       updateFormImageDisplay("");
-      updateFormStatusStyling("Chưa cải thiện");
+      updateFormStatusStyling("Chưa cải thiện / 未改善");
       if (improveDateInp) improveDateInp.value = "";
     }
 
@@ -657,8 +657,8 @@
     }
     const vnIssue = (issueVnInp?.value || "").trim();
     const zhIssue = (issueZhInp?.value || "").trim();
-    const statusVal = statusSelect?.value || "Chưa cải thiện";
-    const isImproved = statusVal === "Cải thiện";
+    const statusVal = statusSelect?.value || "Chưa cải thiện / 未改善";
+    const isImproved = (statusVal.includes("Cải thiện") && !statusVal.includes("Chưa")) || (statusVal.includes("已改善") && !statusVal.includes("未改善"));
     const improveDate = isImproved ? (improveDateInp?.value || new Date().toISOString().substring(0, 10)) : "";
 
     if (!vnIssue && !zhIssue) {
@@ -673,7 +673,7 @@
       vn_issue: vnIssue,
       zh_issue: zhIssue,
       img_before: formCurrentImage,
-      status: statusVal,
+      status: isImproved ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善",
       improved: isImproved,
       improveDate: improveDate,
       improve_date: improveDate
@@ -761,7 +761,7 @@
           <div class="hse-defect-footer" style="display:flex; justify-content:space-between; align-items:center;">
             <label class="hse-checkbox-label ${isDone ? 'done' : 'pending'}">
               <input type="checkbox" data-action="quick-toggle" data-id="${escapeHtml(d.id)}" ${isDone ? 'checked' : ''}>
-              <span>${isDone ? `✓ Cải thiện (${escapeHtml(d.improve_date || 'Xong')})` : '⚠️ Chưa cải thiện'}</span>
+              <span>${isDone ? `✓ Cải thiện / 已改善 (${escapeHtml(d.improve_date || 'Xong')})` : '⚠️ Chưa cải thiện / 未改善'}</span>
             </label>
 
             <div style="display:inline-flex; gap:6px; align-items:center;">
@@ -828,11 +828,11 @@
             `}
           </td>
 
-          <!-- Cột F: Trạng thái (状态) - Dropdown inline chuẩn 2 giá trị -->
+          <!-- Cột F: Trạng thái (状态) - Dropdown inline chuẩn 2 giá trị kèm Tiếng Trung & phân biệt màu xanh / vàng nhạt -->
           <td style="padding:10px 12px; vertical-align:middle; text-align:center; white-space:nowrap;">
-            <select class="hse-table-status-select" data-id="${escapeHtml(d.id || d.code)}" style="padding:6px 10px; border-radius:6px; font-size:12.5px; font-weight:800; cursor:pointer; outline:none; border:1.5px solid ${isDone ? '#86efac' : '#fdba74'}; background:${isDone ? '#dcfce7' : '#ffedd5'}; color:${isDone ? '#166534' : '#9a3412'}; transition:all 0.15s;">
-              <option value="Chưa cải thiện" ${!isDone ? 'selected' : ''} style="background:#ffedd5; color:#9a3412; font-weight:700;">Chưa cải thiện</option>
-              <option value="Cải thiện" ${isDone ? 'selected' : ''} style="background:#dcfce7; color:#166534; font-weight:700;">Cải thiện</option>
+            <select class="hse-table-status-select" data-id="${escapeHtml(d.id || d.code)}" style="padding:6px 10px; border-radius:6px; font-size:12.5px; font-weight:800; cursor:pointer; outline:none; border:1.5px solid ${isDone ? '#86efac' : '#fde047'}; background:${isDone ? '#dcfce7' : '#fef9c3'}; color:${isDone ? '#166534' : '#854d0e'}; transition:all 0.15s;">
+              <option value="Chưa cải thiện / 未改善" ${!isDone ? 'selected' : ''} style="background:#fef9c3; color:#854d0e; font-weight:700;">Chưa cải thiện / 未改善</option>
+              <option value="Cải thiện / 已改善" ${isDone ? 'selected' : ''} style="background:#dcfce7; color:#166534; font-weight:700;">Cải thiện / 已改善</option>
             </select>
           </td>
 
@@ -1476,8 +1476,9 @@
     $("#hse-form-status-select")?.addEventListener("change", (e) => {
       const val = e.target.value;
       updateFormStatusStyling(val);
+      const isImp = (val.includes("Cải thiện") && !val.includes("Chưa")) || (val.includes("已改善") && !val.includes("未改善"));
       const dateInp = $("#hse-form-improve-date");
-      if (val === "Cải thiện") {
+      if (isImp) {
         if (dateInp && !dateInp.value) {
           dateInp.value = new Date().toISOString().substring(0, 10);
         }

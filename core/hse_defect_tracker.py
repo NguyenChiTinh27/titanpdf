@@ -31,6 +31,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.chart import BarChart, DoughnutChart, Reference
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.formatting.rule import CellIsRule
 from pydantic import BaseModel, Field
 
 from core.cell_image_packager import package_cell_images
@@ -759,9 +760,11 @@ class DefectAggregatorService:
                 if "improved" in ov:
                     d["improved"] = bool(ov["improved"])
                 if ov.get("status"):
-                    d["status"] = "Cải thiện" if "cải thiện" in str(ov["status"]).lower() and "chưa" not in str(ov["status"]).lower() else "Chưa cải thiện"
+                    st = str(ov["status"]).lower()
+                    is_ov_imp = ("cải thiện" in st and "chưa" not in st) or ("已改善" in str(ov["status"]) and "未改善" not in str(ov["status"]))
+                    d["status"] = "Cải thiện / 已改善" if is_ov_imp else "Chưa cải thiện / 未改善"
                 else:
-                    d["status"] = "Cải thiện" if d.get("improved") else "Chưa cải thiện"
+                    d["status"] = "Cải thiện / 已改善" if d.get("improved") else "Chưa cải thiện / 未改善"
                 if ov.get("improve_date") is not None:
                     d["improve_date"] = ov["improve_date"]
                 if ov.get("note") is not None:
@@ -777,7 +780,7 @@ class DefectAggregatorService:
                 if ov.get("department"):
                     d["department"] = ov["department"]
             else:
-                d["status"] = "Cải thiện" if d.get("improved") else "Chưa cải thiện"
+                d["status"] = "Cải thiện / 已改善" if (d.get("improved") or ("已改善" in str(d.get("status") or "") and "未改善" not in str(d.get("status") or ""))) else "Chưa cải thiện / 未改善"
 
         # Sắp xếp danh sách: Tháng mới nhất lên đầu, trong cùng tháng mã tăng dần (DEF-YYYYMM-01, 02...)
         raw_defects.sort(key=lambda x: (
@@ -876,7 +879,7 @@ class DefectAggregatorService:
             "category": cls.categorize_hse(f"{zh_issue} {vn_issue}"),
             "zh_issue": zh_issue,
             "vn_issue": vn_issue,
-            "status": "Cải thiện" if is_improved else "Chưa cải thiện",
+            "status": "Cải thiện / 已改善" if is_improved else "Chưa cải thiện / 未改善",
             "improved": is_improved,
             "improve_date": improve_date if is_improved else "",
             "img_before": img_b,
@@ -922,7 +925,7 @@ class DefectAggregatorService:
         for k in keys_to_update:
             item_ov = overrides.get(k, {})
             item_ov["improved"] = is_imp
-            item_ov["status"] = "Cải thiện" if is_imp else "Chưa cải thiện"
+            item_ov["status"] = "Cải thiện / 已改善" if is_imp else "Chưa cải thiện / 未改善"
             item_ov["improve_date"] = now_str if is_imp else ""
             if payload.note is not None:
                 item_ov["note"] = payload.note
@@ -951,7 +954,7 @@ class DefectAggregatorService:
                 for item in m_list:
                     if item.get("code") == code or item.get("id") == code:
                         item["improved"] = is_imp
-                        item["status"] = "Cải thiện" if is_imp else "Chưa cải thiện"
+                        item["status"] = "Cải thiện / 已改善" if is_imp else "Chưa cải thiện / 未改善"
                         item["improve_date"] = now_str if is_imp else ""
                         if payload.note is not None:
                             item["note"] = payload.note
@@ -1217,7 +1220,7 @@ class DefectAggregatorService:
             if improve_date_val and improve_date_val.lower() not in ["none", "---", "", "null"]:
                 is_improved = True
 
-            clean_status = "Cải thiện" if is_improved else "Chưa cải thiện"
+            clean_status = "Cải thiện / 已改善" if is_improved else "Chưa cải thiện / 未改善"
             clean_improve_date = improve_date_val if (is_improved and improve_date_val.lower() not in ["none", "---", "", "null"]) else ""
 
             dept_full, dept_k, dept_icon = cls.normalize_department(dept_val, dept_val)
@@ -1333,8 +1336,8 @@ class MasterHSEExcelExporter:
 
         fill_done = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
         font_done = Font(name=self.font_family, size=9.5, bold=True, color="166534")
-        fill_pending = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
-        font_pending = Font(name=self.font_family, size=9.5, bold=True, color="9A3412")
+        fill_pending = PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid")
+        font_pending = Font(name=self.font_family, size=9.5, bold=True, color="854D0E")
 
         for idx, item in enumerate(defects, 1):
             r = 4 + idx
@@ -1351,8 +1354,8 @@ class MasterHSEExcelExporter:
             ws_all[f"C{r}"] = zh
             ws_all[f"D{r}"] = vn
 
-            is_improved = bool(item.get("improved")) or (str(item.get("status") or "").strip().lower() in ["cải thiện", "đã cải thiện", "hoàn thành", "已改善"])
-            status_text = "Cải thiện" if is_improved else "Chưa cải thiện"
+            is_improved = bool(item.get("improved")) or (any(k in str(item.get("status") or "").strip().lower() for k in ["cải thiện", "đã cải thiện", "hoàn thành", "已改善"]) and not any(k in str(item.get("status") or "").strip().lower() for k in ["chưa", "未"]))
+            status_text = "Cải thiện / 已改善" if is_improved else "Chưa cải thiện / 未改善"
             ws_all[f"F{r}"] = status_text
             ws_all[f"G{r}"] = str(item.get("improve_date") or "").strip()
 
@@ -1413,13 +1416,24 @@ class MasterHSEExcelExporter:
                     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
         # Data Validation on Col F (Trạng thái)
-        dv = DataValidation(type="list", formula1='"Cải thiện,Chưa cải thiện"', allow_blank=True)
-        dv.error = 'Vui lòng chọn từ danh sách: Cải thiện hoặc Chưa cải thiện'
+        dv = DataValidation(type="list", formula1='"Cải thiện / 已改善,Chưa cải thiện / 未改善"', allow_blank=True)
+        dv.error = 'Vui lòng chọn từ danh sách: Cải thiện / 已改善 hoặc Chưa cải thiện / 未改善'
         dv.errorTitle = 'Lựa chọn không hợp lệ'
-        dv.prompt = 'Chọn trạng thái: Cải thiện / Chưa cải thiện'
+        dv.prompt = 'Chọn trạng thái: Cải thiện / 已改善 hoặc Chưa cải thiện / 未改善'
         dv.promptTitle = 'Trạng thái xử lý'
         ws_all.add_data_validation(dv)
         dv.add(f"F5:F{max(4 + total_items + 50, 100)}")
+
+        # Conditional Formatting on Col F (Tự động đổi màu Xanh lá / Vàng nhạt trong Excel)
+        cf_target = f"F5:F{max(4 + total_items + 50, 100)}"
+        rule_done1 = CellIsRule(operator="equal", formula=['"Cải thiện / 已改善"'], fill=fill_done, font=font_done)
+        rule_done2 = CellIsRule(operator="equal", formula=['"Cải thiện"'], fill=fill_done, font=font_done)
+        rule_pending1 = CellIsRule(operator="equal", formula=['"Chưa cải thiện / 未改善"'], fill=fill_pending, font=font_pending)
+        rule_pending2 = CellIsRule(operator="equal", formula=['"Chưa cải thiện"'], fill=fill_pending, font=font_pending)
+        ws_all.conditional_formatting.add(cf_target, rule_done1)
+        ws_all.conditional_formatting.add(cf_target, rule_done2)
+        ws_all.conditional_formatting.add(cf_target, rule_pending1)
+        ws_all.conditional_formatting.add(cf_target, rule_pending2)
 
         ws_all.freeze_panes = "A5"
         ws_all.auto_filter.ref = f"A4:G{4 + total_items}"
