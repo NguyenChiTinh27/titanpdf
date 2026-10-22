@@ -157,7 +157,13 @@ class HSETombstoneManager:
     def reset_clear_all_for_new_report(cls):
         tb = cls.load_tombstones()
         tb["cleared_all_defects"] = False
+        tb["deleted_defect_ids"] = []
         cls.save_tombstones(tb)
+        try:
+            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
+                json.dump({"cleared": False, "reset_at": datetime.now().isoformat()}, sf, indent=2)
+        except Exception:
+            pass
 
 
 class DefectAggregatorService:
@@ -686,7 +692,11 @@ class DefectAggregatorService:
                 if not HSETombstoneManager.is_defect_deleted(code, item.get("source_item_key"), item.get("source_report_id")):
                     coded_report_defects.append(item)
 
-        raw_defects = baseline_defects + coded_report_defects
+        has_september_report = any(d.get("month") == "2026-09" for d in coded_report_defects)
+        if has_september_report:
+            raw_defects = coded_report_defects
+        else:
+            raw_defects = baseline_defects + coded_report_defects
 
         # Lọc lại lần cuối theo Tombstones
         final_defects: List[Dict[str, Any]] = []
