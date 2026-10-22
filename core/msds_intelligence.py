@@ -846,167 +846,96 @@ class MSDSDatabase:
         return deleted_count
 
     @classmethod
-    def sanitize_catalog(cls) -> Dict[str, Any]:
-        """Tự động quét và chuẩn hóa toàn bộ Sổ CIL:
-        - Làm sạch tên nhà cung cấp (loại bỏ '- Product Name', 'Address:...').
-        - Điền tên hóa chất/thương phẩm thực tế thay cho 'Hóa chất FTU0005', 'Hóa chất A1935'...
-        - Quét bổ sung ngày ban hành revision_date nếu bị trống.
+    def sanitize_catalog(cls, api_key: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Quét và chuẩn hóa toàn bộ Sổ CIL bằng DeepSeek AI:
+        - Lấy lại các file gốc trong Kho File Gốc (data/msds_files) của từng hóa chất (A1196, A1731, A1101, FTU0003...).
+        - Đưa qua DeepSeek AI (deepseek-chat) phân tích lại toàn bộ 16 mục GHS từ đầu theo chuẩn mới.
+        - Ghi đè toàn bộ dữ liệu sạch (Tên tiếng Việt, Nhà cung cấp, Đặc tính lý - hóa & UN, Độc tính & Nguy cơ) vào CSDL.
         """
         cls.init_db()
+        from core.ai_text_engine import AITextEngine
+        creds = AITextEngine.get_ai_credentials(api_key=api_key)
+        actual_key = creds.get("api_key")
+
         updated_items = []
         with cls.get_connection() as conn:
             cursor = conn.execute("SELECT * FROM chemicals")
             rows = [dict(r) for r in cursor.fetchall()]
 
-            for item in rows:
-                chem_id = item["chemical_id"]
-                orig_name = item.get("product_name_vi") or ""
-                orig_supp = item.get("manufacturer") or ""
-                orig_date = item.get("revision_date") or ""
-                sfile = item.get("source_file") or ""
+        for item in rows:
+            chem_id = item["chemical_id"]
+            orig_name = item.get("product_name_vi") or ""
+            orig_supp = item.get("manufacturer") or ""
+            fpath = cls.resolve_msds_file_path(chem_id)
 
-                fpath = cls.resolve_msds_file_path(chem_id)
-                text = ""
-                if fpath and fpath.exists() and fpath.is_file():
-                    try:
-                        text = MSDSExtractorEngine.extract_text_from_file(str(fpath))
-                    except Exception:
-                        pass
-
-                # 1. Clean supplier
-                new_supp = orig_supp.strip()
-                new_supp = re.sub(r"^[\s:–—\-]+", "", new_supp).strip()
-                is_supp_dirty = (
-                    not new_supp or
-                    "- product name" in new_supp.lower() or
-                    new_supp.lower() == "product name" or
-                    new_supp.lower().startswith("address") or
-                    "township" in new_supp.lower() or
-                    "rd." in new_supp.lower() or
-                    "no. 1-" in new_supp.lower() or
-                    "tel:" in new_supp.lower() or
-                    "fax:" in new_supp.lower()
-                )
-
-                # 2. Clean product name
-                new_name = orig_name.strip()
-                is_name_generic = (
-                    not new_name or
-                    new_name == f"Hóa chất {chem_id}" or
-                    new_name == chem_id or
-                    new_name == "Hóa chất mới" or
-                    new_name.startswith("Hóa chất 0000") or
-                    bool(re.match(r"^(?:Hóa chất\s+)?(?:FTU\d+|A\d+|ZW\d+|[A-Z0-9]{5,10})$", new_name, re.I))
-                )
-
-                # 3. Clean date
-                new_date = orig_date.strip()
-
-                # Gọi AI trích xuất chuẩn hóa nếu phát hiện dữ liệu lỗi và hệ thống có API Key
-                if (is_supp_dirty or is_name_generic) and text:
-                    try:
-                        from core.ai_text_engine import AITextEngine
-                        creds = AITextEngine.get_ai_credentials()
-                        if creds.get("api_key"):
-                            ai_extract_prompt = (
-                                f"Đọc đoạn văn bản đầu hồ sơ MSDS sau và trích xuất đúng 3 trường thông tin dạng JSON:\n"
-                                f"1. 'chemical_name': Tên thương phẩm / tên hóa chất chính xác (vd: Sơn phủ bóng UV, BYK-333). TUYỆT ĐỐI KHÔNG lấy mã file ({chem_id}, FTU..., A1935...).\n"
-                                f"2. 'supplier_name': CHỈ LẤY ĐÚNG TÊN CÔNG TY của nhà sản xuất hoặc nhà cung cấp. TUYỆT ĐỐI LOẠI BỎ '- Product Name', 'Address:', địa chỉ đường phố, số điện thoại hay email.\n"
-                                f"3. 'revision_date': Ngày phát hành hoặc cập nhật tài liệu (YYYY-MM-DD hoặc DD/MM/YYYY).\n\n"
-                                f"VĂN BẢN MSDS:\n{text[:3500]}\n\n"
-                                f"Chỉ trả về DUY NHẤT một chuỗi JSON hợp lệ: {{\"chemical_name\": \"...\", \"supplier_name\": \"...\", \"revision_date\": \"...\"}}"
-                            )
-                            ai_clean_res = AITextEngine.call_universal_chat(
-                                messages=[{"role": "user", "content": ai_extract_prompt}],
-                                system_prompt="Bạn là chuyên gia thẩm định hồ sơ MSDS. Trích xuất chính xác tên sản phẩm và tên công ty.",
-                                api_key=creds["api_key"],
-                                provider=creds.get("provider"),
-                                model=creds.get("model"),
-                                temperature=0.1,
-                                timeout=20
-                            )
-                            m_j = re.search(r"\{[\s\S]*\}", ai_clean_res)
-                            if m_j:
-                                p_ai = json.loads(m_j.group(0))
-                                cand_ai_name = str(p_ai.get("chemical_name") or "").strip()
-                                cand_ai_supp = str(p_ai.get("supplier_name") or "").strip()
-                                cand_ai_date = str(p_ai.get("revision_date") or "").strip()
-                                if cand_ai_name and not any(k in cand_ai_name.lower() for k in ("ftu", "a1935", chem_id.lower())):
-                                    new_name = cand_ai_name
-                                    is_name_generic = False
-                                if cand_ai_supp and not any(k in cand_ai_supp.lower() for k in ("- product name", "address", "township")):
-                                    new_supp = cand_ai_supp
-                                    is_supp_dirty = False
-                                if cand_ai_date and not new_date:
-                                    new_date = cand_ai_date
-                    except Exception as _ai_clean_err:
-                        pass
-
-                # Fallback Heuristic nếu AI chưa xử lý hết
-                if is_supp_dirty and text:
-                    co_matches = re.findall(
-                        r'([A-Z0-9\s,\.\-—&]+(?:CO\.,\s*LTD|LIMITED|GMBH|INC\.|CORP|INDUSTRIES\s+AG|COMPANY\s+LIMITED|CORPORATION|S\.A\.|MATERIALS\s+CO\.,\s*LTD|CÔNG TY TNHH[^\n,]+))',
-                        text[:3500],
-                        re.I
+            if actual_key and fpath and fpath.exists() and fpath.is_file():
+                try:
+                    reparsed = MSDSExtractorEngine.process_file(
+                        str(fpath),
+                        api_key=actual_key,
+                        engine="deepseek",
+                        original_filename=item.get("source_file") or fpath.name
                     )
-                    for m in co_matches:
-                        cand = m.strip().strip(":-,")
-                        if len(cand) > 4 and not cand.lower().startswith("address") and "product name" not in cand.lower():
-                            new_supp = cand[:120]
-                            break
+                    reparsed["chemical_id"] = chem_id
+                    if item.get("drive_file_id"):
+                        reparsed["drive_file_id"] = item.get("drive_file_id")
+                        reparsed["drive_view_url"] = item.get("drive_view_url")
+                        reparsed["drive_download_url"] = item.get("drive_download_url")
+                    if item.get("plant_code"):
+                        reparsed["plant_code"] = item.get("plant_code")
+                    if item.get("plant_name"):
+                        reparsed["plant_name"] = item.get("plant_name")
 
-                # Lọc sạch triệt để nhãn thừa trong supplier
-                new_supp = re.sub(r"^(?:-\s*Product\s*Name|Product\s*Name|Address)\s*[:：\-–]?\s*", "", new_supp, flags=re.I).strip()
-                new_supp = re.sub(r"^Address\s*:\s*", "", new_supp, flags=re.I).strip()
-
-                if is_name_generic:
-                    cand_name = ""
-                    if text:
-                        m_th = re.search(r'Hóa chất:\s*([^|\n]+)', text[:500], re.I)
-                        if m_th and len(m_th.group(1).strip()) > 2:
-                            cand_name = m_th.group(1).strip().title()
-                        if not cand_name:
-                            m_pn = re.search(r'(?:Product Name|Trading name|SDS Name|Trade name)\s*[:：\n]+\s*([^\n\r]+)', text[:2000], re.I)
-                            if m_pn and len(m_pn.group(1).strip()) > 2:
-                                cp = m_pn.group(1).strip().strip(":- ")
-                                if cp and cp.lower() not in ("na", "none", "n/a"):
-                                    cand_name = cp
-                    if not cand_name and sfile:
-                        base_fn = re.sub(r'^\d+_', '', sfile)
-                        base_fn = re.sub(r'-(?:MSDS|SDS)(?:-[A-Za-z0-9]+)?(?:\.pdf|\.docx|\.doc)$', '', base_fn, flags=re.I)
-                        base_fn = re.sub(r'(\.pdf|\.docx|\.doc)$', '', base_fn, flags=re.I)
-                        base_fn = re.sub(r'^[A-Z0-9]{3,8}-', '', base_fn).strip()
-                        if len(base_fn) > 2 and not base_fn.lower().startswith("msds"):
-                            cand_name = base_fn
-
-                    if cand_name:
-                        new_name = cand_name
-
-                if not new_date and text:
-                    m_d = re.search(r'(?:revision|issue|creation|date|ngày)[^\n:]{0,20}[:\s]+(\d{1,4}[./\-]\d{1,2}[./\-]\d{2,4}|\d{1,2}\s+[a-zA-Z]{3,9}\s+\d{4})', text[:3000], re.I)
-                    if m_d:
-                        new_date = m_d.group(1).strip()
-                    if m_d:
-                        new_date = m_d.group(1).strip()
-
-                # Check if changed
-                if new_name != orig_name or new_supp != orig_supp or new_date != orig_date:
-                    conn.execute("""
-                        UPDATE chemicals
-                        SET product_name_vi = ?, product_name_original = ?, manufacturer = ?, revision_date = ?
-                        WHERE chemical_id = ?
-                    """, (new_name, new_name, new_supp, new_date, chem_id))
+                    cls.save_chemical(reparsed, sync_gas=False)
                     updated_items.append({
                         "chemical_id": chem_id,
                         "old_name": orig_name,
-                        "new_name": new_name,
+                        "new_name": reparsed.get("product_name_vi"),
                         "old_supplier": orig_supp,
-                        "new_supplier": new_supp,
-                        "old_date": orig_date,
-                        "new_date": new_date
+                        "new_supplier": reparsed.get("manufacturer"),
+                        "reparsed_with_ai": True
                     })
+                    continue
+                except Exception as ai_reparse_err:
+                    print(f"[SANITIZE_AI_WARN] {chem_id}: {ai_reparse_err}", flush=True)
 
-            conn.commit()
+            # Fallback làm sạch offline nếu không có file vật lý hoặc gọi AI bị lỗi
+            cleaned_item = dict(item)
+            MSDSExtractorEngine.ensure_vietnamese_msds_fields(cleaned_item)
+            MSDSExtractorEngine._enrich_chemical_spec_fields(cleaned_item)
+
+            # Lọc sạch triệt để nhãn thừa trong supplier
+            supp = str(cleaned_item.get("manufacturer") or "").strip()
+            supp = re.sub(r"^(?:-\s*Product\s*Name|Product\s*Name|Address)\s*[:：\-–]?\s*", "", supp, flags=re.I).strip()
+            supp = re.sub(r"^Address\s*:\s*", "", supp, flags=re.I).strip()
+            cleaned_item["manufacturer"] = supp[:120] if supp else "Chưa cập nhật"
+
+            pname = str(cleaned_item.get("product_name_vi") or "").strip()
+            pname = re.sub(r"^Hóa chất\s+([A-Z0-9]{4,10})$", r"\1", pname)
+            pname = re.sub(r"_[a-f0-9]{6,}$", "", pname)
+            cleaned_item["product_name_vi"] = pname
+
+            with cls.get_connection() as conn:
+                conn.execute("""
+                    UPDATE chemicals
+                    SET product_name_vi = ?, product_name_original = ?, manufacturer = ?,
+                        flash_point = ?, density = ?, physical_state = ?, hazard_classification = ?
+                    WHERE chemical_id = ?
+                """, (
+                    cleaned_item.get("product_name_vi"), cleaned_item.get("product_name_vi"), cleaned_item.get("manufacturer"),
+                    cleaned_item.get("flash_point"), cleaned_item.get("density"), cleaned_item.get("physical_state"),
+                    cleaned_item.get("hazard_classification"), chem_id
+                ))
+                conn.commit()
+            updated_items.append({
+                "chemical_id": chem_id,
+                "old_name": orig_name,
+                "new_name": cleaned_item.get("product_name_vi"),
+                "old_supplier": orig_supp,
+                "new_supplier": cleaned_item.get("manufacturer"),
+                "reparsed_with_ai": False
+            })
 
         return {
             "total": len(rows),
@@ -1025,13 +954,42 @@ class MSDSExtractorEngine:
 
     @classmethod
     def _extract_text_from_docx_object(cls, doc_path: str) -> str:
-        """Đọc toàn bộ đoạn văn và bảng biểu từ tệp DOCX theo đúng thứ tự xuất hiện trên tài liệu."""
+        """Đọc toàn bộ đoạn văn, bảng biểu (kể cả bảng lồng nhau) và header/footer từ tệp DOCX theo đúng thứ tự 16 mục GHS."""
         d = docx.Document(doc_path)
         full_text = []
 
+        # 1. Trích xuất Header từ các sections
+        for s in d.sections:
+            try:
+                for hp in s.header.paragraphs:
+                    htxt = hp.text.strip()
+                    if htxt and htxt not in full_text:
+                        full_text.append(f"[HEADER: {htxt}]")
+            except Exception:
+                pass
+
+        # 2. Trích xuất toàn bộ Body (đoạn văn + bảng biểu có cấu trúc)
         try:
             from docx.text.paragraph import Paragraph
             from docx.table import Table
+
+            def _get_cell_text(cell):
+                parts = []
+                for child in cell._element.iterchildren():
+                    if child.tag.endswith('p'):
+                        ptxt = Paragraph(child, d).text.strip()
+                        if ptxt:
+                            parts.append(ptxt)
+                    elif child.tag.endswith('tbl'):
+                        nested = Table(child, d)
+                        for nr in nested.rows:
+                            nvals = [" ".join(nc.text.split()) for nc in nr.cells if nc.text.strip()]
+                            if nvals:
+                                parts.append(" [ " + " | ".join(nvals) + " ] ")
+                if not parts:
+                    return " ".join(line.strip() for line in cell.text.splitlines() if line.strip())
+                return " ".join(parts)
+
             for child in d.element.body.iterchildren():
                 if child.tag.endswith('p'):
                     para = Paragraph(child, d)
@@ -1040,19 +998,24 @@ class MSDSExtractorEngine:
                         full_text.append(t)
                 elif child.tag.endswith('tbl'):
                     table = Table(child, d)
+                    is_first_row = True
                     for row in table.rows:
                         row_vals = []
                         for c in row.cells:
-                            cell_txt = " ".join(line.strip() for line in c.text.splitlines() if line.strip())
-                            if cell_txt:
-                                row_vals.append(cell_txt)
+                            ctxt = _get_cell_text(c)
+                            if ctxt:
+                                row_vals.append(ctxt)
                         if row_vals:
                             dedup = []
                             for v in row_vals:
                                 if not dedup or v != dedup[-1]:
                                     dedup.append(v)
                             if dedup:
-                                full_text.append(" | ".join(dedup))
+                                row_md = "| " + " | ".join(dedup) + " |"
+                                full_text.append(row_md)
+                                if is_first_row and len(dedup) > 1:
+                                    full_text.append("| " + " | ".join(["---"] * len(dedup)) + " |")
+                                    is_first_row = False
         except Exception:
             for para in d.paragraphs:
                 if para.text.strip():
@@ -1066,7 +1029,17 @@ class MSDSExtractorEngine:
                             if not dedup or v != dedup[-1]:
                                 dedup.append(v)
                         if dedup:
-                            full_text.append(" | ".join(dedup))
+                            full_text.append("| " + " | ".join(dedup) + " |")
+
+        # 3. Trích xuất Footer từ các sections
+        for s in d.sections:
+            try:
+                for fp in s.footer.paragraphs:
+                    ftxt = fp.text.strip()
+                    if ftxt and ftxt not in full_text:
+                        full_text.append(f"[FOOTER: {ftxt}]")
+            except Exception:
+                pass
 
         combined = "\n".join(full_text).strip()
         # Kiểm tra nếu DOCX chủ yếu là ảnh scan (như MSDS.docx)
@@ -1555,16 +1528,21 @@ class MSDSExtractorEngine:
 
     @classmethod
     def parse_with_deepseek(cls, text: str, api_key: Optional[str] = None, visual_ghs_hint: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-        """Sử dụng AI Đa Phương Thức (Gemini / OpenAI / DeepSeek) trích xuất chuẩn 16 mục GHS và dữ liệu có cấu trúc từ MSDS."""
+        """
+        Sử dụng DeepSeek AI (deepseek-chat) với JSON Mode để trích xuất 100% dữ liệu chuẩn 16 mục GHS sang Tiếng Việt.
+        - Model: deepseek-chat (DeepSeek-V3), không dùng deepseek-reasoner
+        - response_format: {"type": "json_object"}
+        - Đọc toàn bộ nội dung tài liệu (lên tới 100,000 ký tự), không cắt cụt làm mất Mục 9, 11, 14, 15, 16.
+        - Tự động retry tối đa 2 lần. Nếu lỗi, raise RuntimeError rõ ràng, tuyệt đối không fallback ngầm về Regex.
+        """
         from core.ai_text_engine import AITextEngine
         creds = AITextEngine.get_ai_credentials(api_key=api_key)
         actual_key = creds.get("api_key")
-        if not actual_key or len(text.strip()) < 50:
-            return None
+        if not actual_key or len(text.strip()) < 30:
+            raise ValueError("Chưa có DeepSeek API Key. Vui lòng thiết lập API Key trong phần Cài Đặt!")
 
-        sample_text = text[:18000]
-        if len(text) > 18000:
-            sample_text += "\n\n[... CẮT BỚT VĂN BẢN Ở GIỮA ...]\n\n" + text[-7000:]
+        # Không cắt cụt tài liệu ở 18k - DeepSeek-V3 có context window 64k tokens (hơn 100,000 ký tự)
+        sample_text = text[:100000]
 
         ghs_visual_instruction = ""
         if visual_ghs_hint:
@@ -1576,88 +1554,118 @@ class MSDSExtractorEngine:
             )
 
         system_prompt = (
-            "Bạn là Chuyên gia Thẩm định An toàn Hóa chất (EHS / MSDS Specialist) hàng đầu thế giới.\n"
-            "Nhiệm vụ: Đọc hiểu toàn văn bản MSDS/SDS được cung cấp và trích xuất dữ liệu chuẩn 16 mục GHS thành định dạng JSON hợp lệ duy nhất.\n\n"
-            "CÁC QUY TẮC BÓC TÁCH BẮT BUỘC TUÂN THỦ:\n"
-            "1. TÊN HÓA CHẤT (product_name_vi / chemicalName):\n"
-            "   - Trích xuất tên thương mại / tên hóa chất chính xác từ Mục 1 (Section 1: Identification).\n"
-            "   - Viết hoa chữ cái đầu chuẩn mực (vd: 'Sơn Phủ Bóng UV Không Dung Môi', 'Phụ Gia Chống Lắng BYK-333').\n"
-            "   - TUYỆT ĐỐI KHÔNG lấy mã file (FTU0005, A1935, ZW55019) làm tên hóa chất trừ khi toàn bộ tài liệu hoàn toàn không có tên sản phẩm.\n"
-            "2. NHÀ SẢN XUẤT / NHÀ CUNG CẤP (manufacturer / supplierName):\n"
-            "   - CHỈ LẤY ĐÚNG TÊN CÔNG TY của Nhà sản xuất hoặc Nhà cung cấp từ Mục 1 (vd: 'ZhanChen New Materials Co., Ltd', 'BYK-Chemie GmbH', 'Công ty TNHH Hóa Chất ABC').\n"
-            "   - TUYỆT ĐỐI LOẠI BỎ các nhãn thừa như '- Product Name', 'Product Name:', 'Address:', địa chỉ đường phố, số điện thoại, fax, email, website.\n"
-            "3. SỐ CAS CHÍNH (cas_primary / casNumber):\n"
-            "   - Trích xuất mã CAS chính từ Mục 3 (Section 3: Composition). Nếu là hỗn hợp, lấy số CAS của hoạt chất nguy hại chính hoặc chất có nồng độ lớn nhất. Không để trống nếu Mục 3 có số CAS.\n"
-            "4. MÃ GHS VÀ TỪ CẢNH BÁO (ghs_codes, signal_word):\n"
-            "   - Xác định dựa trên hình đồ Mục 2 (Section 2: Hazards Identification) của sản phẩm chính.\n"
-            "   - Nếu sản phẩm có tính dễ cháy (Flammable, H220-H228, điểm chớp cháy <= 60°C), bắt buộc phải có 'GHS02'.\n"
-            "   - Nếu Mục 2 ghi rõ 'Không phải là chất hay hỗn hợp nguy hại', 'Not classified as hazardous', 'No symbol', trả về: \"ghs_codes\": [\"NON DG\"] và \"signal_word\": \"NON DG\".\n"
+            "Bạn là Chuyên gia Cao cấp về An toàn Hóa chất & Thẩm định MSDS/SDS (Senior EHS & Chemical Regulatory Specialist).\n"
+            "Nhiệm vụ: Đọc hiểu 100% toàn bộ tài liệu MSDS/SDS được cung cấp (bất kể ngôn ngữ gốc là tiếng Anh, tiếng Trung, tiếng Việt hay song ngữ) "
+            "và trích xuất dữ liệu chuẩn 16 mục GHS thành DUY NHẤT một đối tượng JSON hợp lệ.\n\n"
+            "QUY TẮC BẮT BUỘC TUÂN THỦ TUYỆT ĐỐI (ZERO TOLERANCE):\n"
+            "1. 100% TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH: Toàn bộ nội dung kết quả trả về PHẢI LÀ TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT / HSE.\n"
+            "   - TUYỆT ĐỐI KHÔNG để sót tiếng Anh hoặc tiếng Trung trong các câu mô tả.\n"
+            "   - TUYỆT ĐỐI KHÔNG lặp song ngữ cơ học như 'UV color paint Sơn màu UV', 'colored liquid chất lỏng có màu', '>93 (closed cup) >93 (cốc kín)'.\n"
+            "   - Hãy dịch và viết lại thành tiếng Việt mượt mà, chính xác: 'Sơn màu UV', 'Chất lỏng có màu', '>93°C (cốc kín)'.\n"
+            "2. TÊN HÓA CHẤT / THƯƠNG MẠI (chemical_name & product_name_vi):\n"
+            "   - Trích xuất tên sản phẩm / tên thương phẩm thực tế từ Mục 1 (Section 1). Viết hoa chữ cái đầu chuẩn mực.\n"
+            "   - TUYỆT ĐỐI KHÔNG dùng tên file hoặc mã băm ngẫu nhiên (ví dụ: 'Better BF-6210-MSDS-CN_SongNgu_eefa89') làm tên hóa chất. Hãy lấy tên thực tế như 'Sơn Phủ Bóng BF-6210', 'BYK-310', 'Xtendra 108'.\n"
+            "3. MÃ SẢN PHẨM / MÃ MSDS (product_code):\n"
+            "   - Trích xuất mã sản phẩm hoặc mã hiệu hóa chất từ Mục 1 hoặc đầu trang (ví dụ: 'A1196', 'A1731', 'A1101', 'FTU0003', 'FTU0005', 'ZW55019', 'ZNZX009').\n"
+            "4. PHÂN LOẠI DANH MỤC (category):\n"
+            "   - Tự động xác định: 'Nguyên liệu' (dung môi đơn chất, phụ gia, monomer, nhựa nguyên chất) hoặc 'Thành phẩm' (sơn pha chế, hỗn hợp hoàn thiện, mực in...).\n"
+            "5. NHÀ SẢN XUẤT / CUNG CẤP (manufacturer / supplier):\n"
+            "   - BẮT BUỘC trích xuất ĐÚNG TÊN CÔNG TY của nhà sản xuất hoặc nhà cung ứng từ Mục 1 (ví dụ: 'VISION NEW MATERIALS VIETNAM CO., LTD', 'BYK-Chemie GmbH', 'Eastman Chemical Company').\n"
+            "   - TUYỆT ĐỐI LOẠI BỎ các nhãn thừa như '- Product Name', 'Product Name:', 'Address:', địa chỉ đường phố, số điện thoại, fax, email.\n"
+            "   - KHÔNG ĐƯỢC để 'Chưa cập nhật' khi tài liệu có thông tin công ty.\n"
+            "6. HÌNH ĐỒ GHS & TỪ CẢNH BÁO (ghs_codes, signal_word):\n"
+            "   - 'ghs_codes': Mảng các mã hình đồ chuẩn ở Mục 2, ví dụ: [\"GHS02\", \"GHS07\"]. Nếu Mục 2 ghi rõ không nguy hại hoặc không có hình đồ GHS, trả về [\"NON DG\"].\n"
+            "   - 'signal_word': 'Nguy hiểm', 'Cảnh báo', hoặc 'NON DG'.\n"
             f"{ghs_visual_instruction}"
-            "5. NGÀY PHÁT HÀNH / CẬP NHẬT (revision_date / issueDate):\n"
-            "   - Lấy ngày phát hành hoặc ngày sửa đổi gần nhất từ Mục 1 hoặc đầu/cuối tài liệu (YYYY-MM-DD hoặc DD/MM/YYYY).\n"
-            "6. Toàn bộ các trường mô tả an toàn, công dụng, ngoại quan, cảnh báo nguy hại, sơ cứu 4 đường, trang bị bảo hộ PPE, điều kiện bảo quản, chữa cháy PHẢI ĐƯỢC VIẾT HOẶC DỊCH SANG TIẾNG VIỆT CHUẨN CHUYÊN NGÀNH HÓA CHẤT.\n"
-            "7. BÓC TÁCH CHUYÊN SÂU 11 THÔNG SỐ LÝ HÓA, VẬN CHUYỂN, ĐỘC TÍNH & NGUY HẠI (QUÉT KỸ MỤC 2, 9, 10, 11, 12, 14):\n"
-            "   - 'hazard_classification': Phân loại nguy hiểm tổng quát theo GHS & mã H ở Mục 2. Nếu không nguy hại ghi rõ 'Không phân loại'.\n"
-            "   - 'physical_state': Trạng thái ở Mục 9 (Chất lỏng, Chất rắn, Khí, Dạng sệt, Dạng bột, Khí dung...).\n"
-            "   - 'flash_point': Điểm chớp cháy ở Mục 9 kèm đơn vị °C. Nếu không có hoặc không áp dụng ghi 'KCDL (N/A)'.\n"
-            "   - 'boiling_point': Điểm sôi / khoảng sôi ở Mục 9 kèm đơn vị °C. Nếu không có ghi 'KCDL (N/A)'.\n"
-            "   - 'density': Tỷ trọng tương đối / Khối lượng riêng ở Mục 9. Nếu không có ghi 'KCDL (N/A)'.\n"
-            "   - 'un_no': Mã số UN vận chuyển ở Mục 14 (vd: UN 1263). Nếu không thuộc hàng nguy hiểm ghi rõ 'Không áp dụng'.\n"
-            "   - 'acute_toxicity': Độc cấp tính ở Mục 11 (qua đường miệng, da, hô hấp, LD50/LC50). Nếu không phân loại ghi 'Không phân loại'.\n"
-            "   - 'stot': Độc tính lên cơ quan đích cụ thể (STOT SE / STOT RE kèm tên cơ quan bị ảnh hưởng ở Mục 11). Nếu không có ghi 'KCDL (N/A)'.\n"
-            "   - 'aquatic_hazard': Nguy hại môi trường thủy sinh ở Mục 12 (Aquatic Acute, Aquatic Chronic). Nếu không phân loại ghi 'Không phân loại'.\n"
-            "   - 'self_reactive_peroxide': Chất tự phản ứng hoặc peroxyt hữu cơ (Mục 2, 9, 10). Nếu không phải ghi 'Không phân loại'.\n"
-            "   - 'other_hazards': Các nguy cơ còn lại (ăn mòn/kích ứng da/mắt, mẫn cảm, CMR, nguy cơ hít phải Aspiration). Nếu không có ghi 'KCDL (N/A)'.\n\n"
-            "YÊU CẦU CẤU TRÚC JSON ĐẦU RA:\n"
+            "7. ĐẶC TÍNH LÝ HÓA & VẬN CHUYỂN UN (QUÉT KỸ MỤC 9 & MỤC 14):\n"
+            "   - 'physical_state': Trạng thái vật lý, màu sắc, mùi bằng tiếng Việt (ví dụ: 'Chất lỏng có màu', 'Chất lỏng trong suốt', 'Chất rắn dạng bột trắng').\n"
+            "   - 'flash_point': Điểm chớp cháy kèm đơn vị °C (ví dụ: '>93°C (cốc kín)', '27°C (cốc kín)', 'Không áp dụng').\n"
+            "   - 'boiling_point': Điểm sôi hoặc khoảng sôi kèm đơn vị °C (ví dụ: '138 - 144°C', '>100°C').\n"
+            "   - 'density': Tỷ trọng / khối lượng riêng (ví dụ: '1.24 g/cm³', '0.98').\n"
+            "   - 'un_no': Mã số UN vận chuyển ở Mục 14 (ví dụ: 'UN 1263', 'UN 1993', 'Không áp dụng').\n"
+            "   - 'transport_class': Nhóm nguy hiểm vận chuyển (ví dụ: '3', '8', 'Không áp dụng').\n"
+            "   - 'packing_group': Nhóm đóng gói (ví dụ: 'II', 'III', 'Không áp dụng').\n"
+            "8. ĐỘC TÍNH, MÔI TRƯỜNG & TƯƠNG KỴ (QUÉT KỸ MỤC 2, 10, 11, 12):\n"
+            "   - 'hazard_classification': Phân loại nguy hiểm tổng quát theo GHS bằng tiếng Việt.\n"
+            "   - 'acute_toxicity': Tóm tắt độc cấp tính (miệng, da, hô hấp, LD50/LC50) bằng tiếng Việt.\n"
+            "   - 'stot': Độc tính cơ quan đích cụ thể (STOT SE / RE) kèm cơ quan ảnh hưởng. Nếu không có ghi 'KCDL (N/A)'.\n"
+            "   - 'aquatic_hazard': Nguy hại thủy sinh cấp tính / mãn tính bằng tiếng Việt. Nếu không phân loại ghi 'Không phân loại'.\n"
+            "   - 'self_reactive_peroxide': Chất tự phản ứng hoặc peroxyt hữu cơ. Nếu không phải ghi 'Không phân loại'.\n"
+            "   - 'other_hazards': Nguy cơ khác: kích ứng da/mắt, mẫn cảm, nguy cơ hít phải bằng tiếng Việt.\n"
+            "   - 'toxicity_info': Tóm tắt tổng thể độc tính và nguy cơ sức khỏe / môi trường bằng tiếng Việt (tổng hợp từ Mục 2, 11, 12). TUYỆT ĐỐI KHÔNG gán 'Không phân loại / Ít/không độc tính đặc biệt' khi hóa chất có mối nguy.\n"
+            "   - 'incompatible_materials': Các chất / vật liệu tương kỵ cần tránh ở Mục 10 bằng tiếng Việt (ví dụ: 'Chất oxy hóa mạnh, axit mạnh, bazơ mạnh').\n"
+            "9. THÀNH PHẦN & CAS (MỤC 3):\n"
+            "   - 'cas_primary': Số CAS chính hoặc nồng độ lớn nhất (ví dụ: '1330-20-7'). Nếu là hỗn hợp không tách lẻ số CAS thì ghi rõ.\n"
+            "   - 'components': Danh sách thành phần [{'name_vi': '...', 'name_original': '...', 'cas': '...', 'percent': '...'}] đầy đủ.\n"
+            "10. AN TOÀN, BẢO QUẢN, SƠ CỨU & PCCC (MỤC 4, 5, 6, 7, 8):\n"
+            "   - 'storage_condition': Hướng dẫn bảo quản và thao tác an toàn bằng tiếng Việt.\n"
+            "   - 'first_aid_inhalation', 'first_aid_skin', 'first_aid_eyes', 'first_aid_ingestion': Biện pháp sơ cứu 4 đường bằng tiếng Việt.\n"
+            "   - 'fire_measures': Biện pháp chữa cháy bằng tiếng Việt.\n"
+            "   - 'spill_measures': Xử lý tràn đổ / rò rỉ bằng tiếng Việt.\n"
+            "   - 'respiratory_protection', 'hand_protection', 'eye_protection', 'skin_protection': Trang bị PPE bằng tiếng Việt.\n\n"
+            "CẤU TRÚC JSON ĐẦU RA BẮT BUỘC:\n"
             "{\n"
-            '  "product_code": "Mã sản phẩm hoặc mã hiệu hóa chất (vd: FTU0005, ZW55019)",\n'
-            '  "product_name_vi": "Tên tiếng Việt hoặc tên thương mại chuẩn của sản phẩm",\n'
-            '  "product_name_original": "Tên gốc của hóa chất trên tài liệu",\n'
-            '  "intended_use": "Mục đích sử dụng / Công dụng bằng tiếng Việt (vd: Sơn phủ gỗ công nghiệp)",\n'
-            '  "manufacturer": "Tên công ty sản xuất / Nhà cung ứng (CHỈ TÊN CÔNG TY, KHÔNG KÈM ĐỊA CHỈ HAY PRODUCT NAME)",\n'
-            '  "revision_date": "Ngày sửa đổi / Ngày phát hành SDS (YYYY-MM-DD hoặc DD/MM/YYYY)",\n'
-            '  "cas_primary": "Số CAS chính (vd: 67-64-1)",\n'
-            '  "un_no": "Mã số UN (vd: UN 1263, hoặc Không áp dụng)",\n'
-            '  "transport_class": "Nhóm nguy hiểm vận chuyển (vd: 3, 8)",\n'
-            '  "packing_group": "Nhóm đóng gói (vd: II, III)",\n'
-            '  "signal_word": "Từ cảnh báo ở Phần 2 (Nguy hiểm (Danger) / Cảnh báo (Warning) / NON DG)",\n'
-            '  "ghs_codes": ["GHS02"] hoặc ["NON DG"] nếu Mục 2 không có mối nguy GHS,\n'
-            '  "hazard_statements": "Mã và nội dung cảnh báo nguy hại ở Phần 2 bằng tiếng Việt",\n'
-            '  "precautionary_statements": "Mã và nội dung phòng ngừa bằng tiếng Việt",\n'
-            '  "hazard_classification": "Phân loại nguy hiểm tổng quát theo GHS bằng tiếng Việt",\n'
-            '  "physical_state": "Trạng thái vật lý (Chất lỏng / Chất rắn / Khí / Bột / Sệt...)",\n'
-            '  "flash_point": "Điểm chớp cháy (kèm đơn vị °C hoặc KCDL (N/A))",\n'
-            '  "boiling_point": "Nhiệt độ sôi (kèm đơn vị °C hoặc KCDL (N/A))",\n'
-            '  "density": "Tỷ trọng / Khối lượng riêng (hoặc KCDL (N/A))",\n'
-            '  "acute_toxicity": "Độc cấp tính miệng, da, hô hấp bằng tiếng Việt",\n'
-            '  "stot": "STOT - Độc tính cơ quan đích cụ thể (STOT SE / RE)",\n'
-            '  "aquatic_hazard": "Nguy hại môi trường thủy sinh cấp tính/mãn tính",\n'
-            '  "self_reactive_peroxide": "Tự phản ứng / Peroxyt hữu cơ (hoặc Không phân loại)",\n'
-            '  "other_hazards": "Nguy cơ khác: kích ứng da/mắt, mẫn cảm, CMR, hít phải...",\n'
-            '  "appearance": "Ngoại quan bằng tiếng Việt (trạng thái, màu sắc, mùi)",\n'
-            '  "storage_condition": "Điều kiện bảo quản bằng tiếng Việt",\n'
-            '  "respiratory_protection": "Trang bị bảo vệ hô hấp bằng tiếng Việt",\n'
-            '  "hand_protection": "Bảo vệ tay bằng tiếng Việt",\n'
-            '  "eye_protection": "Bảo vệ mắt bằng tiếng Việt",\n'
-            '  "skin_protection": "Bảo vệ da/thân bằng tiếng Việt",\n'
-            '  "first_aid_inhalation": "Sơ cứu khi hít phải (bằng tiếng Việt)",\n'
-            '  "first_aid_skin": "Sơ cứu khi tiếp xúc với da (bằng tiếng Việt)",\n'
-            '  "first_aid_eyes": "Sơ cứu khi tiếp xúc với mắt (bằng tiếng Việt)",\n'
-            '  "first_aid_ingestion": "Sơ cứu khi nuốt phải (bằng tiếng Việt)",\n'
-            '  "fire_measures": "Biện pháp chữa cháy bằng tiếng Việt",\n'
-            '  "spill_measures": "Biện pháp xử lý tràn đổ / rò rỉ bằng tiếng Việt",\n'
-            '  "composition": [\n'
+            '  "product_code": "Mã SP / MSDS (vd: A1196, FTU0003)",\n'
+            '  "chemical_name": "Tên hóa chất / thương phẩm tiếng Việt",\n'
+            '  "product_name_vi": "Tên hóa chất / thương phẩm tiếng Việt",\n'
+            '  "product_name_original": "Tên gốc trên tài liệu",\n'
+            '  "category": "Nguyên liệu hoặc Thành phẩm",\n'
+            '  "intended_use": "Công dụng chính bằng tiếng Việt",\n'
+            '  "usage": "Công dụng chính bằng tiếng Việt",\n'
+            '  "manufacturer": "Tên công ty sản xuất / cung ứng (chỉ tên công ty)",\n'
+            '  "supplier": "Tên công ty sản xuất / cung ứng (chỉ tên công ty)",\n'
+            '  "emergency_phone": "Số điện thoại khẩn cấp hoặc Không có",\n'
+            '  "revision_date": "Ngày sửa đổi/phát hành SDS (YYYY-MM-DD hoặc DD/MM/YYYY)",\n'
+            '  "cas_primary": "Số CAS chính (vd: 1330-20-7)",\n'
+            '  "cas_number": "Số CAS chính (vd: 1330-20-7)",\n'
+            '  "un_no": "Mã số UN (vd: UN 1263 hoặc Không áp dụng)",\n'
+            '  "un_number": "Mã số UN (vd: UN 1263 hoặc Không áp dụng)",\n'
+            '  "transport_class": "Nhóm nguy hiểm vận chuyển (vd: 3 hoặc Không áp dụng)",\n'
+            '  "packing_group": "Nhóm đóng gói (vd: II, III hoặc Không áp dụng)",\n'
+            '  "signal_word": "Nguy hiểm, Cảnh báo, hoặc NON DG",\n'
+            '  "ghs_codes": ["GHS02", "GHS07"],\n'
+            '  "hazard_statements": "Mã và nội dung cảnh báo nguy hại tiếng Việt",\n'
+            '  "h_statements": "Mã và nội dung cảnh báo nguy hại tiếng Việt",\n'
+            '  "precautionary_statements": "Mã và nội dung phòng ngừa tiếng Việt",\n'
+            '  "p_statements": "Mã và nội dung phòng ngừa tiếng Việt",\n'
+            '  "hazard_classification": "Phân loại nguy hiểm tổng quát GHS tiếng Việt",\n'
+            '  "physical_state": "Trạng thái vật lý, màu sắc, mùi tiếng Việt (vd: Chất lỏng có màu)",\n'
+            '  "flash_point": "Điểm chớp cháy kèm đơn vị °C (vd: >93°C (cốc kín))",\n'
+            '  "boiling_point": "Nhiệt độ sôi kèm đơn vị °C (vd: 138 - 144°C)",\n'
+            '  "density": "Tỷ trọng / khối lượng riêng (vd: 1.24 g/cm³)",\n'
+            '  "specific_gravity": "Tỷ trọng / khối lượng riêng (vd: 1.24 g/cm³)",\n'
+            '  "acute_toxicity": "Độc cấp tính miệng, da, hô hấp tiếng Việt",\n'
+            '  "stot": "STOT - Độc tính cơ quan đích cụ thể",\n'
+            '  "aquatic_hazard": "Nguy hại môi trường thủy sinh tiếng Việt",\n'
+            '  "self_reactive_peroxide": "Tự phản ứng / Peroxyt hữu cơ",\n'
+            '  "other_hazards": "Nguy cơ khác: kích ứng da/mắt, mẫn cảm, hít phải...",\n'
+            '  "toxicity_info": "Tóm tắt tổng quan độc tính và nguy cơ sức khỏe tiếng Việt",\n'
+            '  "incompatible_materials": "Các chất tương kỵ / vật liệu cần tránh tiếng Việt",\n'
+            '  "storage_condition": "Hướng dẫn bảo quản và thao tác an toàn tiếng Việt",\n'
+            '  "storage_handling": "Hướng dẫn bảo quản và thao tác an toàn tiếng Việt",\n'
+            '  "first_aid": "Tóm tắt biện pháp sơ cứu y tế khẩn cấp tiếng Việt",\n'
+            '  "first_aid_inhalation": "Sơ cứu hít phải tiếng Việt",\n'
+            '  "first_aid_skin": "Sơ cứu tiếp xúc da tiếng Việt",\n'
+            '  "first_aid_eyes": "Sơ cứu tiếp xúc mắt tiếng Việt",\n'
+            '  "first_aid_ingestion": "Sơ cứu nuốt phải tiếng Việt",\n'
+            '  "fire_measures": "Biện pháp chữa cháy tiếng Việt",\n'
+            '  "fire_fighting": "Biện pháp chữa cháy tiếng Việt",\n'
+            '  "spill_measures": "Xử lý tràn đổ / rò rỉ tiếng Việt",\n'
+            '  "spill_handling": "Xử lý tràn đổ / rò rỉ tiếng Việt",\n'
+            '  "ppe_requirements": "Trang bị bảo hộ cá nhân tiếng Việt",\n'
+            '  "respiratory_protection": "Bảo vệ hô hấp tiếng Việt",\n'
+            '  "hand_protection": "Bảo vệ tay tiếng Việt",\n'
+            '  "eye_protection": "Bảo vệ mắt tiếng Việt",\n'
+            '  "skin_protection": "Bảo vệ da/thân tiếng Việt",\n'
+            '  "components": [\n'
             '    {\n'
-            '      "ingredient_name_vi": "Tên hoạt chất tiếng Việt",\n'
-            '      "ingredient_name_original": "Tên hoạt chất gốc",\n'
-            '      "cas_number": "Số CAS",\n'
-            '      "concentration_text": "Nồng độ (vd: 30 - 50%)",\n'
-            '      "concentration_min": 30,\n'
-            '      "concentration_max": 50,\n'
-            '      "unit": "%"\n'
+            '      "name_vi": "Tên thành phần tiếng Việt",\n'
+            '      "name_original": "Tên gốc",\n'
+            '      "cas": "Số CAS",\n'
+            '      "percent": "Hàm lượng (vd: 30 - 50%)"\n'
             '    }\n'
             '  ],\n'
-            '  "summary": "Tóm tắt an toàn điều hành ngắn gọn bằng tiếng Việt (3-5 câu cốt lõi)"\n'
+            '  "summary": "Tóm tắt an toàn điều hành bằng tiếng Việt (3-5 câu)"\n'
             "}\n"
             "CHỈ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ, KHÔNG KÈM THEO BẤT KỲ VĂN BẢN HAY GIẢI THÍCH NÀO KHÁC."
         )
@@ -1667,61 +1675,56 @@ class MSDSExtractorEngine:
                 messages=[{"role": "user", "content": sample_text}],
                 system_prompt=system_prompt,
                 api_key=actual_key,
-                provider=creds.get("provider"),
-                model=creds.get("model"),
+                provider="deepseek",
+                model="deepseek-chat",
                 base_url=creds.get("base_url"),
                 temperature=0.1,
-                timeout=90
+                response_format={"type": "json_object"},
+                timeout=120,
+                max_retries=2
             )
             content = ai_res.strip()
             content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
             content = re.sub(r"\s*```$", "", content)
             m_json = re.search(r"\{[\s\S]*\}", content)
             if not m_json:
-                return None
+                raise ValueError("DeepSeek AI không trả về chuỗi JSON hợp lệ.")
             parsed = json.loads(m_json.group(0))
 
             # Hậu kiểm và làm sạch dữ liệu
-            if parsed.get("manufacturer"):
-                supp = str(parsed["manufacturer"]).strip()
+            if parsed.get("manufacturer") or parsed.get("supplier"):
+                supp = str(parsed.get("manufacturer") or parsed.get("supplier") or "").strip()
                 supp = re.sub(r"^(?:-\s*Product\s*Name|Product\s*Name|Address)\s*[:：\-–]?\s*", "", supp, flags=re.IGNORECASE).strip()
                 supp = re.sub(r"^Address\s*:\s*", "", supp, flags=re.IGNORECASE).strip()
                 parsed["manufacturer"] = supp[:120]
+                parsed["supplier"] = supp[:120]
 
-            if parsed.get("product_name_vi"):
-                pname = str(parsed["product_name_vi"]).strip()
-                pname = re.sub(r"^Hóa chất\s+([A-Z0-9]{4,10})$", r"\1", pname)
-                parsed["product_name_vi"] = pname
+            # Đồng bộ tên sản phẩm
+            pname = str(parsed.get("product_name_vi") or parsed.get("chemical_name") or "").strip()
+            pname = re.sub(r"^Hóa chất\s+([A-Z0-9]{4,10})$", r"\1", pname)
+            # Loại bỏ đuôi hash nếu có
+            pname = re.sub(r"_[a-f0-9]{6,}$", "", pname)
+            parsed["product_name_vi"] = pname
+            parsed["chemical_name"] = pname
 
-            # Chuẩn hóa 11 trường thông số MSDS / CIL nếu thiếu
-            if not parsed.get("hazard_classification"):
-                parsed["hazard_classification"] = parsed.get("hazard_statements") or "Không phân loại"
-            if not parsed.get("physical_state"):
-                parsed["physical_state"] = parsed.get("appearance") or "Chất lỏng"
-            if not parsed.get("flash_point"):
-                parsed["flash_point"] = "KCDL (N/A)"
-            if not parsed.get("boiling_point"):
-                parsed["boiling_point"] = "KCDL (N/A)"
-            if not parsed.get("density"):
-                parsed["density"] = "KCDL (N/A)"
-            if not parsed.get("un_no"):
-                parsed["un_no"] = "Không áp dụng"
-            if not parsed.get("acute_toxicity"):
-                parsed["acute_toxicity"] = "Không phân loại"
-            if not parsed.get("stot"):
-                parsed["stot"] = "KCDL (N/A)"
-            if not parsed.get("aquatic_hazard"):
-                parsed["aquatic_hazard"] = "Không phân loại"
-            if not parsed.get("self_reactive_peroxide"):
-                parsed["self_reactive_peroxide"] = "Không phân loại"
-            if not parsed.get("other_hazards"):
-                parsed["other_hazards"] = "KCDL (N/A)"
+            # Đồng bộ components sang composition cho CSDL
+            if parsed.get("components") and not parsed.get("composition"):
+                parsed["composition"] = []
+                for comp in parsed["components"]:
+                    parsed["composition"].append({
+                        "ingredient_name_vi": comp.get("name_vi") or comp.get("name") or "",
+                        "ingredient_name_original": comp.get("name_original") or comp.get("name") or "",
+                        "cas_number": comp.get("cas") or comp.get("cas_number") or "",
+                        "concentration_text": comp.get("percent") or comp.get("concentration_text") or "",
+                        "unit": "%"
+                    })
 
+            # Chuẩn hóa 11 trường thông số MSDS / CIL
             cls._enrich_chemical_spec_fields(parsed)
             return parsed
         except Exception as e:
             print(f"[AI_MSDS_PARSE_ERROR] {e}", flush=True)
-            return None
+            raise RuntimeError(f"DeepSeek AI phân tích thất bại: {str(e)}")
 
     @staticmethod
     def _has_vietnamese(text: str) -> bool:
@@ -1820,6 +1823,31 @@ class MSDSExtractorEngine:
         return out
 
     @classmethod
+    def _clean_bilingual_text(cls, text: str) -> str:
+        """Khử triệt để lỗi song ngữ cơ học như 'UV color paint Sơn màu UV', 'colored liquid chất lỏng có màu', '>93 (closed cup) >93 (cốc kín)'."""
+        if not text or not isinstance(text, str):
+            return text
+        s = text.strip()
+        # Khử trùng lặp điểm chớp cháy: '>93 (closed cup) >93 (cốc kín)' -> '>93°C (cốc kín)'
+        m_dup_fp = re.search(r'>?\s*(\d+(?:\.\d+)?)\s*\([^)]+\)\s*(>?\s*\d+(?:\.\d+)?\s*\([^)]*cốc[^)]*\))', s, re.IGNORECASE)
+        if m_dup_fp:
+            return m_dup_fp.group(2).strip()
+
+        direct_pairs = [
+            (r"^UV\s+color\s+paint\s+", ""),
+            (r"^colored\s+liquid\s+", ""),
+            (r"^clear\s+liquid\s+", ""),
+            (r"^water-based\s+clear\s+topcoat\s+", ""),
+            (r"^wood\s+coatings?\s+", ""),
+            (r"^industrial\s+coatings?\s+", ""),
+            (r"^Store\s+in\s+a\s+cool,\s*well-ventilated\s+area\.\s*Keep\s+away\s+from\s+ignition\s+sources,\s*heat\s+and\s+flame\.\s*Store\s+in\s+a\s+tightly\s+closed\s+container\.\s*Incompatibilities:\s*strong\s+oxidizing\s+agents\s+and\s+foods\.\s*", "")
+        ]
+        for pat, rep in direct_pairs:
+            s = re.sub(pat, rep, s, flags=re.IGNORECASE).strip()
+
+        return s
+
+    @classmethod
     def ensure_vietnamese_msds_fields(cls, parsed: Dict[str, Any]) -> Dict[str, Any]:
         """Đảm bảo 100% các trường thông tin trên Thẻ An Toàn & Danh mục CIL đều bằng Tiếng Việt chuẩn."""
         if not parsed:
@@ -1850,6 +1878,11 @@ class MSDSExtractorEngine:
             "fire_measures",
             "spill_measures"
         ]
+
+        # Khử lỗi song ngữ cơ học cho tất cả các trường
+        for f in translatable_fields + ["flash_point", "density", "boiling_point", "un_no", "toxicity_info", "chemical_name", "usage", "storage_handling"]:
+            if f in parsed and parsed[f]:
+                parsed[f] = cls._clean_bilingual_text(str(parsed[f]))
 
         # Bước 1: Áp dụng từ điển chuyên ngành EHS Offline trước (siêu tốc 0ms)
         fields_needing_api = []
@@ -2335,213 +2368,90 @@ class MSDSExtractorEngine:
         engine: Optional[str] = "deepseek",
         original_filename: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Quy trình trích xuất hoàn chỉnh: Visual GHS Scan -> Text Extract -> Heuristic Baseline + DeepSeek AI -> Chuẩn hóa Tiếng Việt & Checksum."""
+        """
+        Quy trình xử lý tệp MSDS:
+        - engine != 'heuristic': 100% việc đọc hiểu tài liệu, dịch sang tiếng Việt và trích xuất dữ liệu
+          do DeepSeek AI (deepseek-chat) thực hiện trọn vẹn. TUYỆT ĐỐI KHÔNG fallback ngầm về Regex.
+        - engine == 'heuristic': Dùng bộ luật Offline Heuristic Rule Engine khi người dùng chủ động chọn.
+        """
         text = cls.extract_text_from_file(file_path)
         p = Path(file_path)
         eff_filename = original_filename or p.name
 
-        # 0. QUY TẮC NHẬN DIỆN HÌNH ĐỒ GHS TRỰC TIẾP TỪ ẢNH TRONG TÀI LIỆU (THEO YÊU CẦU NGƯỜI DÙNG)
-        # Nhận diện chính xác dựa theo các hình đồ GHS thực tế mà tệp đang có (ở Mục 2),
-        # KHÔNG dựa vào các mã/câu chữ phân loại để suy diễn thêm hình đồ.
+        if not text or len(text.strip()) < 30:
+            raise ValueError(f"Không thể đọc nội dung văn bản từ tệp '{eff_filename}'. Vui lòng kiểm tra định dạng tệp.")
+
+        # 0. QUY TẮC NHẬN DIỆN HÌNH ĐỒ GHS TRỰC TIẾP TỪ ẢNH TRONG TÀI LIỆU
         image_ghs = []
         try:
             from core.ghs_image_detector import GHSImageDetector
             image_ghs = GHSImageDetector.detect_ghs_pictograms_from_file(file_path)
         except Exception as img_err:
-            print(f"[GHS_IMAGE_DETECT_WARN] {img_err}", flush=True)
-
-        # Luôn chạy Heuristic để lấy chuẩn xác Mã sản phẩm, Phần 2 GHS (hoặc NON DG) và các trường bảng biểu
-        heuristic_data = cls.parse_with_heuristic(text, filename=eff_filename)
-        sec2_ghs = cls.classify_ghs_from_section_2(text)
-
-        # Nếu có hình đồ thực tế từ ảnh, áp dụng ngay vào heuristic_data
-        if image_ghs:
-            heuristic_data["ghs_codes"] = list(image_ghs)
-            heuristic_data["ghs_codes_list"] = list(image_ghs)
-            if any(g in image_ghs for g in ("GHS01", "GHS02", "GHS05", "GHS06")):
-                heuristic_data["signal_word"] = "Nguy hiểm (Danger)"
-            elif any(g in image_ghs for g in ("GHS07", "GHS09")):
-                heuristic_data["signal_word"] = "Cảnh báo (Warning)"
-            else:
-                heuristic_data["signal_word"] = "NON DG"
+            pass
 
         parsed = None
         if engine != "heuristic":
-            parsed = cls.parse_with_deepseek(text, api_key, visual_ghs_hint=image_ghs)
-
-        if parsed and isinstance(parsed, dict):
-            for k, v in heuristic_data.items():
-                if not parsed.get(k) and v:
-                    parsed[k] = v
-            if heuristic_data.get("product_code"):
-                parsed["product_code"] = heuristic_data["product_code"]
-
-            # ƯU TIÊN TUYỆT ĐỐI HÌNH ĐỒ THỰC TẾ TRÊN TÀI LIỆU:
-            # Nếu tệp vật lý có chứa hình đồ GHS ở Mục 2 (ví dụ: ZNZX009 chỉ có GHS02):
-            # Bộ hình đồ nhận diện từ ảnh là DUY NHẤT và CHI PHỐI KẾT QUẢ,
-            # TUYỆT ĐỐI KHÔNG thêm bất kỳ mã GHS nào từ câu chữ mô tả nguy cơ (loại bỏ hoàn toàn hình đồ từa lưa).
-            if image_ghs:
-                parsed["ghs_codes"] = list(image_ghs)
-                parsed["ghs_codes_list"] = list(image_ghs)
-                if any(g in image_ghs for g in ("GHS01", "GHS02", "GHS05", "GHS06")):
-                    parsed["signal_word"] = "Nguy hiểm (Danger)"
-                elif any(g in image_ghs for g in ("GHS07", "GHS09")):
-                    parsed["signal_word"] = "Cảnh báo (Warning)"
-                else:
-                    parsed["signal_word"] = "NON DG"
-            else:
-                # Kiểm tra tuyên bố NON DG tường minh ở Mục 2
-                is_explicit_non_dg = bool(sec2_ghs.get("is_non_dg"))
-
-                # Kiểm tra đặc tính dễ cháy toàn tài liệu (bảo vệ chống gán nhầm NON DG)
-                has_flam_h = bool(re.search(r"\bH22[0-8]\b", text, re.IGNORECASE))
-                has_flam_phrase = bool(re.search(
-                    r"\b(?:chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+(?:rất\s+)?dễ\s+cháy|flammable\s+(?:liquid|gas|solid|aerosol)|highly\s+flammable|extremely\s+flammable|易燃液体|易燃气体|易燃固体)\b",
-                    text,
-                    re.IGNORECASE
-                ))
-                fp_m = re.search(r"(?:flash\s*point|điểm\s*chớp\s*cháy)[^\n\d]*([<>]?\s*-?\d+(?:\.\d+)?)\s*°?C", text, re.IGNORECASE)
-                has_low_fp = False
-                if fp_m:
-                    try:
-                        fp_val = float(re.sub(r"[^\d.-]", "", fp_m.group(1)))
-                        if fp_val <= 60.0:
-                            has_low_fp = True
-                    except Exception:
-                        pass
-
-                is_doc_flammable = bool(has_flam_h or has_flam_phrase or has_low_fp)
-                if is_doc_flammable:
-                    is_explicit_non_dg = False
-
-                if is_explicit_non_dg and not is_doc_flammable:
-                    selected_ghs = ["NON DG"]
-                else:
-                    sec2_text = cls.extract_section_2_text(text)
-                    # Lấy danh sách GHS thô từ AI và từ Heuristic Mục 2
-                    raw_ai_ghs = [str(c).strip().upper() for c in (parsed.get("ghs_codes") or []) if str(c).strip()]
-                    raw_heu_ghs = [str(c).strip().upper() for c in (sec2_ghs.get("ghs_codes") or []) if str(c).strip()]
-                    valid_ai_ghs = [g for g in raw_ai_ghs if g in GHS_MAP and g != "NON DG"]
-                    valid_heu_ghs = [g for g in raw_heu_ghs if g in GHS_MAP and g != "NON DG"]
-
-                    # Tuân thủ mệnh lệnh người dùng: "trong file ở mục 2 có hiển thị hình đồ GHS thì hiển thị lại đúng hình đồ cảnh báo GHS đó, không hiển thị Dư"
-                    if valid_ai_ghs:
-                        # Cross-validate AI codes against Section 2 / heuristic findings / text support
-                        pruned_ai_ghs = []
-                        for g in valid_ai_ghs:
-                            if g in valid_heu_ghs:
-                                pruned_ai_ghs.append(g)
-                            else:
-                                # Check if document Section 2 actually supports this specific code
-                                g_support = False
-                                if g == "GHS02" and is_doc_flammable:
-                                    g_support = True
-                                elif g == "GHS07" and re.search(r"\b(?:H302|H312|H332|H315|H319|H317|H335|H336|kích ứng|irritat)\b", sec2_text, re.I):
-                                    g_support = True
-                                elif g == "GHS05" and re.search(r"\b(?:H290|H314|H318|ăn mòn|corrosive)\b", sec2_text, re.I):
-                                    g_support = True
-                                elif g == "GHS06" and re.search(r"\b(?:H300|H301|H310|H311|H330|H331|độc cấp tính|toxic|fatal)\b", sec2_text, re.I):
-                                    g_support = True
-                                elif g == "GHS08" and re.search(r"\b(?:H304|H334|H340|H341|H350|H351|H360|H361|H370|H371|H372|H373)\b", sec2_text, re.I):
-                                    g_support = True
-                                elif g == "GHS09" and re.search(r"\b(?:H400|H410|H411|môi trường thủy sinh|aquatic)\b", sec2_text, re.I):
-                                    g_support = True
-                                if g_support:
-                                    pruned_ai_ghs.append(g)
-                        selected_ghs = pruned_ai_ghs if pruned_ai_ghs else list(valid_heu_ghs)
-                    elif valid_heu_ghs:
-                        selected_ghs = list(valid_heu_ghs)
-                    else:
-                        selected_ghs = []
-
-                    # Nếu tài liệu có đặc tính dễ cháy rõ ràng, bắt buộc bổ sung GHS02 nếu chưa có
-                    if is_doc_flammable and "GHS02" not in selected_ghs:
-                        selected_ghs.append("GHS02")
-
-                    if not selected_ghs:
-                        if is_doc_flammable:
-                            selected_ghs = ["GHS02"]
-                        else:
-                            selected_ghs = ["NON DG"]
-
-                parsed["ghs_codes"] = sorted(list(set(selected_ghs)))
-                if "NON DG" in parsed["ghs_codes"] and len(parsed["ghs_codes"]) > 1:
-                    parsed["ghs_codes"] = [g for g in parsed["ghs_codes"] if g != "NON DG"]
-
-                # Đồng bộ Từ cảnh báo (Signal Word) và Cảnh báo nguy hại tương ứng
-                if "GHS02" in parsed["ghs_codes"] or any(g in parsed["ghs_codes"] for g in ("GHS01", "GHS05", "GHS06")):
-                    if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
-                        parsed["signal_word"] = "Nguy hiểm (Danger)"
-                elif any(g in parsed["ghs_codes"] for g in ("GHS07", "GHS09")):
-                    if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
-                        parsed["signal_word"] = "Cảnh báo (Warning)"
-                elif parsed["ghs_codes"] == ["NON DG"]:
-                    parsed["signal_word"] = "NON DG"
-                    parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
+            # GỌI TRỰC TIẾP DEEPSEEK AI: KHÔNG DÙNG REGEX CẮT TRƯỚC VÀ KHÔNG FALLBACK NGẦM
+            parsed = cls.parse_with_deepseek(text, api_key=api_key, visual_ghs_hint=image_ghs)
+            if not parsed or not isinstance(parsed, dict):
+                raise RuntimeError(
+                    f"DeepSeek AI không thể trích xuất dữ liệu từ tệp '{eff_filename}'. "
+                    f"Vui lòng kiểm tra DeepSeek API Key trong phần Cài Đặt hoặc kiểm tra kết nối mạng."
+                )
         else:
-            parsed = heuristic_data
-            if image_ghs:
-                parsed["ghs_codes"] = list(image_ghs)
-                parsed["ghs_codes_list"] = list(image_ghs)
-                if any(g in image_ghs for g in ("GHS01", "GHS02", "GHS05", "GHS06")):
-                    parsed["signal_word"] = "Nguy hiểm (Danger)"
-                elif any(g in image_ghs for g in ("GHS07", "GHS09")):
-                    parsed["signal_word"] = "Cảnh báo (Warning)"
-                else:
-                    parsed["signal_word"] = "NON DG"
+            parsed = cls.parse_with_heuristic(text, filename=eff_filename)
+
+        # ƯU TIÊN TUYỆT ĐỐI HÌNH ĐỒ THỰC TẾ TRÊN TÀI LIỆU (nếu ảnh phát hiện được ở Mục 2)
+        if image_ghs:
+            parsed["ghs_codes"] = list(image_ghs)
+            parsed["ghs_codes_list"] = list(image_ghs)
+            if any(g in image_ghs for g in ("GHS01", "GHS02", "GHS05", "GHS06")):
+                parsed["signal_word"] = "Nguy hiểm (Danger)"
+            elif any(g in image_ghs for g in ("GHS07", "GHS09")):
+                parsed["signal_word"] = "Cảnh báo (Warning)"
             else:
-                is_explicit_non_dg = bool(sec2_ghs.get("is_non_dg"))
-                has_flam_h = bool(re.search(r"\bH22[0-8]\b", text, re.IGNORECASE))
-                has_flam_phrase = bool(re.search(
-                    r"\b(?:chất\s+(?:lỏng|khí|rắn)\s+dễ\s+cháy|hơi\s+và\s+chất\s+lỏng\s+(?:rất\s+)?dễ\s+cháy|flammable\s+(?:liquid|gas|solid|aerosol)|highly\s+flammable|extremely\s+flammable|易燃液体|易燃气体|易燃固体)\b",
-                    text,
-                    re.IGNORECASE
-                ))
-                fp_m = re.search(r"(?:flash\s*point|điểm\s*chớp\s*cháy)[^\n\d]*([<>]?\s*-?\d+(?:\.\d+)?)\s*°?C", text, re.IGNORECASE)
-                has_low_fp = False
-                if fp_m:
-                    try:
-                        fp_val = float(re.sub(r"[^\d.-]", "", fp_m.group(1)))
-                        if fp_val <= 60.0:
-                            has_low_fp = True
-                    except Exception:
-                        pass
-                is_doc_flammable = bool(has_flam_h or has_flam_phrase or has_low_fp)
-                if is_doc_flammable:
-                    is_explicit_non_dg = False
-
-                if is_explicit_non_dg:
-                    parsed["ghs_codes"] = ["NON DG"]
-                    parsed["signal_word"] = "NON DG"
-                    parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
-                else:
-                    raw_heu_ghs = [str(c).strip().upper() for c in (sec2_ghs.get("ghs_codes") or []) if str(c).strip()]
-                    selected_ghs = [g for g in raw_heu_ghs if g in GHS_MAP and g != "NON DG"]
-                    if is_doc_flammable and "GHS02" not in selected_ghs:
-                        selected_ghs.append("GHS02")
-                    if not selected_ghs:
-                        selected_ghs = ["GHS02"] if is_doc_flammable else ["NON DG"]
-                    parsed["ghs_codes"] = sorted(list(set(selected_ghs)))
-                    if "GHS02" in parsed["ghs_codes"] or any(g in parsed["ghs_codes"] for g in ("GHS01", "GHS05", "GHS06")):
-                        if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
-                            parsed["signal_word"] = "Nguy hiểm (Danger)"
-                    elif any(g in parsed["ghs_codes"] for g in ("GHS07", "GHS09")):
-                        if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
-                            parsed["signal_word"] = "Cảnh báo (Warning)"
-                    elif parsed["ghs_codes"] == ["NON DG"]:
-                        parsed["signal_word"] = "NON DG"
-
-        # Quy tắc bắt buộc: Mã hóa chất và Mã MSDS lấy theo Mã sản phẩm (ví dụ: FTU0005)
-        final_code = cls._clean_product_code_candidate(str(parsed.get("product_code") or "")) or heuristic_data.get("product_code") or ""
-        if final_code:
-            parsed["product_code"] = final_code
-            parsed["chemical_id"] = final_code
+                parsed["signal_word"] = "NON DG"
         else:
-            parsed["chemical_id"] = parsed.get("chemical_id") or MSDSDatabase.next_chemical_id()
-            parsed["product_code"] = parsed.get("product_code") or parsed["chemical_id"]
+            # Chuẩn hóa danh sách mã GHS do AI hoặc Heuristic trích xuất
+            raw_ghs = parsed.get("ghs_codes") or []
+            if isinstance(raw_ghs, str):
+                raw_ghs = re.findall(r"GHS0[1-9]|NON[_\s-]?DG", raw_ghs, re.IGNORECASE)
+            clean_ghs = []
+            for g in raw_ghs:
+                g_str = str(g).strip().upper().replace("_", " ")
+                if re.match(r"^GHS0[1-9]$", g_str) or g_str in ("NON DG", "NONDG"):
+                    norm = "NON DG" if "NON" in g_str else g_str
+                    if norm not in clean_ghs:
+                        clean_ghs.append(norm)
+            if not clean_ghs or ("NON DG" in clean_ghs and len(clean_ghs) == 1):
+                clean_ghs = ["NON DG"]
+            elif len(clean_ghs) > 1 and "NON DG" in clean_ghs:
+                clean_ghs = [c for c in clean_ghs if c != "NON DG"]
+            parsed["ghs_codes"] = sorted(clean_ghs)
+            parsed["ghs_codes_list"] = list(parsed["ghs_codes"])
+
+            if "GHS02" in parsed["ghs_codes"] or any(g in parsed["ghs_codes"] for g in ("GHS01", "GHS05", "GHS06")):
+                if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                    parsed["signal_word"] = "Nguy hiểm (Danger)"
+            elif any(g in parsed["ghs_codes"] for g in ("GHS07", "GHS09")):
+                if not parsed.get("signal_word") or parsed.get("signal_word") == "NON DG":
+                    parsed["signal_word"] = "Cảnh báo (Warning)"
+            elif parsed["ghs_codes"] == ["NON DG"]:
+                parsed["signal_word"] = "NON DG"
+                if not parsed.get("hazard_statements"):
+                    parsed["hazard_statements"] = "NON DG — Không phải là chất hay hỗn hợp nguy hại theo phân loại GHS."
+
+        # Chuẩn hóa Mã hóa chất và Mã MSDS
+        extracted_code = cls._clean_product_code_candidate(str(parsed.get("product_code") or ""))
+        if not extracted_code:
+            extracted_code = cls.extract_product_code(text, eff_filename)
+        final_code = extracted_code or cls.next_chemical_id()
+        parsed["product_code"] = final_code
+        parsed["chemical_id"] = final_code
 
         # Đảm bảo 100% các trường thông tin an toàn đều bằng Tiếng Việt
         parsed = cls.ensure_vietnamese_msds_fields(parsed)
+        cls._enrich_chemical_spec_fields(parsed)
 
         parsed["source_file"] = eff_filename
         parsed["temp_uploaded_path"] = str(p.resolve()) if p.exists() else ""
@@ -2704,7 +2614,14 @@ class CILExcelExporter:
 
         for row_idx, c in enumerate(chemicals, 3):
             fill_current = fill_white if row_idx % 2 != 0 else fill_zebra
-            ghs_str = ", ".join(c.get("ghs_codes_list", [])) if c.get("ghs_codes_list") else str(c.get("ghs_codes", ""))
+            ghs_raw = str(c.get("ghs_codes", "") or c.get("ghs_symbols", ""))
+            ghs_matches = re.findall(r'GHS0[1-9]', ghs_raw, re.IGNORECASE)
+            if ghs_matches:
+                ghs_str = ", ".join(dict.fromkeys([m.upper() for m in ghs_matches]))
+            elif "NON" in ghs_raw.upper():
+                ghs_str = "NON DG"
+            else:
+                ghs_str = "-"
 
             ppe_parts = []
             if c.get("respiratory_protection"): ppe_parts.append(f"Hô hấp: {c['respiratory_protection']}")
@@ -2938,7 +2855,9 @@ class MSDSSafetyCardExporter:
         run_sub.bold = True
         run_sub.font.size = Pt(11)
 
-        ghs_list = chem_data.get("ghs_codes_list") or [g.strip() for g in str(chem_data.get("ghs_codes", "")).split(",") if g.strip()]
+        ghs_raw = str(chem_data.get("ghs_codes", "") or chem_data.get("ghs_symbols", ""))
+        ghs_list = chem_data.get("ghs_codes_list") or re.findall(r'GHS0[1-9]', ghs_raw, re.IGNORECASE)
+        ghs_list = [g.upper() for g in ghs_list]
         ghs_vi_str = " | ".join(cls.GHS_VI_LABELS.get(g.upper(), g) for g in ghs_list) if ghs_list else "✓ NON DG (Không phân loại nguy hại theo Phần 2 GHS)"
 
         # Bảng tóm tắt thông tin nhanh

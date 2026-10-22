@@ -1220,7 +1220,7 @@ function openMsdsDuplicateModal(dupPayload) {
             <div><b>Mã SP / MSDS:</b> <span style="font-family:monospace; color:#0F5C78; font-weight:700;">${escapeHtml(existing.chemical_id || code)}</span></div>
             <div><b>Tên sản phẩm:</b> ${escapeHtml(existing.product_name_vi || existing.product_name_original || "N/A")}</div>
             <div><b>Công dụng:</b> ${escapeHtml(existing.intended_use || "N/A")}</div>
-            <div><b>Ngày sửa đổi:</b> ${escapeHtml(existing.revision_date || "N/A")}</div>
+            <div><b>Ngày sửa đổi:</b> ${escapeHtml(formatMsdsDisplayDate(existing.revision_date) || "N/A")}</div>
             <div><b>Số CAS chính:</b> <span style="font-family:monospace;">${escapeHtml(existing.cas_primary || "N/A")}</span></div>
             <div><b>Nhà sản xuất:</b> ${escapeHtml(existing.manufacturer || "N/A")}</div>
             <div><b>Tệp gốc:</b> <span style="color:#64748b;">${escapeHtml(existing.source_file || "N/A")}</span></div>
@@ -1232,7 +1232,7 @@ function openMsdsDuplicateModal(dupPayload) {
             <div><b>Mã SP / MSDS:</b> <span style="font-family:monospace; color:#166534; font-weight:700;">${escapeHtml(newData.product_code || code)}</span></div>
             <div><b>Tên sản phẩm:</b> ${escapeHtml(newData.product_name_vi || newData.product_name_original || "N/A")}</div>
             <div><b>Công dụng:</b> ${escapeHtml(newData.intended_use || "N/A")}</div>
-            <div><b>Ngày sửa đổi:</b> ${escapeHtml(newData.revision_date || "N/A")}</div>
+            <div><b>Ngày sửa đổi:</b> ${escapeHtml(formatMsdsDisplayDate(newData.revision_date) || "N/A")}</div>
             <div><b>Số CAS chính:</b> <span style="font-family:monospace;">${escapeHtml(newData.cas_primary || "N/A")}</span></div>
             <div><b>Nhà sản xuất:</b> ${escapeHtml(newData.manufacturer || "N/A")}</div>
             <div><b>Tệp mới nạp:</b> <span style="color:#166534;">${escapeHtml(newData.source_file || "N/A")}</span></div>
@@ -1369,6 +1369,23 @@ function renderGhsDiamondSvg(code, size = 28) {
     `;
 }
 
+function formatMsdsDisplayDate(dStr) {
+    if (!dStr) return "";
+    const s = String(dStr).trim();
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
+    if (isoMatch) {
+        const [_, y, m, d, hh, mm] = isoMatch;
+        if (hh && mm) return `${d}/${m}/${y} ${hh}:${mm}`;
+        return `${d}/${m}/${y}`;
+    }
+    const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (ymdMatch) {
+        const [_, y, m, d] = ymdMatch;
+        return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+    return s;
+}
+
 function renderGhsTableBadge(code) {
     let cleanCode = String(code || "").trim().toUpperCase().replace(/[\[\]"']/g, "").trim();
     if (!cleanCode || cleanCode === "NON DG" || cleanCode === "NONDG" || cleanCode === "NONE" || cleanCode === "-") {
@@ -1381,6 +1398,13 @@ function renderGhsTableBadge(code) {
                 </div>
             </div>
         `;
+    }
+    const subMatches = cleanCode.match(/GHS0[1-9]|NON[_\s-]?DG/gi);
+    if (subMatches && subMatches.length > 1) {
+        return subMatches.map(sc => renderGhsTableBadge(sc)).join("");
+    }
+    if (subMatches && subMatches.length === 1) {
+        cleanCode = subMatches[0].toUpperCase();
     }
     const info = GHS_PICTOGRAM_INFO[cleanCode];
     if (!info) {
@@ -1399,7 +1423,8 @@ function renderGhsTableBadge(code) {
 
 function renderGhsSafetyCardGallery(codesStr) {
     const rawStr = String(codesStr || "").trim().toUpperCase();
-    const codes = rawStr.split(/[,;]+/).map(s => s.trim()).filter(c => /^GHS0[1-9]$/.test(c));
+    const matches = rawStr.match(/GHS0[1-9]/g);
+    const codes = matches ? Array.from(new Set(matches)) : [];
     if (codes.length === 0 || rawStr.includes("NON DG") || rawStr.includes("NONDG")) {
         return `
             <div style="display:flex; align-items:center; gap:10px; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:8px 14px; margin-top:10px;">
@@ -2760,25 +2785,22 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
     let html = "";
     pagedItems.forEach((item, localIdx) => {
         const index = startIdx + localIdx;
+        const rawGhsInput = item.ghs_symbols || item.ghs_codes || item.ghs_classifications || [];
+        const rawGhsStr = Array.isArray(rawGhsInput) ? rawGhsInput.join(" ") : String(rawGhsInput || "");
+        const matches = rawGhsStr.match(/GHS0[1-9]|NON[_\s-]?DG/gi);
         let ghsCodes = [];
-        if (Array.isArray(item.ghs_symbols)) {
-            ghsCodes = item.ghs_symbols.map(s => String(s).trim());
-        } else {
-            const rawGhs = String(item.ghs_symbols || "").trim();
-            if (rawGhs.startsWith("[") && rawGhs.endsWith("]")) {
-                try {
-                    const parsed = JSON.parse(rawGhs);
-                    if (Array.isArray(parsed)) ghsCodes = parsed.map(s => String(s).trim());
-                } catch (e) {
-                    ghsCodes = rawGhs.replace(/[\[\]"']/g, "").split(/[,;]+/).map(s => s.trim());
-                }
-            } else {
-                ghsCodes = rawGhs.replace(/[\[\]"']/g, "").split(/[,;]+/).map(s => s.trim());
-            }
+        if (matches && matches.length > 0) {
+            const seen = new Set();
+            matches.forEach(m => {
+                let norm = m.toUpperCase().replace(/[_\s-]/g, " ").trim();
+                if (norm.includes("NON")) norm = "NON DG";
+                if (!seen.has(norm)) { seen.add(norm); ghsCodes.push(norm); }
+            });
         }
-        ghsCodes = ghsCodes.map(s => s.replace(/[\[\]"']/g, "").trim()).filter(Boolean);
-        if (ghsCodes.length === 0 || ghsCodes.some(c => c.toUpperCase().includes("NON DG") || c.toUpperCase() === "NONDG")) {
+        if (ghsCodes.length === 0 || (ghsCodes.includes("NON DG") && ghsCodes.length === 1)) {
             ghsCodes = ["NON DG"];
+        } else if (ghsCodes.length > 1) {
+            ghsCodes = ghsCodes.filter(c => c !== "NON DG");
         }
         const ghsBadges = ghsCodes.map(c => renderGhsTableBadge(c)).join("");
 
@@ -2827,7 +2849,7 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
             subInfoParts.push(`Mã SP: <b>${escapeHtml(item.product_code)}</b>`);
         }
         if (item.intended_use) subInfoParts.push(escapeHtml(item.intended_use));
-        if (item.revision_date) subInfoParts.push("Cập nhật: " + escapeHtml(item.revision_date));
+        if (item.revision_date) subInfoParts.push("Cập nhật: " + escapeHtml(formatMsdsDisplayDate(item.revision_date)));
         const subInfoHtml = subInfoParts.length > 0 ? subInfoParts.join(" · ") : "Hóa chất công nghiệp";
 
         const srcFileName = item.file_name || item.source_file || `MSDS-${displayCode}.docx`;
@@ -2984,7 +3006,7 @@ async function openMsdsSafetyModal(chemId) {
         const motherInfo = chem.mother_msds_id ? ` | Mother MSDS: ${chem.mother_msds_id}` : "";
 
         if (cardTitle) cardTitle.innerText = `THẺ AN TOÀN KHẨN CẤP: ${codeDisplay} — ${(chem.product_name || "HÓA CHẤT").toUpperCase()}`;
-        if (cardSub) cardSub.innerText = `Mã SP: ${codeDisplay} | Phân loại: [${itemTypeLabel}]${motherInfo} | Nhà cung cấp: ${supplierDisplay} | Ngày sửa đổi: ${chem.revision_date || "N/A"}`;
+        if (cardSub) cardSub.innerText = `Mã SP: ${codeDisplay} | Phân loại: [${itemTypeLabel}]${motherInfo} | Nhà cung cấp: ${supplierDisplay} | Ngày sửa đổi: ${formatMsdsDisplayDate(chem.revision_date) || "N/A"}`;
         
         // Cấu hình nút xuất Thẻ An Toàn Word (.docx) chuẩn Mục 3 GHS có Checksum
         if (btnDownloadWord) {
@@ -5247,10 +5269,22 @@ function renderMsdsCardGrid(items, totalCount, startIdx = 0) {
         }
 
         // GHS Badges
-        const rawGhs = String(item.ghs_symbols || "").trim();
-        let ghsCodes = rawGhs.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
-        if (ghsCodes.length === 0 || rawGhs.toUpperCase().includes("NON DG")) {
+        const rawGhsInput = item.ghs_symbols || item.ghs_codes || item.ghs_classifications || [];
+        const rawGhsStr = Array.isArray(rawGhsInput) ? rawGhsInput.join(" ") : String(rawGhsInput || "");
+        const matches = rawGhsStr.match(/GHS0[1-9]|NON[_\s-]?DG/gi);
+        let ghsCodes = [];
+        if (matches && matches.length > 0) {
+            const seen = new Set();
+            matches.forEach(m => {
+                let norm = m.toUpperCase().replace(/[_\s-]/g, " ").trim();
+                if (norm.includes("NON")) norm = "NON DG";
+                if (!seen.has(norm)) { seen.add(norm); ghsCodes.push(norm); }
+            });
+        }
+        if (ghsCodes.length === 0 || (ghsCodes.includes("NON DG") && ghsCodes.length === 1)) {
             ghsCodes = ["NON DG"];
+        } else if (ghsCodes.length > 1) {
+            ghsCodes = ghsCodes.filter(c => c !== "NON DG");
         }
         const ghsBadges = ghsCodes.map(c => renderGhsTableBadge(c)).join("");
 
@@ -5636,6 +5670,7 @@ async function sanitizeMsdsCatalogWithAi() {
         showMsdsLoading("Đang quét & chuẩn hóa Sổ CIL bằng AI...");
         const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
         const role = sessionStorage.getItem("luv_user_role") || "owner";
+        const apiKey = (window.LuvAIService ? window.LuvAIService.getRawApiKey() : "") || document.getElementById("ai-deepseek-key")?.value?.trim() || localStorage.getItem("deepseek_api_key") || "";
         const resp = await fetch("/api/msds/sanitize-catalog", {
             method: "POST",
             headers: {
@@ -5643,7 +5678,8 @@ async function sanitizeMsdsCatalogWithAi() {
                 "X-Titan-Session": token,
                 "X-Titan-Role": role,
                 "Authorization": "Bearer " + token
-            }
+            },
+            body: JSON.stringify({ api_key: apiKey })
         });
         const res = await resp.json();
         if (!resp.ok || !res.success) throw new Error(res.detail || res.message || "Lỗi chuẩn hóa CIL.");

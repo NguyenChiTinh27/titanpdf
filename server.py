@@ -2636,15 +2636,16 @@ def api_msds_delete_all(payload: MSDSDeleteAllRequest, _: str = Depends(require_
 
 
 @app.post("/api/msds/sanitize-catalog")
-def api_msds_sanitize_catalog(_: str = Depends(require_owner)):
-    """Tự động quét và chuẩn hóa toàn bộ Sổ CIL: sửa lỗi nhà cung cấp, tên hóa chất, ngày ban hành."""
+def api_msds_sanitize_catalog(payload: Optional[Dict[str, Any]] = Body(None), _: str = Depends(require_owner)):
+    """Tự động quét và chuẩn hóa toàn bộ Sổ CIL bằng DeepSeek AI: sửa lỗi nhà cung cấp, tên hóa chất, đặc tính lý hóa, độc tính."""
     from core.msds_intelligence import MSDSDatabase
     try:
-        result = MSDSDatabase.sanitize_catalog()
+        api_key = payload.get("api_key") if payload else None
+        result = MSDSDatabase.sanitize_catalog(api_key=api_key)
         return {
             "success": True,
             "data": result,
-            "message": f"Đã quét và chuẩn hóa thành công {result.get('updated_count', 0)}/{result.get('total', 0)} hóa chất trong sổ CIL!"
+            "message": f"Đã quét và chuẩn hóa thành công {result.get('updated_count', 0)}/{result.get('total', 0)} hóa chất trong sổ CIL bằng DeepSeek AI!"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi chuẩn hóa danh mục CIL: {str(e)}")

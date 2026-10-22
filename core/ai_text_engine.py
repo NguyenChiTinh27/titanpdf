@@ -411,6 +411,7 @@ class AITextEngine:
             raise ValueError("DeepSeek không trả về nội dung phân tích hiện trường hợp lệ.")
 
     @classmethod
+    @classmethod
     def call_universal_chat(
         cls,
         messages: List[Dict[str, Any]],
@@ -420,9 +421,12 @@ class AITextEngine:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         temperature: float = 0.2,
-        timeout: int = 60
+        response_format: Optional[Dict[str, str]] = None,
+        timeout: int = 90,
+        max_retries: int = 2
     ) -> str:
-        """Thực thi gọi Chat Completion thống nhất (Gemini / OpenAI / DeepSeek / Custom)."""
+        """Thực thi gọi Chat Completion thống nhất (Gemini / OpenAI / DeepSeek / Custom) với hỗ trợ JSON mode & Retry tự động."""
+        import time
         creds = cls.get_ai_credentials(api_key=api_key, provider=provider, model=model, base_url=base_url)
         active_provider = creds["provider"]
         active_key = creds["api_key"]
@@ -440,19 +444,36 @@ class AITextEngine:
             for m in messages:
                 role = "user" if m.get("role") in ("user", "system") else "model"
                 contents.append({"role": role, "parts": [{"text": str(m.get("content") or "")}]})
+            gen_config = {"temperature": temperature}
+            if response_format and response_format.get("type") == "json_object":
+                gen_config["response_mime_type"] = "application/json"
             payload = {
                 "contents": contents,
-                "generationConfig": {"temperature": temperature}
+                "generationConfig": gen_config
             }
             if system_prompt:
                 payload["system_instruction"] = {"parts": [{"text": system_prompt}]}
-            resp = requests.post(gemini_url, json=payload, timeout=timeout)
-            if resp.status_code != 200:
-                raise RuntimeError(f"Gemini API lỗi (HTTP {resp.status_code}): {resp.text}")
-            candidates = resp.json().get("candidates") or []
-            if not candidates:
-                raise RuntimeError("Gemini API không trả về nội dung.")
-            return "".join(p.get("text", "") for p in candidates[0].get("content", {}).get("parts", [])).strip()
+
+            last_err = None
+            for attempt in range(max_retries + 1):
+                try:
+                    resp = requests.post(gemini_url, json=payload, timeout=timeout)
+                    if resp.status_code == 200:
+                        candidates = resp.json().get("candidates") or []
+                        if not candidates:
+                            raise RuntimeError("Gemini API không trả về nội dung.")
+                        return "".join(p.get("text", "") for p in candidates[0].get("content", {}).get("parts", [])).strip()
+                    elif resp.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    else:
+                        raise RuntimeError(f"Gemini API lỗi (HTTP {resp.status_code}): {resp.text}")
+                except Exception as ex:
+                    last_err = ex
+                    if attempt < max_retries:
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    raise last_err
 
         # 2. OpenAI / DeepSeek / Custom
         else:
@@ -460,7 +481,15 @@ class AITextEngine:
             if not endpoint.endswith("/chat/completions"):
                 endpoint = endpoint + "/chat/completions"
 
-            target_model = cls.normalize_model_name(active_model, active_provider)
+            # ĐẶC BIỆT: Nếu là DeepSeek và có yêu cầu JSON mode (response_format), BẮT BUỘC dùng deepseek-chat
+            # vì deepseek-reasoner không hỗ trợ response_format và sinh token reasoning làm vỡ JSON.
+            if "deepseek" in endpoint.lower() or active_provider == "deepseek":
+                if response_format or "reasoner" in active_model.lower():
+                    target_model = "deepseek-chat"
+                else:
+                    target_model = cls.normalize_model_name(active_model, active_provider)
+            else:
+                target_model = cls.normalize_model_name(active_model, active_provider)
 
             headers = {
                 "Authorization": f"Bearer {active_key}",
@@ -471,26 +500,39 @@ class AITextEngine:
                 all_messages.append({"role": "system", "content": system_prompt})
             all_messages.extend(messages)
 
-            resp = requests.post(
-                endpoint,
-                headers=headers,
-                json={"model": target_model, "messages": all_messages, "temperature": temperature},
-                timeout=timeout
-            )
-            if resp.status_code != 200 and "deepseek" in endpoint.lower() and target_model != cls.FALLBACK_MODEL:
-                resp = requests.post(
-                    endpoint,
-                    headers=headers,
-                    json={"model": cls.FALLBACK_MODEL, "messages": all_messages, "temperature": temperature},
-                    timeout=timeout
-                )
+            post_body = {
+                "model": target_model,
+                "messages": all_messages,
+                "temperature": temperature
+            }
+            if response_format:
+                post_body["response_format"] = response_format
 
-            if resp.status_code != 200:
-                raise RuntimeError(f"AI API lỗi (HTTP {resp.status_code}): {resp.text}")
-            choices = resp.json().get("choices") or []
-            if not choices:
-                raise RuntimeError("AI API không trả về phản hồi hợp lệ.")
-            return choices[0].get("message", {}).get("content", "").strip()
+            last_err = None
+            for attempt in range(max_retries + 1):
+                try:
+                    resp = requests.post(endpoint, headers=headers, json=post_body, timeout=timeout)
+                    if resp.status_code != 200 and "deepseek" in endpoint.lower() and target_model != cls.FALLBACK_MODEL:
+                        post_body["model"] = cls.FALLBACK_MODEL
+                        resp = requests.post(endpoint, headers=headers, json=post_body, timeout=timeout)
+
+                    if resp.status_code == 200:
+                        choices = resp.json().get("choices") or []
+                        if not choices:
+                            raise RuntimeError("AI API không trả về phản hồi hợp lệ.")
+                        return choices[0].get("message", {}).get("content", "").strip()
+
+                    elif resp.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    else:
+                        raise RuntimeError(f"AI API lỗi (HTTP {resp.status_code}): {resp.text}")
+                except Exception as ex:
+                    last_err = ex
+                    if attempt < max_retries:
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    raise last_err
 
     @classmethod
     def chat_completion(
