@@ -364,13 +364,6 @@ def get_hse_health():
     else:
         health_status = "ok"
 
-    # 3. Synchronize report violations directly into Master Defect Tracker
-    try:
-        from core.hse_defect_tracker import DefectAggregatorService
-        DefectAggregatorService.sync_report_to_defect_tracker(payload_dict, json_filename)
-    except Exception as _sync_err:
-        print(f"[HSE_DEFECT_SYNC_WARNING] Error syncing report to tracker: {_sync_err}", flush=True)
-
     return {
         "status": health_status,
         "module": "hse_report_studio",
@@ -823,6 +816,13 @@ def save_report_endpoint(req: SaveReportRequest):
             drive_saved = True
         except Exception as e:
             print(f"[HSE_DRIVE_SYNC_WARNING] Error syncing to drive: {e}", flush=True)
+
+    # 3. Synchronize report violations directly into Master Defect Tracker
+    try:
+        from core.hse_defect_tracker import DefectAggregatorService
+        DefectAggregatorService.sync_report_to_defect_tracker(payload_dict, json_filename)
+    except Exception as _sync_err:
+        print(f"[HSE_DEFECT_SYNC_WARNING] Error syncing report to tracker: {_sync_err}", flush=True)
 
     return {
         "success": True,
