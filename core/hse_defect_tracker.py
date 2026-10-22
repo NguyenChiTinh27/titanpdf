@@ -65,11 +65,14 @@ class DefectAggregatorService:
 
     @staticmethod
     def get_gas_url() -> str:
+        env_url = (os.environ.get("GAS_WEB_APP_URL") or os.environ.get("HSE_GAS_URL") or os.environ.get("MSDS_GAS_URL") or "").strip()
+        if env_url and "script.google.com" in env_url:
+            return env_url
         if GAS_CONFIG_FILE.exists():
             try:
                 with open(GAS_CONFIG_FILE, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
-                    url = cfg.get("webhook_url")
+                    url = cfg.get("webhook_url") or cfg.get("gas_url") or cfg.get("url")
                     if url and "script.google.com" in url and "AKtest" not in url:
                         return url.strip()
             except Exception:
@@ -531,33 +534,51 @@ class DefectAggregatorService:
         }
 
     @classmethod
-    def sync_with_gas(cls) -> Dict[str, Any]:
+    def sync_with_gas(cls, custom_gas_url: Optional[str] = None) -> Dict[str, Any]:
         """Manually triggers two-way sync with Google Apps Script Web App."""
-        gas_url = cls.get_gas_url()
+        gas_url = (custom_gas_url or "").strip() or cls.get_gas_url()
         remote_count = 0
         status_msg = "Chưa kết nối GAS"
+        is_html = False
+
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "TitanPDF-HSE-Tracker/1.0"
+        }
 
         try:
-            r = requests.get(f"{gas_url}?action=getAllDefects", timeout=8.0)
+            r = requests.get(f"{gas_url}?action=getAllDefects", headers=headers, timeout=12.0)
             if r.ok:
-                try:
-                    data = r.json()
-                    if isinstance(data, dict) and "defects" in data:
-                        items = data["defects"]
-                        remote_count = len(items)
-                        status_msg = f"Đã đồng bộ {remote_count} lỗi từ Google Apps Script"
-                    elif isinstance(data, list):
-                        remote_count = len(data)
-                        status_msg = f"Đã đồng bộ {remote_count} lỗi từ Google Apps Script"
-                except Exception:
-                    status_msg = "Google Apps Script phản hồi HTML/Yêu cầu quyền truy cập"
+                content_type = r.headers.get("Content-Type", "")
+                text_preview = (r.text or "").strip()
+                if "html" in content_type.lower() or text_preview.startswith("<!doctype html") or "<html" in text_preview[:200].lower():
+                    is_html = True
+                    status_msg = "Google Apps Script phản hồi HTML (Yêu cầu đăng nhập). Vui lòng Deploy Web App với quyền 'Who has access' (Ai có quyền truy cập) là 'Anyone' (Bất kỳ ai)."
+                else:
+                    try:
+                        data = r.json()
+                        if isinstance(data, dict) and "defects" in data:
+                            items = data["defects"]
+                            remote_count = len(items)
+                            status_msg = f"Đã đồng bộ thành công {remote_count} lỗi từ Google Apps Script!"
+                        elif isinstance(data, list):
+                            remote_count = len(data)
+                            status_msg = f"Đã đồng bộ thành công {remote_count} lỗi từ Google Apps Script!"
+                        elif isinstance(data, dict) and data.get("status") == "error":
+                            status_msg = f"Lỗi GAS: {data.get('error', 'Lỗi không xác định')}"
+                    except Exception:
+                        status_msg = "Google Apps Script không trả về định dạng JSON hợp lệ."
+            else:
+                status_msg = f"Mã phản hồi từ Google Apps Script: {r.status_code}"
         except Exception as e:
             status_msg = f"Lỗi kết nối GAS: {str(e)}"
 
         all_defects = cls.aggregate_all_defects()
         return {
-            "success": True,
+            "success": not is_html and remote_count >= 0,
             "message": status_msg,
+            "is_html": is_html,
+            "gas_url": gas_url,
             "remote_defects_count": remote_count,
             "total_local_defects": all_defects["total"],
             "kpis": all_defects["kpis"]

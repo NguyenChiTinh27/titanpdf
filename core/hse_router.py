@@ -391,28 +391,31 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
     quoted_bilingual = urllib.parse.quote(bilingual_filename)
     target_path = REPORTS_DIR / filename
 
-    actual_path, was_locked = safe_write_bytes(target_path, docx_bytes)
-
-    # Save to monthly HSE_ZhanChen_Storage/{year_month}/Bao_Cao_Xuat_File/
-    year_month = clean_date[:7] if len(clean_date) >= 7 else date.today().strftime("%Y-%m")
-    _, rpt_dir_word = HSEStorageManager.get_or_create_monthly_folder(year_month)
-    std_docx_name = f"Bao_Cao_HSE_{clean_date}{suffix}.docx"
-    safe_write_bytes(rpt_dir_word / std_docx_name, docx_bytes)
-
-    # Google Drive auto-backup check
+    actual_path = target_path
+    was_locked = False
+    drive_filename = filename
     drive_backup = False
-    drive_path = detect_google_drive()
-    drive_locked = was_locked
-    drive_filename = actual_path.name
-    if drive_path:
-        try:
-            month_dir = drive_path / clean_date[:7]
-            month_dir.mkdir(parents=True, exist_ok=True)
-            drive_file, drive_locked = safe_write_bytes(month_dir / filename, docx_bytes)
-            drive_filename = drive_file.name
-            drive_backup = True
-        except Exception:
-            pass
+
+    try:
+        actual_path, was_locked = safe_write_bytes(target_path, docx_bytes)
+        drive_filename = actual_path.name
+        year_month = clean_date[:7] if len(clean_date) >= 7 else date.today().strftime("%Y-%m")
+        _, rpt_dir_word = HSEStorageManager.get_or_create_monthly_folder(year_month)
+        std_docx_name = f"Bao_Cao_HSE_{clean_date}{suffix}.docx"
+        safe_write_bytes(rpt_dir_word / std_docx_name, docx_bytes)
+
+        drive_path = detect_google_drive()
+        if drive_path:
+            try:
+                month_dir = drive_path / clean_date[:7]
+                month_dir.mkdir(parents=True, exist_ok=True)
+                drive_file, drive_locked = safe_write_bytes(month_dir / filename, docx_bytes)
+                drive_filename = drive_file.name
+                drive_backup = True
+            except Exception:
+                pass
+    except Exception as io_err:
+        print(f"[HSE_DOCX_CACHE_WARNING] {io_err}", flush=True)
 
     headers = {
         "Content-Disposition": f'attachment; filename="{actual_path.name}"; filename*=UTF-8\'\'{quoted_bilingual}',
@@ -1098,9 +1101,20 @@ def update_defect_endpoint(payload: Dict[str, Any]):
 
 @hse_router.post("/defects/sync_gas")
 @hse_router.get("/defects/sync_gas")
-def sync_defects_gas_endpoint():
+async def sync_defects_gas_endpoint(request: Request):
     from core.hse_defect_tracker import DefectAggregatorService
-    return DefectAggregatorService.sync_with_gas()
+    custom_url = None
+    if request.method == "POST":
+        try:
+            body = await request.body()
+            if body:
+                payload = json.loads(body)
+                custom_url = payload.get("gas_url") or payload.get("webhook_url")
+        except Exception:
+            pass
+    if not custom_url:
+        custom_url = request.query_params.get("gas_url")
+    return DefectAggregatorService.sync_with_gas(custom_gas_url=custom_url)
 
 
 @hse_router.post("/defects/clear_all")

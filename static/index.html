@@ -4781,6 +4781,9 @@
                 <button type="button" class="hse-btn-action sync" id="hse-btn-sync-gas" title="Đồng bộ dữ liệu hai chiều với Google Apps Script Web App & Drive">
                     ☁️ Đồng Bộ GAS / Drive
                 </button>
+                <button type="button" class="hse-btn-action" id="hse-btn-config-gas" title="Cài đặt URL kết nối Google Apps Script & Hướng dẫn Deploy" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #334155;">
+                    ⚙️ Cài Đặt GAS
+                </button>
             </div>
         </header>
 
@@ -4879,7 +4882,51 @@
     </main>
 
     <!-- Detail Modal -->
-    <div id="hse-tracker-detail-modal" class="hse-modal-backdrop" style="display: none;">
+        <!-- Modal: Cài Đặt Google Apps Script (GAS) -->
+        <div id="hse-gas-config-modal" class="hse-modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
+            <div style="background: #ffffff; border-radius: 14px; max-width: 620px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); overflow: hidden; display: flex; flex-direction: column;">
+                <div style="padding: 16px 20px; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">⚙️</span>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 700;">Cài Đặt Kết Nối Google Apps Script (GAS)</h3>
+                    </div>
+                    <button type="button" id="hse-gas-modal-close-btn" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px;">✕</button>
+                </div>
+                <div style="padding: 20px; overflow-y: auto; max-height: 80vh; font-size: 13.5px; line-height: 1.5;">
+                    <div id="hse-gas-modal-notice" style="display: none; padding: 10px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #b91c1c; font-weight: 600; margin-bottom: 14px;"></div>
+
+                    <label style="display: block; font-weight: 700; color: #1e293b; margin-bottom: 6px;">URL Web App Google Apps Script:</label>
+                    <input type="text" id="hse-gas-url-input" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-family: monospace; box-sizing: border-box; margin-bottom: 12px;" />
+
+                    <div id="hse-gas-test-result" style="display: none; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px;"></div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <button type="button" id="hse-gas-test-btn" style="flex: 1; padding: 9px 14px; background: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; font-weight: 700; border-radius: 8px; cursor: pointer;">
+                            🔄 Kiểm Tra Kết Nối
+                        </button>
+                        <button type="button" id="hse-gas-save-btn" style="flex: 1; padding: 9px 14px; background: #2563eb; border: none; color: #fff; font-weight: 700; border-radius: 8px; cursor: pointer;">
+                            💾 Lưu & Đồng Bộ Ngay
+                        </button>
+                    </div>
+
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; color: #334155;">
+                        <div style="font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <span>💡</span> HƯỚNG DẪN ĐỂ KHÔNG BỊ LỖI QUYỀN TRUY CẬP (HTML):
+                        </div>
+                        <ol style="margin: 0; padding-left: 20px; font-size: 12.5px; color: #475569; line-height: 1.6;">
+                            <li>Mở dự án <b>Google Apps Script</b> (chứa file <code>Code.gs</code>) trên Google Drive của bạn.</li>
+                            <li>Bấm nút <b>Deploy (Triển khai)</b> ở góc trên bên phải > Chọn <b>New deployment (Tùy chọn triển khai mới)</b>.</li>
+                            <li>Chọn loại: <b>Web app (Ứng dụng web)</b>.</li>
+                            <li><b>Execute as (Thực thi dưới dạng):</b> Chọn <b>Me (ntc270120cm@gmail.com)</b>.</li>
+                            <li><b>Who has access (Ai có quyền truy cập):</b> BẮT BUỘC CHỌN <b>Anyone (Bất kỳ ai)</b>.<br><span style="color:#dc2626; font-weight: 700;">⚠️ Lưu ý quan trọng:</span> Nếu chọn "Chỉ mình tôi" (Only myself), Google sẽ chặn và trả về trang đăng nhập HTML gây lỗi đồng bộ.</li>
+                            <li>Bấm <b>Deploy</b> > Sao chép URL ứng dụng web (có đuôi <code>/exec</code>) dán vào ô trên và bấm <b>Lưu & Đồng Bộ Ngay</b>.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Chi Tiết & Cập Nhật Sự Cố HSE -->
         <div class="hse-modal-box">
             <header class="hse-modal-header">
                 <div>

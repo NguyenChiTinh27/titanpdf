@@ -1335,7 +1335,10 @@
   // ==========================================================================
   // WORD EXPORT & DECOMPILER IMPORT
   // ==========================================================================
+  let isExportingWord = false;
   async function exportWordDocument() {
+    if (isExportingWord) return;
+    isExportingWord = true;
     const wordBtns = [$("#hse-export-word-btn"), $("#hse-preview-export-btn")].filter(Boolean);
     wordBtns.forEach(b => {
       b.disabled = true;
@@ -1428,6 +1431,7 @@
       showToast("❌ " + msg, true);
     } finally {
       clearTimeout(timeoutId);
+      isExportingWord = false;
       wordBtns.forEach(b => {
         b.disabled = false;
         if (b.dataset.origText) b.innerHTML = b.dataset.origText;

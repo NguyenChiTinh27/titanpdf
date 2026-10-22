@@ -56,6 +56,9 @@ def get_template_path() -> Path:
         module_dir / "templates" / "HSE-template.docx",
         module_dir.parent / "core" / "templates" / "HSE-template.docx",
         module_dir.parent / "template" / "HSE-template.docx",
+        Path("/app/core/templates/HSE-template.docx"),
+        Path("/app/templates/HSE-template.docx"),
+        Path("/opt/render/project/src/core/templates/HSE-template.docx"),
         Path(r"E:\Tool\hse-report-app\template\HSE-template.docx"),
     ])
     for p in candidates:

@@ -542,12 +542,18 @@
   async function syncGasNow() {
     try {
       setLoading(true, "Đang kết nối hai chiều với Google Apps Script Web App...");
-      const resp = await fetch("/api/hse/defects/sync_gas", { method: "POST" });
+      const savedGasUrl = localStorage.getItem("hse_gas_web_app_url") || localStorage.getItem("gas_web_app_url") || "";
+      const resp = await fetch("/api/hse/defects/sync_gas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gas_url: savedGasUrl })
+      });
       if (!resp.ok) throw new Error("Lỗi kết nối Google Apps Script.");
       const res = await resp.json();
       await loadDefects(false);
-      if (res.message && (res.message.includes("HTML") || res.message.includes("quyền truy cập"))) {
+      if (res.is_html || (res.message && (res.message.includes("HTML") || res.message.includes("quyền truy cập")))) {
         showToast(`⚠️ ${res.message}`, true);
+        openGasConfigModal(res.message);
       } else {
         showToast(`☁️ ${res.message || 'Đồng bộ GAS thành công!'}`);
       }
@@ -556,6 +562,101 @@
     } finally {
       setLoading(false);
     }
+  }
+
+  function openGasConfigModal(notice = "") {
+    let modal = $("#hse-gas-config-modal");
+    if (!modal) return;
+    const currentUrl = localStorage.getItem("hse_gas_web_app_url") || localStorage.getItem("gas_web_app_url") || "https://script.google.com/macros/s/AKfycbws_nxdj41dyvagv-uBNkPhyJWBjRpr727xFICssUNJabTA_VLYqZWszoB9bbAZaPKMbQ/exec";
+    const inp = $("#hse-gas-url-input");
+    if (inp) inp.value = currentUrl;
+    const noticeEl = $("#hse-gas-modal-notice");
+    if (noticeEl) {
+      if (notice) {
+        noticeEl.style.display = "block";
+        noticeEl.textContent = notice;
+      } else {
+        noticeEl.style.display = "none";
+      }
+    }
+    const testResultEl = $("#hse-gas-test-result");
+    if (testResultEl) {
+      testResultEl.style.display = "none";
+      testResultEl.textContent = "";
+    }
+    modal.style.display = "flex";
+  }
+
+  function closeGasConfigModal() {
+    const modal = $("#hse-gas-config-modal");
+    if (modal) modal.style.display = "none";
+  }
+
+  async function testGasConnection() {
+    const inp = $("#hse-gas-url-input");
+    const testResultEl = $("#hse-gas-test-result");
+    const btn = $("#hse-gas-test-btn");
+    const url = (inp?.value || "").trim();
+    if (!url || !url.includes("script.google.com")) {
+      alert("Vui lòng nhập URL Web App hợp lệ bắt đầu bằng https://script.google.com/macros/s/.../exec");
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Đang kiểm tra...";
+    }
+    if (testResultEl) {
+      testResultEl.style.display = "block";
+      testResultEl.style.background = "#eff6ff";
+      testResultEl.style.color = "#1d4ed8";
+      testResultEl.textContent = "Đang gửi kiểm tra tới Google Apps Script...";
+    }
+    try {
+      const resp = await fetch("/api/hse/defects/sync_gas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gas_url: url })
+      });
+      const data = await resp.json();
+      if (data.is_html) {
+        testResultEl.style.background = "#fef2f2";
+        testResultEl.style.color = "#b91c1c";
+        testResultEl.innerHTML = `❌ <b>Lỗi quyền truy cập (HTML):</b> Google yêu cầu đăng nhập.<br>👉 Bạn cần vào Google Apps Script > <b>Triển khai mới</b> > Đặt <b>Who has access</b> là <b>Anyone (Bất kỳ ai)</b>!`;
+      } else if (data.success) {
+        testResultEl.style.background = "#f0fdf4";
+        testResultEl.style.color = "#15803d";
+        testResultEl.innerHTML = `✅ <b>Kết nối thành công!</b> Đã tìm thấy ${data.remote_defects_count || 0} lỗi trên Google Sheet.`;
+        localStorage.setItem("hse_gas_web_app_url", url);
+        await loadDefects(false);
+      } else {
+        testResultEl.style.background = "#fffbeb";
+        testResultEl.style.color = "#b45309";
+        testResultEl.textContent = `⚠️ Phản hồi: ${data.message || 'Không có phản hồi'}`;
+      }
+    } catch (err) {
+      testResultEl.style.background = "#fef2f2";
+      testResultEl.style.color = "#b91c1c";
+      testResultEl.textContent = `❌ Lỗi kết nối: ${err.message}`;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "🔄 Kiểm Tra Kết Nối";
+      }
+    }
+  }
+
+  function saveGasConfig() {
+    const inp = $("#hse-gas-url-input");
+    const url = (inp?.value || "").trim();
+    if (!url || !url.includes("script.google.com")) {
+      alert("Vui lòng nhập URL Google Apps Script hợp lệ!");
+      return;
+    }
+    localStorage.setItem("hse_gas_web_app_url", url);
+    localStorage.setItem("gas_web_app_url", url);
+    showToast("✓ Đã lưu cấu hình Google Apps Script!");
+    closeGasConfigModal();
+    syncGasNow();
   }
 
   async function clearAllDefects() {
@@ -680,6 +781,10 @@
 
     // Toolbar buttons
     $("#hse-btn-sync-gas")?.addEventListener("click", syncGasNow);
+    $("#hse-btn-config-gas")?.addEventListener("click", () => openGasConfigModal());
+    $("#hse-gas-modal-close-btn")?.addEventListener("click", closeGasConfigModal);
+    $("#hse-gas-save-btn")?.addEventListener("click", saveGasConfig);
+    $("#hse-gas-test-btn")?.addEventListener("click", testGasConnection);
     $("#hse-btn-clear-all-defects")?.addEventListener("click", clearAllDefects);
     $("#hse-btn-excel-all")?.addEventListener("click", () => exportMasterExcel(true));
     $("#hse-btn-excel-filter")?.addEventListener("click", () => exportMasterExcel(false));
@@ -756,6 +861,10 @@
     loadDefects,
     applyFilters,
     exportMasterExcel,
-    syncGasNow
+    syncGasNow,
+    openGasConfigModal,
+    closeGasConfigModal,
+    testGasConnection,
+    saveGasConfig
   };
 })();
