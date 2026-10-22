@@ -367,9 +367,9 @@ body {
 .main-nav-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   height: 34px;
-  padding: 0 11px;
+  padding: 0 9px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -7152,14 +7152,25 @@ body.msds-studio-active {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 6px 14px;
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #1e40af;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 700;
+  max-width: 175px;
+  flex-shrink: 0;
   white-space: nowrap;
+}
+
+.owner-email-text {
+  max-width: 135px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .btn-topbar-shield {

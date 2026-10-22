@@ -2740,9 +2740,9 @@
 
                 <!-- OWNER MODE VIEW (Hiển thị khi role === 'owner') -->
                 <div id="topbar-owner-controls" class="topbar-role-group hidden">
-                    <div id="topbar-owner-badge" class="topbar-owner-badge" title="Tài khoản Chính chủ Quản trị Tối cao">
+                    <div id="topbar-owner-badge" class="topbar-owner-badge" title="ntc270120cm@gmail.com (Tài khoản Chính chủ Quản trị Tối cao)">
                         <span class="owner-crown-icon">👑</span>
-                        <span class="owner-email-text">ntc270120cm@gmail.com</span>
+                        <span class="owner-email-text" title="ntc270120cm@gmail.com">ntc270120cm@gmail.com</span>
                     </div>
                     <button id="btn-open-security-modal" type="button" onclick="openSecurityModal()" class="btn-topbar-shield" title="Mở bảng phân quyền sử dụng Chế độ Khách &amp; Quản trị bảo mật">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -4926,8 +4926,9 @@
             </div>
         </div>
 
-        <!-- Modal: Chi Tiết & Cập Nhật Sự Cố HSE -->
-        <div class="hse-modal-box">
+        <!-- Modal: Chi Tiết & Cập Nhật Sự Cố HSE (Fixed Backdrop Overlay) -->
+        <div id="hse-tracker-detail-modal" class="hse-modal-backdrop hse-modal-overlay" style="display: none !important;">
+            <div class="hse-modal-box">
             <header class="hse-modal-header">
                 <div>
                     <h3 id="modal-defect-title">Chi Tiết Sự Cố</h3>
@@ -4972,11 +4973,11 @@
 
                 <!-- Descriptions -->
                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
-                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 4px;">MÔ TẢ CHI TIẾT (TIẾNG TRUNG · 详细描述):</div>
-                    <div id="modal-defect-zh" style="font-size: 13.5px; font-weight: 600; color: #0f172a; line-height: 1.45; margin-bottom: 10px;"></div>
+                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 6px;">MÔ TẢ CHI TIẾT (TIẾNG TRUNG · 详细描述):</div>
+                    <div id="modal-defect-zh" style="font-size: 13.5px; font-weight: 600; color: #0f172a; line-height: 1.5; margin-bottom: 12px;"></div>
 
-                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 4px;">MÔ TẢ VẤN ĐỀ (TIẾNG VIỆT):</div>
-                    <div id="modal-defect-vn" style="font-size: 13px; font-style: italic; color: #334155; line-height: 1.4;"></div>
+                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 6px;">MÔ TẢ VẤN ĐỀ (TIẾNG VIỆT):</div>
+                    <div id="modal-defect-vn" style="font-size: 13px; font-style: italic; color: #334155; line-height: 1.5;"></div>
                 </div>
 
                 <!-- Status & Notes Form -->

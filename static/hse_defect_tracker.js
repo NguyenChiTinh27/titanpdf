@@ -425,8 +425,28 @@
     $("#modal-defect-code-badge").textContent = d.code || d.id;
     $("#modal-defect-dept-badge").textContent = `${d.dept_icon || '🏢'} ${d.department}`;
     $("#modal-defect-category").textContent = d.category || "An toàn xưởng";
-    $("#modal-defect-zh").textContent = d.zh_issue || "(Không có)";
-    $("#modal-defect-vn").textContent = d.vn_issue || "(Không có)";
+
+    // Descriptions with elegant empty placeholders
+    const zhEl = $("#modal-defect-zh");
+    const vnEl = $("#modal-defect-vn");
+    if (zhEl) {
+      if (d.zh_issue && d.zh_issue.trim() && d.zh_issue.trim() !== "(Không có)") {
+        zhEl.textContent = d.zh_issue;
+        zhEl.style.fontStyle = "normal";
+        zhEl.style.color = "#0f172a";
+      } else {
+        zhEl.innerHTML = '<span style="color:#94a3b8; font-style:italic; font-weight:normal;">(Chưa có mô tả)</span>';
+      }
+    }
+    if (vnEl) {
+      if (d.vn_issue && d.vn_issue.trim() && d.vn_issue.trim() !== "(Không có)") {
+        vnEl.textContent = d.vn_issue;
+        vnEl.style.fontStyle = "normal";
+        vnEl.style.color = "#334155";
+      } else {
+        vnEl.innerHTML = '<span style="color:#94a3b8; font-style:italic; font-weight:normal;">(Chưa có mô tả)</span>';
+      }
+    }
 
     // Before Photo
     const bImg = $("#modal-photo-before");
@@ -449,7 +469,7 @@
 
     const dateInp = $("#modal-improve-date");
     if (dateInp) {
-      dateInp.value = d.improve_date || new Date().toISOString().substring(0, 10);
+      dateInp.value = d.improve_date || (d.improved ? new Date().toISOString().substring(0, 10) : "");
     }
 
     const noteInp = $("#modal-note-inp");
@@ -457,12 +477,16 @@
       noteInp.value = d.note || "";
     }
 
-    modal.style.display = "flex";
+    modal.classList.add("active", "is-open");
+    modal.style.setProperty("display", "flex", "important");
   }
 
   function closeDetailModal() {
     const modal = $("#hse-tracker-detail-modal");
-    if (modal) modal.style.display = "none";
+    if (modal) {
+      modal.classList.remove("active", "is-open");
+      modal.style.setProperty("display", "none", "important");
+    }
     state.currentDetailDefect = null;
     state.pendingAfterImage = "";
   }
@@ -833,6 +857,44 @@
     $("#modal-cancel-btn")?.addEventListener("click", closeDetailModal);
     $("#modal-save-btn")?.addEventListener("click", saveDetailModal);
 
+    // Close on backdrop click
+    const detailModal = $("#hse-tracker-detail-modal");
+    detailModal?.addEventListener("click", (e) => {
+      if (e.target === detailModal) {
+        closeDetailModal();
+      }
+    });
+
+    const gasModal = $("#hse-gas-config-modal");
+    gasModal?.addEventListener("click", (e) => {
+      if (e.target === gasModal) {
+        closeGasConfigModal();
+      }
+    });
+
+    // Close on Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeDetailModal();
+        closeGasConfigModal();
+      }
+    });
+
+    // Auto-fill completion date when checkbox is checked
+    $("#modal-status-chk")?.addEventListener("change", (e) => {
+      const chk = e.target;
+      const dateInp = $("#modal-improve-date");
+      if (chk && chk.checked && dateInp && !dateInp.value.trim()) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        const hh = String(now.getHours()).padStart(2, "0");
+        const min = String(now.getMinutes()).padStart(2, "0");
+        dateInp.value = `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+      }
+    });
+
     // Modal after photo upload
     $("#modal-upload-after-inp")?.addEventListener("change", async (e) => {
       const file = e.target.files[0];
@@ -843,7 +905,19 @@
         state.pendingAfterImage = compressed;
         updateModalAfterPhotoDisplay(compressed);
         const chk = $("#modal-status-chk");
-        if (chk) chk.checked = true; // Auto-check when after-photo uploaded
+        if (chk) {
+          chk.checked = true; // Auto-check when after-photo uploaded
+          const dateInp = $("#modal-improve-date");
+          if (dateInp && !dateInp.value.trim()) {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, "0");
+            const dd = String(now.getDate()).padStart(2, "0");
+            const hh = String(now.getHours()).padStart(2, "0");
+            const min = String(now.getMinutes()).padStart(2, "0");
+            dateInp.value = `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+          }
+        }
         showToast("✓ Đã nạp ảnh sau cải thiện!");
       } catch (err) {
         showToast("Lỗi nạp ảnh: " + err.message, true);
@@ -864,7 +938,10 @@
     syncGasNow,
     openGasConfigModal,
     closeGasConfigModal,
+    openDetailModal,
+    closeDetailModal,
     testGasConnection,
     saveGasConfig
   };
+  window.HSEDefectTracker = window.HseDefectTracker;
 })();

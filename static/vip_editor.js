@@ -179,6 +179,26 @@ function switchMainTab(tab, subTab = null) {
         }
     });
 
+    // 4. TAB STATE ISOLATION: Đóng toàn bộ các modal đang mở khi chuyển tab (Đặc biệt là Modal Chi Tiết Sự Cố HSE)
+    try {
+        const hseDetailModal = document.getElementById("hse-tracker-detail-modal");
+        if (hseDetailModal) {
+            hseDetailModal.style.setProperty("display", "none", "important");
+            hseDetailModal.classList.remove("active", "open", "is-open");
+        }
+        const hseGasModal = document.getElementById("hse-gas-config-modal");
+        if (hseGasModal) {
+            hseGasModal.style.setProperty("display", "none", "important");
+            hseGasModal.classList.remove("active", "open", "is-open");
+        }
+        if (window.HseDefectTracker && typeof window.HseDefectTracker.closeDetailModal === "function") {
+            window.HseDefectTracker.closeDetailModal();
+        }
+        if (window.HseDefectTracker && typeof window.HseDefectTracker.closeGasConfigModal === "function") {
+            window.HseDefectTracker.closeGasConfigModal();
+        }
+    } catch (_modalErr) {}
+
     if (tab === 'editor') {
         if (editorView) editorView.classList.remove("hidden");
         if (footer) footer.classList.add("hidden");

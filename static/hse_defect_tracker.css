@@ -627,26 +627,34 @@
   vertical-align: middle;
 }
 
-/* Detail Modal */
+/* Detail Modal - Fixed Backdrop Overlay */
+#hse-tracker-detail-modal,
 .hse-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(4px);
-  display: flex;
+  -webkit-backdrop-filter: blur(4px);
+  display: none !important;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 99999;
   padding: 16px;
+}
+
+#hse-tracker-detail-modal.active,
+#hse-tracker-detail-modal.open,
+#hse-tracker-detail-modal.is-open {
+  display: flex !important;
 }
 
 .hse-modal-box {
   background: #ffffff;
   width: 100%;
-  max-width: 780px;
+  max-width: 680px;
   max-height: 90vh;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
