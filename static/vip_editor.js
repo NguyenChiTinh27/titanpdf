@@ -47,6 +47,7 @@ function switchMainTab(tab, subTab = null) {
     }
     if (tab === 'msds-studio') tab = 'msds';
     if (tab === 'hse-studio') tab = 'hse';
+    if (tab === 'hse-tracker' || tab === 'defect-tracker' || tab === 'tracker') tab = 'hse-tracker';
     if (tab === 'legal-lookup') tab = 'legal';
     if (tab === 'ai-studio') tab = 'ai';
     if (tab === 'vip-editor') tab = 'editor';
@@ -128,6 +129,7 @@ function switchMainTab(tab, subTab = null) {
     const aiView = document.getElementById("ai-studio-view");
     const msdsView = document.getElementById("msds-studio-view");
     const hseView = document.getElementById("hse-studio-view");
+    const hseTrackerView = document.getElementById("hse-tracker-view");
     const legalView = document.getElementById("legal-lookup-view");
     const monthlyView = document.getElementById("monthly-inventory-view");
     const gatepassView = document.getElementById("gatepass-studio-view");
@@ -137,6 +139,7 @@ function switchMainTab(tab, subTab = null) {
     const navAi = document.getElementById("nav-tab-ai");
     const navMsds = document.getElementById("nav-tab-msds");
     const navHse = document.getElementById("nav-tab-hse");
+    const navHseTracker = document.getElementById("nav-tab-hse-tracker");
     const navLegal = document.getElementById("nav-tab-legal");
     const navMonthly = document.getElementById("nav-tab-inventory") || document.getElementById("nav-tab-monthly-inventory");
     const navGatepass = document.getElementById("nav-tab-gatepass");
@@ -144,7 +147,7 @@ function switchMainTab(tab, subTab = null) {
     const footer = document.querySelector(".footer");
 
     // Reset active nav states & aria-selected attributes
-    [navTools, navEditor, navAi, navMsds, navHse, navLegal, navMonthly, navGatepass, navLicense].forEach(n => {
+    [navTools, navEditor, navAi, navMsds, navHse, navHseTracker, navLegal, navMonthly, navGatepass, navLicense].forEach(n => {
         if (n) {
             n.classList.remove("active");
             n.setAttribute("aria-selected", "false");
@@ -163,7 +166,7 @@ function switchMainTab(tab, subTab = null) {
     // 2. Danh sách toàn bộ 10 view chính trong hệ thống
     const allViews = [
         homeView, wsView, editorView, aiView, msdsView,
-        hseView, legalView, monthlyView, gatepassView, licenseView
+        hseView, hseTrackerView, legalView, monthlyView, gatepassView, licenseView
     ];
 
     // 3. Ẩn toàn bộ tất cả các view trước khi bật view được chọn
@@ -231,6 +234,17 @@ function switchMainTab(tab, subTab = null) {
 
         if (typeof window.initHseStudio === 'function') {
             window.initHseStudio();
+        }
+    } else if (tab === 'hse-tracker') {
+        if (hseTrackerView) hseTrackerView.classList.remove("hidden");
+        if (footer) footer.classList.remove("hidden");
+        document.body.classList.remove("vip-editor-active");
+        document.body.classList.remove("msds-studio-active");
+
+        if (navHseTracker) { navHseTracker.classList.add("active"); navHseTracker.setAttribute("aria-selected", "true"); }
+
+        if (typeof window.initHseDefectTracker === 'function') {
+            window.initHseDefectTracker();
         }
     } else if (tab === 'legal') {
         if (legalView) legalView.classList.remove("hidden");

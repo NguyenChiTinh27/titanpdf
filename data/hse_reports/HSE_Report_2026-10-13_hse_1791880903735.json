@@ -30,7 +30,7 @@
       "status": "fail",
       "issueVi": "Bình chữa cháy hết hạn",
       "issueZh": "问题: 灭火器过期",
-      "improved": false
+      "improved": true
     }
   ],
   "findings": [

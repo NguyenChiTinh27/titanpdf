@@ -55,6 +55,7 @@
     <!-- 100% Offline Local Stylesheet - Zero External CDNs -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="hse_style.css">
+    <link rel="stylesheet" href="hse_defect_tracker.css">
     <link rel="stylesheet" href="legal_style.css">
     <link rel="stylesheet" href="monthly_inventory.css">
     <link rel="stylesheet" href="gatepass_studio.css">
@@ -2623,6 +2624,11 @@
                     <span class="tab-label">HSE Report</span>
                     <span class="nav-tab-pill-badge badge-hse">HSE</span>
                 </button>
+                <button id="nav-tab-hse-tracker" class="main-nav-tab nav-tab-hse-tracker" onclick="switchMainTab('hse-tracker')" title="🎯 Theo Dõi Lỗi HSE - Trung Tâm Theo Dõi & Khắc Phục Lỗi Toàn Thời Gian (Master Defect Tracker)" role="tab" aria-selected="false">
+                    <span style="font-size: 14px; margin-right: 4px;">🎯</span>
+                    <span class="tab-label">Theo Dõi Lỗi HSE</span>
+                    <span class="nav-tab-pill-badge badge-tracker" id="nav-hse-tracker-count-badge" style="background: linear-gradient(135deg, #f59e0b, #d97706); color:#fff; font-weight:800;" title="TRACKER / 隐患追踪">TRACKER</span>
+                </button>
                 <button id="nav-tab-legal" class="main-nav-tab nav-tab-legal" onclick="switchMainTab('legal')" title="Pháp Lý Hóa Chất - Tra Cứu Danh Mục NĐ 24, NĐ 28, QCVN 01" role="tab" aria-selected="false">
                     <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
@@ -4750,6 +4756,200 @@
     </main>
 
     <!-- ============================================================ -->
+    <!-- HSE MASTER DEFECT TRACKER WORKSPACE (#hse-tracker-view)       -->
+    <!-- ============================================================ -->
+    <main id="hse-tracker-view" class="hse-tracker-container hidden">
+        <!-- Header -->
+        <header class="hse-tracker-header">
+            <div class="hse-tracker-title-box">
+                <h1>
+                    <span>🎯</span>
+                    <span>TRUNG TÂM THEO DÕI & KHẮC PHỤC LỖI HSE</span>
+                    <span class="hse-tracker-badge-pill">TRACKER · 隐患追踪</span>
+                </h1>
+                <p>Hệ thống giám sát, tổng hợp và theo dõi khắc phục sự cố EHS toàn thời gian qua các đợt kiểm tra</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="hse-btn-action sync" id="hse-btn-sync-gas" title="Đồng bộ dữ liệu hai chiều với Google Apps Script Web App & Drive">
+                    ☁️ Đồng Bộ GAS / Drive
+                </button>
+            </div>
+        </header>
+
+        <!-- Row 1: 4 KPI Cards -->
+        <section class="hse-tracker-kpi-grid">
+            <div class="hse-tracker-kpi-card blue">
+                <div class="hse-kpi-icon-circle">📋</div>
+                <div class="hse-kpi-info">
+                    <span class="hse-kpi-label">Tổng Số Lỗi / 总缺陷数</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-total">0</span>
+                </div>
+            </div>
+            <div class="hse-tracker-kpi-card green">
+                <div class="hse-kpi-icon-circle">✓</div>
+                <div class="hse-kpi-info">
+                    <span class="hse-kpi-label">Đã Cải Thiện / 已改善</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-improved">0</span>
+                </div>
+            </div>
+            <div class="hse-tracker-kpi-card orange">
+                <div class="hse-kpi-icon-circle">⚠️</div>
+                <div class="hse-kpi-info">
+                    <span class="hse-kpi-label">Còn Tồn Đọng / 待改善</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-pending">0</span>
+                </div>
+            </div>
+            <div class="hse-tracker-kpi-card purple">
+                <div class="hse-kpi-icon-circle">📈</div>
+                <div class="hse-kpi-info">
+                    <span class="hse-kpi-label">Tỷ Lệ Hoàn Thành / 改善率</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-rate">0.0%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Row 2: Filter Bar -->
+        <section class="hse-tracker-filter-bar">
+            <div class="hse-filter-group">
+                <label for="hse-tracker-month-select">📅 THÁNG / 月份</label>
+                <select id="hse-tracker-month-select">
+                    <option value="all">🌟 Tất cả các tháng / 全部月份</option>
+                </select>
+            </div>
+            <div class="hse-filter-group">
+                <label for="hse-tracker-dept-select">🏢 BỘ PHẬN / 责任部门</label>
+                <select id="hse-tracker-dept-select">
+                    <option value="all">🏢 Tất cả bộ phận / 全部部门</option>
+                </select>
+            </div>
+            <div class="hse-filter-group">
+                <label for="hse-tracker-status-select">⚡ TRẠNG THÁI / 状态</label>
+                <select id="hse-tracker-status-select">
+                    <option value="all">⚡ Tất cả trạng thái / 全部</option>
+                    <option value="pending">⚠️ Chờ xử lý / 待处理</option>
+                    <option value="improved">✓ Đã cải thiện / 已改善</option>
+                </select>
+            </div>
+            <div class="hse-filter-group">
+                <label for="hse-tracker-search-inp">🔍 TÌM KIẾM / 搜索</label>
+                <input type="text" id="hse-tracker-search-inp" placeholder="Tìm theo mã sự cố (DEF-202609-01), nội dung tiếng Trung / tiếng Việt..." />
+            </div>
+        </section>
+
+        <!-- Row 3: Action Toolbar -->
+        <section class="hse-tracker-toolbar">
+            <div class="hse-toolbar-left">
+                <span class="hse-defects-counter" id="hse-defects-counter-label">Hiển thị 0 sự cố / 共有 0 条缺陷记录</span>
+                <div class="hse-view-switch">
+                    <button type="button" class="hse-view-btn active" id="hse-view-cards-btn" title="Chế độ xem dạng lưới thẻ trực quan">🔲 Lưới Thẻ / 卡片</button>
+                    <button type="button" class="hse-view-btn" id="hse-view-table-btn" title="Chế độ xem dạng bảng danh sách">📋 Bảng / 列表</button>
+                </div>
+            </div>
+            <div class="hse-toolbar-right">
+                <button type="button" class="hse-btn-action excel-all" id="hse-btn-excel-all" title="Xuất toàn bộ dữ liệu qua tất cả các tháng ra file Excel chuyên nghiệp kèm Dashboard và các Sheet bộ phận">
+                    📊 Xuất Excel Tổng Thể (Tất cả các tháng)
+                </button>
+                <button type="button" class="hse-btn-action excel-filter" id="hse-btn-excel-filter" title="Xuất các sự cố đang hiển thị theo bộ lọc ra file Excel">
+                    📥 Xuất Excel Theo Bộ Lọc
+                </button>
+            </div>
+        </section>
+
+        <!-- Row 4: Grid or Table Container -->
+        <section id="hse-tracker-cards-root" class="hse-defects-grid"></section>
+        <section id="hse-tracker-table-root" style="display: none;"></section>
+
+        <!-- Empty State -->
+        <div id="hse-tracker-empty" style="display: none; text-align: center; padding: 60px 20px; background: #ffffff; border-radius: 14px; border: 1.5px dashed #cbd5e1;">
+            <div style="font-size: 48px; margin-bottom: 8px;">🎯</div>
+            <h3 style="margin: 0 0 6px; font-size: 16px; font-weight: 700; color: #1e293b;">Không tìm thấy sự cố nào phù hợp</h3>
+            <p style="margin: 0; font-size: 13px; color: #64748b;">Vui lòng điều chỉnh lại bộ lọc tháng, bộ phận hoặc từ khóa tìm kiếm.</p>
+        </div>
+    </main>
+
+    <!-- Detail Modal -->
+    <div id="hse-tracker-detail-modal" class="hse-modal-backdrop" style="display: none;">
+        <div class="hse-modal-box">
+            <header class="hse-modal-header">
+                <div>
+                    <h3 id="modal-defect-title">Chi Tiết Sự Cố</h3>
+                    <div style="display: flex; gap: 6px; margin-top: 4px;">
+                        <span id="modal-defect-code-badge" style="font-family: monospace; font-size: 11.5px; font-weight: 800; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;"></span>
+                        <span id="modal-defect-dept-badge" style="font-size: 11.5px; font-weight: 700; background: #eff6ff; color: #1e40af; padding: 2px 6px; border-radius: 4px;"></span>
+                        <span id="modal-defect-category" style="font-size: 11.5px; color: #64748b; padding: 2px 6px;"></span>
+                    </div>
+                </div>
+                <button type="button" class="hse-modal-close" id="modal-close-btn">&times;</button>
+            </header>
+
+            <div class="hse-modal-body">
+                <!-- Dual Photos Comparison -->
+                <div class="hse-modal-photos-grid">
+                    <div class="hse-modal-photo-slot">
+                        <h5>📸 Ảnh Hiện Trường Vi Phạm (整改前)</h5>
+                        <div class="hse-modal-photo-preview">
+                            <img id="modal-photo-before" src="" alt="Ảnh trước" style="display: none;">
+                            <div id="modal-no-photo-before" style="color: #94a3b8; font-size: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <span style="font-size: 24px;">📸</span>
+                                <span>(Không có ảnh trước)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hse-modal-photo-slot">
+                        <h5>📸 Ảnh Sau Cải Thiện (整改后)</h5>
+                        <div class="hse-modal-photo-preview">
+                            <img id="modal-photo-after" src="" alt="Ảnh sau" style="display: none;">
+                            <div id="modal-no-photo-after" style="color: #94a3b8; font-size: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <span style="font-size: 24px;">📸</span>
+                                <span>(Chưa có ảnh sau cải thiện)</span>
+                            </div>
+                        </div>
+                        <label style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; background: #f0fdf4; color: #166534; border: 1px dashed #86efac; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 4px;">
+                            📤 Tải / Đổi ảnh sau cải thiện
+                            <input type="file" id="modal-upload-after-inp" accept="image/jpeg,image/png,image/webp" style="display: none;">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Descriptions -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;">
+                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 4px;">MÔ TẢ CHI TIẾT (TIẾNG TRUNG · 详细描述):</div>
+                    <div id="modal-defect-zh" style="font-size: 13.5px; font-weight: 600; color: #0f172a; line-height: 1.45; margin-bottom: 10px;"></div>
+
+                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 4px;">MÔ TẢ VẤN ĐỀ (TIẾNG VIỆT):</div>
+                    <div id="modal-defect-vn" style="font-size: 13px; font-style: italic; color: #334155; line-height: 1.4;"></div>
+                </div>
+
+                <!-- Status & Notes Form -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">Trạng Thái Cải Thiện *</label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700;">
+                            <input type="checkbox" id="modal-status-chk" style="width: 18px; height: 18px;">
+                            <span style="color: #16a34a;">✓ ĐÃ CẢI THIỆN / 已改善</span>
+                        </label>
+                    </div>
+                    <div>
+                        <label for="modal-improve-date" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">Ngày Hoàn Thành (改善日期)</label>
+                        <input type="text" id="modal-improve-date" style="width: 100%; height: 40px; padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;" placeholder="YYYY-MM-DD hoặc YYYY-MM-DD HH:mm">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="modal-note-inp" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">Ghi Chú & Đối Sách Khắc Phục (备注与改善对策)</label>
+                    <textarea id="modal-note-inp" rows="3" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px; font-family: inherit;" placeholder="Nhập biện pháp khắc phục, đối sách an toàn..."></textarea>
+                </div>
+            </div>
+
+            <footer class="hse-modal-footer">
+                <button type="button" class="hse-modal-btn-cancel" id="modal-cancel-btn">Đóng</button>
+                <button type="button" class="hse-modal-btn-save" id="modal-save-btn">💾 Lưu & Cập Nhật</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
     <!-- LEGAL CHEMICAL LOOKUP COMMAND CENTER (#legal-lookup-view)    -->
     <!-- ============================================================ -->
     <main id="legal-lookup-view" class="legal-command-center hidden">
@@ -5875,6 +6075,7 @@
     <script src="vip_editor.js"></script>
     <script src="ai_studio.js"></script>
     <script src="hse_studio.js"></script>
+    <script src="hse_defect_tracker.js"></script>
     <script src="legal_lookup.js"></script>
     <script src="monthly_inventory.js"></script>
     <script src="libs/chart.umd.min.js"></script>

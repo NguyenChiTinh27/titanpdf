@@ -1045,3 +1045,102 @@ def drive_config_endpoint(cfg: DriveConfigRequest):
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return {"success": True, "message": "Đã lưu cài đặt Google Drive."}
+
+
+# =============================================================================
+# DEFECT TRACKER APIS (/api/hse/defects/* & /api/hse/defect_image/*)
+# =============================================================================
+
+@hse_router.get("/defects")
+def get_defects_endpoint(
+    month: Optional[str] = None,
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None
+):
+    from core.hse_defect_tracker import DefectAggregatorService
+    return DefectAggregatorService.aggregate_all_defects(
+        month_filter=month,
+        dept_filter=department,
+        status_filter=status,
+        search_query=search
+    )
+
+
+@hse_router.post("/defects/update")
+def update_defect_endpoint(payload: Dict[str, Any]):
+    from core.hse_defect_tracker import DefectAggregatorService, DefectUpdatePayload
+    p = DefectUpdatePayload(**payload)
+    return DefectAggregatorService.update_defect(p)
+
+
+@hse_router.post("/defects/sync_gas")
+@hse_router.get("/defects/sync_gas")
+def sync_defects_gas_endpoint():
+    from core.hse_defect_tracker import DefectAggregatorService
+    return DefectAggregatorService.sync_with_gas()
+
+
+@hse_router.get("/defects/export_master_excel")
+@hse_router.post("/defects/export_master_excel")
+async def export_master_excel_endpoint(
+    request: Request,
+    all: bool = True,
+    month: Optional[str] = None,
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None
+):
+    from core.hse_defect_tracker import DefectAggregatorService, MasterHSEExcelExporter
+
+    # If filtered export requested
+    if not all and (month or department or status or search):
+        data = DefectAggregatorService.aggregate_all_defects(
+            month_filter=month,
+            dept_filter=department,
+            status_filter=status,
+            search_query=search
+        )
+        defects = data["defects"]
+        suffix = f"_{month}" if month and month != "all" else "_Filtered"
+    else:
+        data = DefectAggregatorService.aggregate_all_defects()
+        defects = data["defects"]
+        suffix = "_All_Months"
+
+    exporter = MasterHSEExcelExporter()
+    excel_bytes = exporter.export_master_bytes(defects)
+
+    filename = f"Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty{suffix}.xlsx"
+    quoted_filename = urllib.parse.quote(filename)
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quoted_filename}',
+        "Access-Control-Expose-Headers": "Content-Disposition"
+    }
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers
+    )
+
+
+@hse_router.get("/defect_image/{year_month}/{filename}")
+def get_defect_image_endpoint(year_month: str, filename: str):
+    # 1. Check extracted images baseline
+    p1 = Path(BASE_DIR) / "core" / "data" / "hse" / "extracted_images" / filename
+    if p1.exists():
+        return FileResponse(p1, media_type="image/jpeg")
+
+    # 2. Check storage hierarchy
+    root = HSEStorageManager.get_storage_root()
+    p2 = root / year_month / "Hinh_Anh_Hien_Truong" / filename
+    if p2.exists():
+        return FileResponse(p2, media_type="image/jpeg")
+
+    p3 = Path(DATA_DIR) / "data" / "HSE_ZhanChen_Storage" / year_month / "Hinh_Anh_Hien_Truong" / filename
+    if p3.exists():
+        return FileResponse(p3, media_type="image/jpeg")
+
+    raise HTTPException(status_code=404, detail="Ảnh sự cố không tồn tại.")
+
