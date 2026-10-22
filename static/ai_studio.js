@@ -1114,10 +1114,16 @@ async function runMsdsAnalysis() {
             const chemObj = data.data || { chemical_id: savedCode, product_name: savedName };
 
             // Tự động đẩy file gốc lên Google Drive & đồng bộ 2 chiều vào Google Sheets qua GAS Web App
-            if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+            if ((window.cilSync && window.cilSync.gasUrl) || (window.MsdsGasSync && window.MsdsGasSync.getUrl())) {
                 try {
                     const fileBase64 = await readFileAsBase64(file);
-                    const gasResult = await window.MsdsGasSync.upsertChemical(chemObj, fileBase64, file.name, file.type);
+                    let gasResult = null;
+                    if (window.cilSync && window.cilSync.gasUrl) {
+                        const savedItem = await window.cilSync.saveChemical(chemObj, file);
+                        gasResult = { item: savedItem };
+                    } else {
+                        gasResult = await window.MsdsGasSync.upsertChemical(chemObj, fileBase64, file.name, file.type);
+                    }
                     if (gasResult && gasResult.item) {
                         if (gasResult.item.drive_view_url) chemObj.drive_view_url = gasResult.item.drive_view_url;
                         if (gasResult.item.drive_download_url) chemObj.drive_download_url = gasResult.item.drive_download_url;
@@ -1490,6 +1496,480 @@ function readFileAsBase64(file) {
         reader.readAsDataURL(file);
     });
 }
+
+// ==============================================================================
+// CILCloudSync: CONTINUOUS 2-WAY SYNC FOR MSDS & SỔ CIL WITH GOOGLE SHEETS & DRIVE
+// ==============================================================================
+class CILCloudSync {
+  constructor({ gasUrl, token, onDataUpdated, onSyncStatusChange } = {}) {
+    this.gasUrl = gasUrl || (localStorage.getItem("msds_gas_url") || "").trim();
+    this.token = token || (localStorage.getItem("msds_gas_token") || "LUV_PDF_SYNC_KEY_2026").trim();
+    this.onDataUpdated = onDataUpdated;           // Callback render lại bảng MSDS & CIL
+    this.onSyncStatusChange = onSyncStatusChange; // Callback đổi trạng thái nút "Đã đồng bộ Drive"
+    this.localVersion = Number(localStorage.getItem('cil_sync_version') || localStorage.getItem('luv_msds_version') || 0);
+    this.cacheKey = 'cil_records_cache';
+    this.queueKey = 'cil_sync_outbox';
+    this.isSyncing = false;
+  }
+
+  // 1. Khởi tạo: Nạp cache tức thì -> Kéo dữ liệu mới từ Sheet -> Bật vòng lặp đồng bộ liên tục
+  async init(pollIntervalMs = 15000) {
+    const cached = this.getLocalRecords();
+    if (cached.length > 0 && this.onDataUpdated) {
+      this.onDataUpdated(cached, this.getFolderUrl());
+    }
+
+    await this.flushOutbox();
+    if (this.gasUrl) {
+      await this.pullFromCloud(true);
+    }
+
+    // Đồng bộ định kỳ ngầm
+    if (this.timer) clearInterval(this.timer);
+    this.timer = setInterval(() => this.heartbeat(), pollIntervalMs);
+
+    // Đồng bộ ngay khi người dùng quay lại tab hoặc có mạng trở lại
+    window.addEventListener('online', () => this.flushOutbox());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') this.heartbeat();
+    });
+  }
+
+  getLocalRecords() {
+    try {
+      const primary = localStorage.getItem(this.cacheKey);
+      if (primary) return JSON.parse(primary);
+      const secondary = localStorage.getItem('luv_msds_cache');
+      if (secondary) return JSON.parse(secondary);
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveLocalRecords(records, version) {
+    try {
+      localStorage.setItem(this.cacheKey, JSON.stringify(records || []));
+      localStorage.setItem('luv_msds_cache', JSON.stringify(records || []));
+    } catch (_) {}
+    if (version !== undefined && version !== null) {
+      this.localVersion = Number(version);
+      localStorage.setItem('cil_sync_version', String(version));
+      localStorage.setItem('luv_msds_version', String(version));
+    }
+  }
+
+  getFolderUrl() {
+    return localStorage.getItem("msds_gas_folder_url") || "https://drive.google.com/drive/u/0/my-drive";
+  }
+
+  setFolderUrl(url) {
+    if (url) localStorage.setItem("msds_gas_folder_url", url);
+  }
+
+  // 2. Kiểm tra nhẹ (Ping) xem Google Sheet có thay đổi mới không
+  async heartbeat() {
+    this.gasUrl = (localStorage.getItem("msds_gas_url") || this.gasUrl || "").trim();
+    if (this.isSyncing || !navigator.onLine || !this.gasUrl) return;
+    await this.flushOutbox();
+    try {
+      const res = await fetch(`${this.gasUrl}?action=ping&t=${Date.now()}`, {
+        method: "GET",
+        mode: "cors",
+        redirect: "follow"
+      });
+      if (!res.ok) return;
+      const text = await res.text();
+      if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("<HTML")) {
+        console.warn("[CIL Sync] Ping nhận HTML login");
+        return;
+      }
+      const json = JSON.parse(text);
+      if ((json.status === 'ok' || json.success) && Number(json.version) > this.localVersion) {
+        console.log(`[CIL Sync] Phiên bản Google Sheets mới (${json.version} > ${this.localVersion}), đồng bộ về...`);
+        await this.pullFromCloud(true);
+      }
+    } catch (err) {
+      console.warn('[CIL Sync] Ping tạm gián đoạn:', err.message);
+    }
+  }
+
+  // 3. Tải toàn bộ danh sách từ Google Sheet về Render App
+  async pullFromCloud(forceRender = false) {
+    this.gasUrl = (localStorage.getItem("msds_gas_url") || this.gasUrl || "").trim();
+    if (!this.gasUrl) return this.getLocalRecords();
+    try {
+      this.setStatus('syncing', 'Đang đồng bộ Drive...');
+      const res = await fetch(`${this.gasUrl}?action=list&t=${Date.now()}`, {
+        method: "GET",
+        mode: "cors",
+        redirect: "follow"
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("<HTML")) {
+        throw new Error("Google Apps Script phản hồi HTML/Yêu cầu quyền truy cập. Vui lòng Deploy Web App với quyền: 'Anyone' (Bất kỳ ai).");
+      }
+      const json = JSON.parse(text);
+
+      if (json.status === 'ok' || json.success) {
+        const rawItems = Array.isArray(json.data) ? json.data : (Array.isArray(json.chemicals) ? json.chemicals : []);
+        if (json.folderUrl) {
+          this.setFolderUrl(json.folderUrl);
+        }
+
+        // Auto-migration nếu Google Sheet đang trống mà máy tính đang có hóa chất cục bộ
+        const localCurrent = this.getLocalRecords();
+        if (rawItems.length === 0 && localCurrent && localCurrent.length > 0) {
+          console.log("[CIL Sync] Google Sheet trống, kích hoạt Auto-Migration tự động đẩy danh mục cục bộ lên đám mây...");
+          this.setStatus('syncing', 'Tự động di trú dữ liệu lên Google Sheets...');
+          await this.syncAllExisting(localCurrent);
+          this.setStatus('synced', 'Đã đồng bộ Drive');
+          return localCurrent;
+        }
+
+        const normalizedList = rawItems.map(it => this.normalizeItem(it));
+        this.saveLocalRecords(normalizedList, json.version || Date.now());
+        if (forceRender && this.onDataUpdated) {
+          this.onDataUpdated(normalizedList, json.folderUrl || this.getFolderUrl());
+        }
+        this.setStatus('synced', 'Đã đồng bộ Drive');
+        return normalizedList;
+      }
+    } catch (err) {
+      this.setStatus('offline', 'Lưu tạm (Chờ mạng)');
+      console.error('[CIL Sync] Lỗi tải dữ liệu từ Google Sheet:', err);
+    }
+    return this.getLocalRecords();
+  }
+
+  normalizeItem(item) {
+    if (!item || typeof item !== "object") return {};
+    const id = item.id || item.chemical_id || item.chem_id || item.product_code || ("CHEM_" + Date.now());
+    const product_code = item.product_code || item.chem_id || item.chemical_id || id;
+    const chemical_name = item.chemical_name || item.product_name_vi || item.product_name || item.product_name_original || product_code;
+    const rawType = String(item.category || item.item_type || "").toLowerCase();
+    const category = (rawType.includes("finish") || rawType.includes("thành phẩm")) ? "Thành phẩm" : "Nguyên liệu";
+    const usage = item.usage || item.intended_use || item.storage_condition || "Sử dụng trong sản xuất công nghiệp";
+    const updated_date = item.updated_date || item.revision_date || item.updated_at || item.created_at || new Date().toISOString().slice(0, 10);
+    const cas_number = item.cas_number || item.cas_primary || item.cas_numbers || "";
+    const supplier = item.supplier || item.manufacturer_supplier || item.manufacturer || "";
+
+    let ghs_classifications = [];
+    if (Array.isArray(item.ghs_classifications)) {
+      ghs_classifications = item.ghs_classifications;
+    } else if (Array.isArray(item.ghs_codes)) {
+      ghs_classifications = item.ghs_codes;
+    } else if (typeof item.ghs_symbols === "string") {
+      ghs_classifications = item.ghs_symbols.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+    }
+    if (ghs_classifications.length === 0) ghs_classifications = ["NON DG"];
+
+    const drive_file_id = item.drive_file_id || "";
+    const drive_view_url = item.drive_view_url || (drive_file_id ? `https://drive.google.com/file/d/${drive_file_id}/preview` : "");
+    const drive_download_url = item.drive_download_url || (drive_file_id ? `https://drive.google.com/uc?export=download&id=${drive_file_id}` : "");
+
+    return {
+      id,
+      product_code,
+      category,
+      chemical_name,
+      usage,
+      updated_date,
+      cas_number,
+      legal_flags: Array.isArray(item.legal_flags) ? item.legal_flags : [],
+      supplier,
+      ghs_classifications,
+      ghs_16_sections: item.ghs_16_sections || item.composition || {},
+      file_name: item.file_name || item.source_file || item.source_file_name || (product_code ? `MSDS-${product_code}.pdf` : ""),
+      drive_file_id,
+      drive_view_url,
+      drive_download_url,
+      last_synced_at: item.last_synced_at || new Date().toISOString(),
+
+      // Aliases
+      chemical_id: id,
+      chem_id: id,
+      product_name: chemical_name,
+      product_name_vi: chemical_name,
+      product_name_original: supplier || chemical_name,
+      item_type: category === "Thành phẩm" ? "finished_product" : "raw_material",
+      intended_use: usage,
+      revision_date: updated_date,
+      cas_primary: cas_number,
+      cas_numbers: cas_number,
+      manufacturer_supplier: supplier,
+      manufacturer: supplier,
+      ghs_codes: ghs_classifications,
+      ghs_symbols: ghs_classifications.join(", "),
+      source_file: item.file_name || item.source_file || (product_code ? `MSDS-${product_code}.pdf` : "")
+    };
+  }
+
+  // 4. Lưu hóa chất mới / Cập nhật sau khi AI DeepSeek bóc tách + Upload file MSDS gốc lên Drive
+  async saveChemical(item, fileObj = null) {
+    this.gasUrl = (localStorage.getItem("msds_gas_url") || this.gasUrl || "").trim();
+    this.token = (localStorage.getItem("msds_gas_token") || this.token || "LUV_PDF_SYNC_KEY_2026").trim();
+    this.setStatus('syncing', 'Đang lưu lên Drive & Sheet...');
+
+    const normItem = this.normalizeItem(item);
+
+    // Cập nhật ngay trên giao diện (Optimistic UI)
+    const records = this.getLocalRecords();
+    const itemId = String(normItem.id || "").trim();
+    const itemCode = String(normItem.product_code || "").trim().toUpperCase();
+
+    const idx = records.findIndex(
+      r => (itemId && String(r.id || r.chemical_id || "").trim() === itemId) ||
+           (itemCode && String(r.product_code || "").trim().toUpperCase() === itemCode)
+    );
+    if (idx >= 0) records[idx] = { ...records[idx], ...normItem };
+    else records.unshift(normItem);
+    this.saveLocalRecords(records);
+    if (this.onDataUpdated) this.onDataUpdated(records, this.getFolderUrl());
+
+    // Chuyển file MSDS gốc (.pdf, .doc, .docx) sang Base64 nếu có đính kèm
+    let filePayload = {};
+    if (fileObj) {
+      if (typeof fileObj === "string" && fileObj.startsWith("data:")) {
+        filePayload = {
+          fileBase64: fileObj,
+          fileName: normItem.file_name || (itemCode ? `MSDS-${itemCode}.pdf` : `MSDS_${Date.now()}.pdf`),
+          mimeType: "application/octet-stream"
+        };
+      } else if (typeof fileObj === "object" && fileObj.name) {
+        const base64 = await this.fileToBase64(fileObj);
+        filePayload = {
+          fileBase64: base64,
+          fileName: fileObj.name,
+          mimeType: fileObj.type || 'application/octet-stream'
+        };
+      }
+    }
+
+    const requestBody = {
+      token: this.token,
+      action: 'upsert',
+      item: normItem,
+      ...filePayload
+    };
+
+    if (!this.gasUrl) {
+      this.enqueueOutbox(requestBody);
+      this.setStatus('pending', 'Chờ đồng bộ Drive');
+      return normItem;
+    }
+
+    try {
+      const res = await fetch(this.gasUrl, {
+        method: 'POST',
+        mode: 'cors',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(requestBody)
+      });
+      const text = await res.text();
+      if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("<HTML")) {
+        throw new Error("GAS phản hồi HTML (Yêu cầu quyền truy cập).");
+      }
+      const json = JSON.parse(text);
+
+      if (json.status === 'ok' || json.success) {
+        const savedItem = json.item || normItem;
+        if (json.drive_view_url) savedItem.drive_view_url = json.drive_view_url;
+        if (json.drive_download_url) savedItem.drive_download_url = json.drive_download_url;
+        if (json.drive_file_id) savedItem.drive_file_id = json.drive_file_id;
+
+        const curList = this.getLocalRecords();
+        const fIdx = curList.findIndex(r => (savedItem.id && r.id === savedItem.id) || (savedItem.product_code && r.product_code === savedItem.product_code));
+        if (fIdx >= 0) curList[fIdx] = { ...curList[fIdx], ...savedItem };
+        this.saveLocalRecords(curList, json.version || this.localVersion);
+        if (this.onDataUpdated) this.onDataUpdated(curList, this.getFolderUrl());
+
+        this.setStatus('synced', 'Đã đồng bộ Drive');
+        return savedItem;
+      } else {
+        throw new Error(json.message || json.error || "Lỗi lưu GAS");
+      }
+    } catch (err) {
+      console.warn("[CIL Sync] Lỗi mạng khi đẩy lên GAS, đưa vào hàng đợi outbox:", err);
+      this.enqueueOutbox(requestBody);
+      this.setStatus('pending', 'Lưu tạm (Chờ mạng)');
+      return normItem;
+    }
+  }
+
+  // 5. Đồng bộ toàn bộ hóa chất hiện có lên Google Sheet lần đầu
+  async syncAllExisting(items) {
+    if (!items || !items.length) return { status: 'ok', count: 0 };
+    this.gasUrl = (localStorage.getItem("msds_gas_url") || this.gasUrl || "").trim();
+    this.token = (localStorage.getItem("msds_gas_token") || this.token || "LUV_PDF_SYNC_KEY_2026").trim();
+    this.setStatus('syncing', 'Đang đồng bộ toàn bộ sổ CIL...');
+    const normList = items.map(it => this.normalizeItem(it));
+    const requestBody = {
+      token: this.token,
+      action: 'bulk_sync',
+      items: normList
+    };
+    if (!this.gasUrl) {
+      this.enqueueOutbox(requestBody);
+      this.setStatus('pending', 'Chờ đồng bộ Drive');
+      return { status: 'queued', count: items.length };
+    }
+    try {
+      const res = await fetch(this.gasUrl, {
+        method: 'POST',
+        mode: 'cors',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(requestBody)
+      });
+      const text = await res.text();
+      const json = JSON.parse(text);
+      if (json.status === 'ok' || json.success) {
+        this.saveLocalRecords(normList, json.version || Date.now());
+        this.setStatus('synced', 'Đã đồng bộ Drive');
+      }
+      return json;
+    } catch (err) {
+      this.enqueueOutbox(requestBody);
+      this.setStatus('pending', 'Lưu tạm (Chờ mạng)');
+      return { status: 'queued', error: err.message };
+    }
+  }
+
+  async deleteChemical(id, productCode, deleteDriveFile = true) {
+    this.gasUrl = (localStorage.getItem("msds_gas_url") || this.gasUrl || "").trim();
+    this.token = (localStorage.getItem("msds_gas_token") || this.token || "LUV_PDF_SYNC_KEY_2026").trim();
+    this.setStatus('syncing', 'Đang xóa trên Drive...');
+    const curList = this.getLocalRecords();
+    const cleanId = String(id || productCode || "").trim().toUpperCase();
+    const filtered = curList.filter(r => String(r.id || "").trim().toUpperCase() !== cleanId && String(r.product_code || "").trim().toUpperCase() !== cleanId);
+    this.saveLocalRecords(filtered);
+    if (this.onDataUpdated) this.onDataUpdated(filtered, this.getFolderUrl());
+
+    const requestBody = {
+      token: this.token,
+      action: 'delete',
+      id: id || productCode,
+      product_code: productCode || id,
+      deleteDriveFile: deleteDriveFile !== false
+    };
+
+    if (!this.gasUrl) {
+      this.enqueueOutbox(requestBody);
+      return { status: 'queued' };
+    }
+
+    try {
+      const res = await fetch(this.gasUrl, {
+        method: 'POST',
+        mode: 'cors',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(requestBody)
+      });
+      const json = await res.json();
+      this.setStatus('synced', 'Đã đồng bộ Drive');
+      return json;
+    } catch (err) {
+      this.enqueueOutbox(requestBody);
+      this.setStatus('pending', 'Lưu tạm (Chờ mạng)');
+      return { status: 'queued', error: err.message };
+    }
+  }
+
+  enqueueOutbox(payload) {
+    const queue = JSON.parse(localStorage.getItem(this.queueKey) || '[]');
+    queue.push(payload);
+    localStorage.setItem(this.queueKey, JSON.stringify(queue));
+  }
+
+  async flushOutbox() {
+    this.gasUrl = (localStorage.getItem("msds_gas_url") || this.gasUrl || "").trim();
+    const queue = JSON.parse(localStorage.getItem(this.queueKey) || '[]');
+    if (queue.length === 0 || this.isSyncing || !this.gasUrl || !navigator.onLine) return;
+
+    this.isSyncing = true;
+    const remaining = [];
+    for (const payload of queue) {
+      try {
+        const res = await fetch(this.gasUrl, {
+          method: 'POST',
+          mode: 'cors',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        const text = await res.text();
+        const json = JSON.parse(text);
+        if (json.status !== 'ok' && !json.success) remaining.push(payload);
+      } catch {
+        remaining.push(payload);
+      }
+    }
+    localStorage.setItem(this.queueKey, JSON.stringify(remaining));
+    this.isSyncing = false;
+    if (remaining.length === 0) {
+      this.setStatus('synced', 'Đã đồng bộ Drive');
+    } else {
+      this.setStatus('pending', `Chờ đồng bộ Drive (${remaining.length})`);
+    }
+  }
+
+  fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  setStatus(state, text) {
+    if (this.onSyncStatusChange) this.onSyncStatusChange(state, text);
+  }
+}
+window.CILCloudSync = CILCloudSync;
+
+// Global instance of CILCloudSync
+const cilSync = new CILCloudSync({
+    gasUrl: localStorage.getItem("msds_gas_url") || "",
+    token: localStorage.getItem("msds_gas_token") || "LUV_PDF_SYNC_KEY_2026",
+    onDataUpdated: (records, folderUrl) => {
+        ALL_MSDS_CHEMICALS_CACHE = records;
+        try {
+            localStorage.setItem("luv_msds_cache", JSON.stringify(records));
+        } catch (_) {}
+        updateMsdsKpiStats(records);
+        const activeSearch = (document.getElementById("msds-search-input")?.value || "").trim();
+        renderMsdsFilteredTable(records, activeSearch);
+        if (folderUrl) {
+            localStorage.setItem("msds_gas_folder_url", folderUrl);
+        }
+    },
+    onSyncStatusChange: (state, text) => {
+        const badge = document.getElementById("msds-cloud-sync-status");
+        if (!badge) return;
+        if (state === "syncing") {
+            badge.style.background = "#eff6ff";
+            badge.style.color = "#1d4ed8";
+            badge.style.borderColor = "#93c5fd";
+            badge.innerHTML = `<span style="display:inline-block; animation:spin 1s linear infinite; margin-right:4px;">⏳</span> ${text || "Đang đồng bộ Drive..."}`;
+        } else if (state === "synced") {
+            badge.style.background = "#ecfdf5";
+            badge.style.color = "#065f46";
+            badge.style.borderColor = "#a7f3d0";
+            badge.innerHTML = `☁️ ${text || "Đã đồng bộ Drive"}`;
+        } else if (state === "pending" || state === "offline" || state === "error") {
+            badge.style.background = "#fff7ed";
+            badge.style.color = "#c2410c";
+            badge.style.borderColor = "#fdba74";
+            badge.innerHTML = `⚠️ ${text || "Lưu tạm (Chờ mạng)"}`;
+        }
+    }
+});
+window.cilSync = cilSync;
 
 // ==============================================================================
 // MSDS & CIL CONTINUOUS 2-WAY GOOGLE SHEETS & DRIVE SYNC ENGINE
@@ -1906,8 +2386,12 @@ window.MsdsGasSync = MsdsGasSync;
 
 if (!window._msdsGasSyncIntervalStarted) {
     window._msdsGasSyncIntervalStarted = true;
+    if (window.cilSync) {
+        window.cilSync.init(15000);
+    }
     setInterval(() => {
-        if (window.MsdsGasSync) window.MsdsGasSync.checkHeartbeat();
+        if (window.cilSync) window.cilSync.heartbeat();
+        else if (window.MsdsGasSync) window.MsdsGasSync.checkHeartbeat();
     }, 15000);
 
     document.addEventListener("visibilitychange", () => {

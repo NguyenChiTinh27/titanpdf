@@ -68,6 +68,16 @@ function incrementCilVersion() {
 }
 
 /**
+ * 16 TIÊU ĐỀ CỘT CHUẨN GOOGLE SHEETS (MSDS_CIL_DB / MSDS_CIL)
+ */
+var CIL_16_HEADERS = [
+  "id", "product_code", "category", "chemical_name", "usage",
+  "updated_date", "cas_number", "legal_flags", "supplier",
+  "ghs_classifications", "ghs_16_sections", "file_name",
+  "drive_file_id", "drive_view_url", "drive_download_url", "last_synced_at"
+];
+
+/**
  * 38 TIÊU ĐỀ CỘT CHUẨN ĐỒNG BỘ HAI CHIỀU (SINGLE SOURCE OF TRUTH - SSOT)
  */
 var CIL_HEADERS = [
@@ -455,19 +465,119 @@ function handleGetAllChemicals() {
     };
   }
 
-  var values = sheet.getRange(2, 1, lastRow - 1, Math.min(lastCol, CIL_HEADERS.length)).getValues();
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var is16ColSchema = (sheet.getName() === "MSDS_CIL" || sheet.getName() === "MSDS_CIL_DB" || headers.indexOf("chemical_name") > -1 || (headers.length > 0 && headers[0] === "id"));
+  var values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   var chemicals = [];
+  var latestTimestamp = 0;
+
+  var headerMap = {};
+  for (var h = 0; h < headers.length; h++) {
+    var hName = String(headers[h] || "").trim().toLowerCase();
+    if (hName) headerMap[hName] = h;
+  }
+
+  function getVal(r, name, fallback) {
+    var idx = headerMap[name.toLowerCase()];
+    if (idx !== undefined && r[idx] !== undefined && r[idx] !== null && String(r[idx]).trim() !== "") {
+      return r[idx];
+    }
+    return fallback !== undefined ? fallback : "";
+  }
 
   for (var i = 0; i < values.length; i++) {
     var r = values[i];
-    var ghsList = r[11] ? String(r[11]).split(/[,;]+/).map(function(s){return s.trim();}).filter(Boolean) : [];
-    if (ghsList.length === 0) ghsList = ["NON DG"];
+    if (!r[0] && !r[1]) continue;
 
-    var driveFileId = r[30] || "";
-    var driveViewUrl = r[31] || (driveFileId ? "https://drive.google.com/file/d/" + driveFileId + "/preview" : "");
-    var driveDownloadUrl = r[32] || (driveFileId ? "https://drive.google.com/uc?export=download&id=" + driveFileId : "");
+    var chemObj = {};
+    if (is16ColSchema) {
+      var id = String(getVal(r, "id", "") || getVal(r, "product_code", "") || ("CHEM_" + (i + 1))).trim();
+      var product_code = String(getVal(r, "product_code", id)).trim();
+      var category = String(getVal(r, "category", "Nguyên liệu")).trim();
+      var chemical_name = String(getVal(r, "chemical_name", product_code)).trim();
+      var usage = String(getVal(r, "usage", "Sử dụng trong sản xuất công nghiệp")).trim();
+      var updated_date = String(getVal(r, "updated_date", "")).trim();
+      var cas_number = String(getVal(r, "cas_number", "")).trim();
 
-    var chemObj = {
+      var rawLegal = getVal(r, "legal_flags", "[]");
+      var legal_flags = [];
+      try { legal_flags = typeof rawLegal === "string" ? JSON.parse(rawLegal) : rawLegal; } catch (_) { legal_flags = []; }
+
+      var supplier = String(getVal(r, "supplier", "")).trim();
+
+      var rawGhs = getVal(r, "ghs_classifications", "[]");
+      var ghs_classifications = [];
+      try {
+        ghs_classifications = typeof rawGhs === "string" ? (rawGhs.indexOf("[") > -1 ? JSON.parse(rawGhs) : rawGhs.split(/[,;]+/).map(function(s){return s.trim();}).filter(Boolean)) : rawGhs;
+      } catch (_) {
+        ghs_classifications = ["NON DG"];
+      }
+      if (!Array.isArray(ghs_classifications) || ghs_classifications.length === 0) ghs_classifications = ["NON DG"];
+
+      var raw16 = getVal(r, "ghs_16_sections", "{}");
+      var ghs_16_sections = {};
+      try { ghs_16_sections = typeof raw16 === "string" ? JSON.parse(raw16) : raw16; } catch (_) { ghs_16_sections = {}; }
+
+      var file_name = String(getVal(r, "file_name", "")).trim();
+      var drive_file_id = String(getVal(r, "drive_file_id", "")).trim();
+      var drive_view_url = String(getVal(r, "drive_view_url", "")).trim();
+      if (!drive_view_url && drive_file_id) drive_view_url = "https://drive.google.com/file/d/" + drive_file_id + "/view";
+      var drive_download_url = String(getVal(r, "drive_download_url", "")).trim();
+      if (!drive_download_url && drive_file_id) drive_download_url = "https://drive.google.com/uc?export=download&id=" + drive_file_id;
+      var last_synced_at = String(getVal(r, "last_synced_at", "")).trim() || new Date().toISOString();
+
+      var ts16 = new Date(last_synced_at).getTime();
+      if (ts16 && ts16 > latestTimestamp) latestTimestamp = ts16;
+
+      chemObj = {
+        id: id,
+        product_code: product_code,
+        category: category,
+        chemical_name: chemical_name,
+        usage: usage,
+        updated_date: updated_date,
+        cas_number: cas_number,
+        legal_flags: legal_flags,
+        supplier: supplier,
+        ghs_classifications: ghs_classifications,
+        ghs_16_sections: ghs_16_sections,
+        file_name: file_name,
+        drive_file_id: drive_file_id,
+        drive_view_url: drive_view_url,
+        drive_download_url: drive_download_url,
+        last_synced_at: last_synced_at,
+
+        chemical_id: id,
+        chem_id: id,
+        product_name: chemical_name,
+        product_name_vi: chemical_name,
+        product_name_original: supplier || chemical_name,
+        item_type: (category === "Thành phẩm" || category === "finished_product") ? "finished_product" : "raw_material",
+        intended_use: usage,
+        cas_primary: cas_number,
+        cas_numbers: cas_number,
+        manufacturer: supplier,
+        manufacturer_supplier: supplier,
+        ghs_codes: ghs_classifications,
+        ghs_symbols: ghs_classifications.join(", "),
+        source_file: file_name,
+        compositions_json: JSON.stringify(ghs_16_sections || {}),
+        sync_status: "synced",
+        created_at: updated_date,
+        updated_at: last_synced_at
+      };
+    } else {
+      var ghsList = r[11] ? String(r[11]).split(/[,;]+/).map(function(s){return s.trim();}).filter(Boolean) : [];
+      if (ghsList.length === 0) ghsList = ["NON DG"];
+
+      var driveFileId = r[30] || "";
+      var driveViewUrl = r[31] || (driveFileId ? "https://drive.google.com/file/d/" + driveFileId + "/preview" : "");
+      var driveDownloadUrl = r[32] || (driveFileId ? "https://drive.google.com/uc?export=download&id=" + driveFileId : "");
+      var syncTime = r[36] || r[35] || new Date().toISOString();
+      var ts38 = new Date(syncTime).getTime();
+      if (ts38 && ts38 > latestTimestamp) latestTimestamp = ts38;
+
+      chemObj = {
       // 16 TRƯỜNG CHUẨN HÓA THEO YÊU CẦU
       id: r[0] || r[1] || ("CHEM_" + (i + 1)),
       product_code: r[1] || r[0] || "",
@@ -658,6 +768,69 @@ function handleSaveChemical(chem) {
         rowIndexToUpdate = i + 2;
         break;
       }
+    }
+  }
+
+  var currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var is16Col = (sheet.getName() === "MSDS_CIL" || sheet.getName() === "MSDS_CIL_DB" || currentHeaders.indexOf("chemical_name") > -1 || (currentHeaders.length > 0 && currentHeaders[0] === "id"));
+
+  if (is16Col) {
+    var nowIso = new Date().toISOString();
+    chem.id = chem.id || chem.chemical_id || chem.product_code || ("CHEM_" + new Date().getTime());
+    chem.last_synced_at = nowIso;
+
+    var rowValues = CIL_16_HEADERS.map(function(h) {
+      var val = chem[h];
+      if (val === undefined) {
+        if (h === 'chemical_name') val = chem.product_name_vi || chem.product_name;
+        else if (h === 'supplier') val = chem.manufacturer || chem.manufacturer_supplier;
+        else if (h === 'cas_number') val = chem.cas_primary || chem.cas_numbers;
+        else if (h === 'category') val = (chem.item_type === 'finished_product' || chem.category === 'Thành phẩm') ? 'Thành phẩm' : 'Nguyên liệu';
+        else if (h === 'file_name') val = chem.source_file;
+      }
+      if (['legal_flags', 'ghs_classifications', 'ghs_16_sections'].indexOf(h) > -1) {
+        return (typeof val === 'object' && val !== null) ? JSON.stringify(val) : (val || '[]');
+      }
+      return (val !== undefined && val !== null) ? val : '';
+    });
+
+    if (rowIndexToUpdate > 1) {
+      existingRowValues = sheet.getRange(rowIndexToUpdate, 1, 1, CIL_16_HEADERS.length).getValues()[0];
+      if (!chem.drive_file_id && existingRowValues) {
+        var oldFileName = existingRowValues[11];
+        var oldFileId = existingRowValues[12];
+        var oldViewUrl = existingRowValues[13];
+        var oldDownUrl = existingRowValues[14];
+        if (oldFileId) {
+          chem.drive_file_id = oldFileId;
+          chem.drive_view_url = oldViewUrl;
+          chem.drive_download_url = oldDownUrl;
+          chem.file_name = oldFileName;
+          rowValues[11] = oldFileName;
+          rowValues[12] = oldFileId;
+          rowValues[13] = oldViewUrl;
+          rowValues[14] = oldDownUrl;
+        }
+      }
+      sheet.getRange(rowIndexToUpdate, 1, 1, CIL_16_HEADERS.length).setValues([rowValues]);
+      return {
+        status: "ok",
+        success: true,
+        action: "updated",
+        chemical_id: chemId,
+        rowIndex: rowIndexToUpdate,
+        message: "Đã cập nhật hóa chất '" + chemId + "' trên Google Sheet thành công."
+      };
+    } else {
+      sheet.appendRow(rowValues);
+      return {
+        status: "ok",
+        success: true,
+        action: "created",
+        chemical_id: chemId,
+        rowIndex: sheet.getLastRow(),
+        message: "Đã thêm mới hóa chất '" + chemId + "' vào Google Sheet thành công."
+      };
     }
   }
 
@@ -867,10 +1040,21 @@ function getOrCreateSheet(ss, sheetName) {
     throw new Error("Không thể khởi tạo hoặc mở Spreadsheet. Vui lòng kiểm tra quyền truy cập hoặc cấu hình SPREADSHEET_ID.");
   }
 
-  sheetName = sheetName || (typeof CONFIG !== 'undefined' && CONFIG.SHEET_NAME_CIL ? CONFIG.SHEET_NAME_CIL : "CIL_Chemical_Inventory");
-  var sheet = ss.getSheetByName(sheetName);
+  var targetName = sheetName || "MSDS_CIL";
+  var sheet = ss.getSheetByName(targetName);
+  if (!sheet && (targetName === "MSDS_CIL" || targetName === "CIL_Chemical_Inventory")) {
+    sheet = ss.getSheetByName("MSDS_CIL") || ss.getSheetByName("CIL_Chemical_Inventory");
+  }
+
   if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
+    sheet = ss.insertSheet(targetName);
+    var headers = (targetName === "MSDS_CIL" || targetName === "MSDS_CIL_DB") ? CIL_16_HEADERS : (targetName === (typeof CONFIG !== 'undefined' && CONFIG.SHEET_NAME_HSE ? CONFIG.SHEET_NAME_HSE : "HSE_Defect_Tracker") ? HSE_DEFECT_HEADERS : CIL_HEADERS);
+    sheet.appendRow(headers);
+    var hRange = sheet.getRange(1, 1, 1, headers.length);
+    hRange.setFontWeight("bold");
+    hRange.setBackground("#0f172a");
+    hRange.setFontColor("#f8fafc");
+    sheet.setFrozenRows(1);
   }
   return sheet;
 }
