@@ -4793,54 +4793,56 @@
     <!-- HSE MASTER DEFECT TRACKER WORKSPACE (#hse-tracker-view)       -->
     <!-- ============================================================ -->
     <main id="hse-tracker-view" class="hse-tracker-container hidden">
-        <!-- Header -->
-        <header class="hse-tracker-header">
-            <div class="hse-tracker-title-box">
-                <h1>
-                    <span>🎯</span>
-                    <span>TRUNG TÂM THEO DÕI & KHẮC PHỤC LỖI HSE</span>
-                    <span class="hse-tracker-badge-pill">TRACKER · 隐患追踪</span>
+        <!-- Header Branded Banner matching Excel Template -->
+        <header class="hse-tracker-banner-container" style="border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.08); margin-bottom: 16px;">
+            <div style="background: #1E3A8A; color: #FFFFFF; padding: 14px 20px; text-align: center;">
+                <h1 style="margin: 0; font-size: 19px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+                    BẢNG TỔNG HỢP LỖI HSE TOÀN CÔNG TY - 全公司HSE隐患跟踪汇总表
                 </h1>
-                <p>Hệ thống giám sát, tổng hợp và theo dõi khắc phục sự cố EHS toàn thời gian qua các đợt kiểm tra</p>
             </div>
-            <div style="display: flex; gap: 8px;">
-                <button type="button" class="hse-btn-action sync" id="hse-btn-sync-gas" title="Đồng bộ dữ liệu hai chiều với Google Apps Script Web App & Drive">
-                    ☁️ Đồng Bộ GAS / Drive
-                </button>
-                <button type="button" class="hse-btn-action" id="hse-btn-config-gas" title="Cài đặt URL kết nối Google Apps Script & Hướng dẫn Deploy" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #334155;">
-                    ⚙️ Cài Đặt GAS
-                </button>
+            <div style="background: #2563EB; color: #FFFFFF; padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <div style="font-size: 13.5px; font-weight: 600; letter-spacing: 0.3px;">
+                    CÔNG TY TNHH VISION NEW MATERIALS VIỆT NAM / 威逊新材料（越南）有限公司
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="hse-btn-action sync" id="hse-btn-sync-gas" title="Đồng bộ dữ liệu hai chiều với Google Apps Script Web App & Drive" style="background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                        ☁️ Đồng Bộ GAS / Drive
+                    </button>
+                    <button type="button" class="hse-btn-action" id="hse-btn-config-gas" title="Cài đặt URL kết nối Google Apps Script & Hướng dẫn Deploy" style="background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                        ⚙️ Cài Đặt GAS
+                    </button>
+                </div>
             </div>
         </header>
 
         <!-- Row 1: 4 KPI Cards -->
         <section class="hse-tracker-kpi-grid">
             <div class="hse-tracker-kpi-card blue">
-                <div class="hse-kpi-icon-circle">📋</div>
+                <div class="hse-kpi-icon-circle" style="background:#eff6ff; color:#1e40af;">📋</div>
                 <div class="hse-kpi-info">
-                    <span class="hse-kpi-label">Tổng Số Lỗi / 总缺陷数</span>
-                    <span class="hse-kpi-val" id="hse-kpi-val-total">0</span>
+                    <span class="hse-kpi-label">Tổng Số Lỗi Ghi Nhận / 总缺陷数</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-total" style="color:#1e3a8a;">0</span>
                 </div>
             </div>
-            <div class="hse-tracker-kpi-card green">
-                <div class="hse-kpi-icon-circle">✓</div>
+            <div class="hse-tracker-kpi-card orange" style="background:#fff7ed; border-color:#fed7aa;">
+                <div class="hse-kpi-icon-circle" style="background:#ffedd5; color:#9a3412;">⚠️</div>
                 <div class="hse-kpi-info">
-                    <span class="hse-kpi-label">Cải Thiện / 已改善</span>
-                    <span class="hse-kpi-val" id="hse-kpi-val-improved">0</span>
+                    <span class="hse-kpi-label" style="color:#9a3412; font-weight:700;">Chưa Cải Thiện / 未改善</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-pending" style="color:#9a3412; background:#ffedd5; padding:2px 10px; border-radius:12px; display:inline-block;">0</span>
                 </div>
             </div>
-            <div class="hse-tracker-kpi-card orange">
-                <div class="hse-kpi-icon-circle">⚠️</div>
+            <div class="hse-tracker-kpi-card green" style="background:#f0fdf4; border-color:#bbf7d0;">
+                <div class="hse-kpi-icon-circle" style="background:#dcfce7; color:#166534;">✓</div>
                 <div class="hse-kpi-info">
-                    <span class="hse-kpi-label">Chưa Cải Thiện / 未改善</span>
-                    <span class="hse-kpi-val" id="hse-kpi-val-pending">0</span>
+                    <span class="hse-kpi-label" style="color:#166534; font-weight:700;">Cải Thiện / 已改善</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-improved" style="color:#166534; background:#dcfce7; padding:2px 10px; border-radius:12px; display:inline-block;">0</span>
                 </div>
             </div>
             <div class="hse-tracker-kpi-card purple">
-                <div class="hse-kpi-icon-circle">📈</div>
+                <div class="hse-kpi-icon-circle" style="background:#faf5ff; color:#7c3aed;">📈</div>
                 <div class="hse-kpi-info">
                     <span class="hse-kpi-label">Tỷ Lệ Hoàn Thành / 改善率</span>
-                    <span class="hse-kpi-val" id="hse-kpi-val-rate">0.0%</span>
+                    <span class="hse-kpi-val" id="hse-kpi-val-rate" style="color:#6d28d9;">0.0%</span>
                 </div>
             </div>
         </section>
@@ -4878,23 +4880,26 @@
             <div class="hse-toolbar-left">
                 <span class="hse-defects-counter" id="hse-defects-counter-label">Hiển thị 0 sự cố / 共有 0 条缺陷记录</span>
                 <div class="hse-view-switch">
-                    <button type="button" class="hse-view-btn active" id="hse-view-cards-btn" title="Chế độ xem dạng lưới thẻ trực quan">🔲 Lưới Thẻ / 卡片视图</button>
-                    <button type="button" class="hse-view-btn" id="hse-view-table-btn" title="Chế độ xem dạng bảng danh sách">📋 Bảng / 列表视图</button>
+                    <button type="button" class="hse-view-btn" id="hse-view-cards-btn" title="Chế độ xem dạng lưới thẻ trực quan">🔲 Lưới Thẻ / 卡片视图</button>
+                    <button type="button" class="hse-view-btn active" id="hse-view-table-btn" title="Chế độ xem dạng bảng danh sách">📋 Bảng / 列表视图</button>
                 </div>
             </div>
             <div class="hse-toolbar-right">
-                <button type="button" class="hse-btn-action excel-all" id="hse-btn-excel-all" title="Xuất toàn bộ dữ liệu qua tất cả các tháng ra file Excel chuẩn kèm chèn ảnh trực tiếp vào ô">
-                    📊 Xuất Master Excel (Kèm Ảnh Vào Ô) / 导出汇总表
+                <button type="button" class="hse-btn-action add-defect" id="hse-btn-add-defect" title="Thêm một sự cố HSE mới vào danh sách" style="background: #1e3a8a; color: #fff; font-weight: 700; padding: 8px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border: none; box-shadow: 0 2px 6px rgba(30,58,138,0.25);">
+                    ➕ Thêm Lỗi Mới / 新增隐患
+                </button>
+                <button type="button" class="hse-btn-action excel-all" id="hse-btn-excel-all" title="Xuất toàn bộ dữ liệu ra file Excel chuẩn 100% kèm chèn ảnh trực tiếp vào ô" style="background: #2563eb; color: #fff; font-weight: 700; padding: 8px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border: none;">
+                    📤 Xuất Báo Cáo Excel (.xlsx) / 导出Excel
                 </button>
                 <button type="button" class="hse-btn-action excel-filter" id="hse-btn-excel-filter" title="Xuất các sự cố đang hiển thị theo bộ lọc ra file Excel">
                     📥 Xuất Theo Bộ Lọc / 导出筛选
                 </button>
-                <button type="button" class="hse-btn-action import-excel" id="hse-btn-import-excel" title="Cập nhật hoặc đồng bộ hóa dữ liệu từ file Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx lên web" style="background:#f0fdf4; border:1px solid #86efac; color:#15803d; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                <button type="button" class="hse-btn-action import-excel" id="hse-btn-import-excel" title="Nhập và đồng bộ hóa từ file Excel (hỗ trợ đọc ảnh WPS DISPIMG và ảnh nổi)" style="background:#f0fdf4; border:1px solid #86efac; color:#15803d; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
                     📂 Nhập Master Excel / 导入Excel
                 </button>
                 <input type="file" id="hse-tracker-import-file-input" accept=".xlsx,.xls" style="display:none;" />
                 <button type="button" class="hse-btn-action delete-all admin-only-ctrl" id="hse-btn-clear-all-defects" title="Xóa sạch toàn bộ sự cố HSE (yêu cầu mật khẩu quản trị: 270120)" style="background:#fee2e2; border:1px solid #fca5a5; color:#dc2626; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-                    <span>🗑️ Xóa Tất Cả Lỗi HSE / 清空隐患</span>
+                    <span>🗑️ Xóa Tất Cả / 清空</span>
                 </button>
             </div>
         </section>
@@ -4910,6 +4915,154 @@
             <p style="margin: 0; font-size: 13px; color: #64748b;">Vui lòng điều chỉnh lại bộ lọc tháng, bộ phận hoặc từ khóa tìm kiếm.</p>
         </div>
     </main>
+
+    <!-- Modal: Lightbox Xem & Phóng To Ảnh Sự Cố (Zoom, Xoay, Tải) -->
+    <div id="hse-image-lightbox-modal" class="hse-modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.85); backdrop-filter: blur(6px); z-index: 100000; align-items: center; justify-content: center; padding: 20px;">
+        <div style="position: relative; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; align-items: center;">
+            <div style="position: absolute; top: -48px; right: 0; display: flex; gap: 10px; align-items: center;">
+                <button type="button" id="hse-lightbox-zoom-in" title="Phóng to (+)" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; cursor: pointer;">🔍+</button>
+                <button type="button" id="hse-lightbox-zoom-out" title="Thu nhỏ (-)" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; cursor: pointer;">🔍-</button>
+                <button type="button" id="hse-lightbox-rotate" title="Xoay 90 độ" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; cursor: pointer;">↻</button>
+                <button type="button" id="hse-lightbox-download" title="Tải ảnh về máy" style="background: #2563eb; border: none; color: #fff; padding: 0 14px; height: 36px; border-radius: 18px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">⬇️ Tải Ảnh</button>
+                <button type="button" id="hse-lightbox-close" title="Đóng (ESC)" style="background: rgba(239,68,68,0.85); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 20px; font-weight: 700; cursor: pointer;">✕</button>
+            </div>
+            <div style="overflow: hidden; border-radius: 10px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); background: #0f172a; display: flex; align-items: center; justify-content: center;">
+                <img id="hse-lightbox-img" src="" alt="Ảnh hiện trường" style="max-width: 85vw; max-height: 80vh; object-fit: contain; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: center center;" />
+            </div>
+            <div id="hse-lightbox-caption" style="color: #cbd5e1; font-size: 13.5px; margin-top: 10px; text-align: center; max-width: 85vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+        </div>
+    </div>
+
+    <!-- Modal: Thêm / Sửa Sự Cố HSE (Form 7 Trường Chuẩn Excel) -->
+    <div id="hse-defect-form-modal" class="hse-modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: #ffffff; border-radius: 14px; max-width: 780px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); overflow: hidden; display: flex; flex-direction: column; max-height: 92vh;">
+            <div style="padding: 16px 22px; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">📝</span>
+                    <h3 id="hse-form-modal-title" style="margin: 0; font-size: 16px; font-weight: 700;">Thêm Mới Sự Cố HSE / 新增HSE隐患</h3>
+                </div>
+                <button type="button" id="hse-form-modal-close-btn" style="background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 4px;">✕</button>
+            </div>
+            
+            <form id="hse-defect-crud-form" style="padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;">
+                <input type="hidden" id="hse-form-defect-id" value="" />
+
+                <!-- Hàng 1: Ngày ghi nhận & Bộ phận -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">
+                            📅 Cột A - Ngày ghi nhận (记录日期) *
+                        </label>
+                        <input type="date" id="hse-form-date" required style="width: 100%; height: 38px; padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13.5px; box-sizing: border-box;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">
+                            🏢 Cột B - Bộ phận (部门) *
+                        </label>
+                        <select id="hse-form-dept-select" style="width: 100%; height: 38px; padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13.5px; font-weight: 600; box-sizing: border-box;">
+                            <option value="技术部 / Kỹ thuật">🔬 技术部 / Kỹ thuật</option>
+                            <option value="生产部 / Sản xuất">⚙️ 生产部 / Sản xuất</option>
+                            <option value="营业部 / Bán hàng">💼 营业部 / Bán hàng</option>
+                            <option value="仓库 / Kho">📦 仓库 / Kho</option>
+                            <option value="品质部 / Chất lượng (QC)">🔍 品质部 / Chất lượng (QC)</option>
+                            <option value="设备工程部 / Cơ điện - Bảo trì">🔧 设备工程部 / Cơ điện - Bảo trì</option>
+                            <option value="行政人事部 / Hành chính - Nhân sự">📋 行政人事部 / Hành chính - Nhân sự</option>
+                            <option value="HSE / An toàn Môi trường">🛡️ HSE / An toàn Môi trường</option>
+                            <option value="__custom__">✏️ Khác (Tự nhập tay)...</option>
+                        </select>
+                        <input type="text" id="hse-form-dept-custom" placeholder="Nhập tên bộ phận mới..." style="display: none; width: 100%; height: 36px; margin-top: 6px; padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px; box-sizing: border-box;" />
+                    </div>
+                </div>
+
+                <!-- Hàng 2: Mô tả chi tiết Tiếng Việt & Nút dịch sang Tiếng Trung -->
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                        <label style="font-size: 12.5px; font-weight: 700; color: #1e293b;">
+                            🇻🇳 Cột D - Mô tả chi tiết (Tiếng Việt · 详细描述) *
+                        </label>
+                        <button type="button" id="hse-btn-ai-translate-zh" title="Dùng AI dịch sang tiếng Trung chuẩn thuật ngữ an toàn" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                            🌐 Dịch sang Tiếng Trung
+                        </button>
+                    </div>
+                    <textarea id="hse-form-issue-vn" rows="3" placeholder="Nhập mô tả chi tiết lỗi và yêu cầu khắc phục bằng tiếng Việt..." style="width: 100%; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-family: inherit; line-height: 1.45; box-sizing: border-box;"></textarea>
+                </div>
+
+                <!-- Hàng 3: Mô tả chi tiết Tiếng Trung & Nút dịch sang Tiếng Việt -->
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                        <label style="font-size: 12.5px; font-weight: 700; color: #1e293b;">
+                            🇨🇳 Cột C - Mô tả chi tiết (Tiếng Trung · 详细描述 (中文)) *
+                        </label>
+                        <button type="button" id="hse-btn-ai-translate-vn" title="Dùng AI dịch sang tiếng Việt chuẩn thuật ngữ an toàn" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                            🌐 Dịch sang Tiếng Việt
+                        </button>
+                    </div>
+                    <textarea id="hse-form-issue-zh" rows="3" placeholder="输入现场隐患详情及整改要求（中文）..." style="width: 100%; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-family: inherit; line-height: 1.45; box-sizing: border-box;"></textarea>
+                </div>
+
+                <!-- Hàng 4: Cột E - Xem ảnh & AI Vision -->
+                <div style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 12px 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                        <label style="font-size: 12.5px; font-weight: 700; color: #1e293b;">
+                            📸 Cột E - Xem ảnh (图片预览)
+                        </label>
+                        <button type="button" id="hse-btn-ai-vision-analyze" title="Dùng Gemini Multimodal Vision đọc ảnh và tự động soạn mô tả song ngữ" style="background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff; border: none; font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(124,58,237,0.3);">
+                            ✨ AI Phân tích lỗi từ ảnh
+                        </button>
+                    </div>
+
+                    <div style="display: flex; gap: 14px; align-items: center;">
+                        <div id="hse-form-img-preview-box" style="width: 110px; height: 85px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;">
+                            <img id="hse-form-img-thumb" src="" alt="Xem trước ảnh" style="display: none; width: 100%; height: 100%; object-fit: cover;" />
+                            <span id="hse-form-img-empty-label" style="font-size: 11px; color: #94a3b8; text-align: center; padding: 4px;">Chưa có ảnh<br>(Click/Dán Ctrl+V)</span>
+                        </div>
+                        <div style="flex: 1; font-size: 12px; color: #64748b; line-height: 1.5;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                <label style="padding: 6px 12px; background: #2563eb; color: #fff; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                                    📁 Tải ảnh lên
+                                    <input type="file" id="hse-form-file-input" accept="image/*" capture="environment" style="display: none;" />
+                                </label>
+                                <button type="button" id="hse-form-remove-img-btn" style="display: none; padding: 6px 10px; background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 11.5px; font-weight: 600;">
+                                    🗑️ Xóa ảnh
+                                </button>
+                            </div>
+                            <div>💡 <i>Hỗ trợ chụp từ camera, kéo thả file hoặc dán trực tiếp từ clipboard (Ctrl + V).</i></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hàng 5: Trạng thái & Ngày cải thiện -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">
+                            ⚡ Cột F - Trạng thái (状态) *
+                        </label>
+                        <select id="hse-form-status-select" style="width: 100%; height: 38px; padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13.5px; font-weight: 800; box-sizing: border-box; background: #ffedd5; color: #9a3412;">
+                            <option value="Chưa cải thiện" style="background:#ffedd5; color:#9a3412; font-weight:700;">Chưa cải thiện</option>
+                            <option value="Cải thiện" style="background:#dcfce7; color:#166534; font-weight:700;">Cải thiện</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">
+                            📅 Cột G - Ngày cải thiện (改善日期)
+                        </label>
+                        <input type="date" id="hse-form-improve-date" style="width: 100%; height: 38px; padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13.5px; box-sizing: border-box;" />
+                        <div style="font-size: 11px; color: #64748b; margin-top: 3px;"><i>(Tự động điền hôm nay khi chọn "Cải thiện", tự xóa khi chọn "Chưa cải thiện")</i></div>
+                    </div>
+                </div>
+
+                <!-- Nút hành động Form -->
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; padding-top: 14px; border-top: 1px solid #e2e8f0;">
+                    <button type="button" id="hse-form-cancel-btn" style="padding: 8px 18px; background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; border-radius: 8px; font-weight: 700; cursor: pointer;">
+                        ✕ Hủy Bỏ
+                    </button>
+                    <button type="submit" id="hse-form-save-btn" style="padding: 8px 24px; background: #1e3a8a; border: none; color: #fff; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                        💾 Lưu Sự Cố / 保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Detail Modal -->
         <!-- Modal: Cài Đặt Google Apps Script (GAS) -->

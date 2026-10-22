@@ -1289,6 +1289,13 @@ def reconcile_defects_endpoint():
     return DefectAggregatorService.reconcile_all_reports_to_tracker()
 
 
+@hse_router.post("/defects/create")
+@hse_router.post("/defects/add")
+def create_defect_endpoint(payload: Dict[str, Any]):
+    from core.hse_defect_tracker import DefectAggregatorService
+    return DefectAggregatorService.add_defect(payload)
+
+
 @hse_router.post("/defects/update")
 def update_defect_endpoint(payload: Dict[str, Any]):
     from core.hse_defect_tracker import DefectAggregatorService, DefectUpdatePayload
@@ -1358,7 +1365,12 @@ async def export_master_excel_endpoint(
     exporter = MasterHSEExcelExporter()
     excel_bytes = exporter.export_master_bytes(defects)
 
-    filename = f"Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty{suffix}.xlsx"
+    if month and "2026-09" in month:
+        filename = "Tong_hop_loi_thang_9_2026.xlsx"
+    elif month and month != "all":
+        filename = f"Tong_hop_loi_{month}.xlsx"
+    else:
+        filename = "Tong_Hop_Loi_HSE_Toan_Cong_Ty.xlsx"
     quoted_filename = urllib.parse.quote(filename)
 
     headers = {

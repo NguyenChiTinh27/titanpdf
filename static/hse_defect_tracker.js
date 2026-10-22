@@ -13,7 +13,7 @@
     selectedDept: "all",
     selectedStatus: "all",
     searchQuery: "",
-    viewMode: "cards", // "cards" | "table"
+    viewMode: "table", // "table" (default 7-col Excel standard) | "cards"
     kpis: { total: 0, improved: 0, pending: 0, rate: 0.0 },
     availableMonths: [],
     availableDepts: [],
@@ -21,6 +21,11 @@
     pendingAfterImage: "",
     initialized: false
   };
+
+  let currentLightboxZoom = 1;
+  let currentLightboxRotate = 0;
+  let currentLightboxSrc = "";
+  let formCurrentImage = "";
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -262,17 +267,454 @@
     }
   }
 
+  // ==========================================================================
+  // LIGHTBOX CONTROLS
+  // ==========================================================================
+  function applyLightboxTransform() {
+    const img = $("#hse-lightbox-img");
+    if (img) {
+      img.style.transform = `scale(${currentLightboxZoom}) rotate(${currentLightboxRotate}deg)`;
+    }
+  }
+
+  function openLightbox(src, caption = "") {
+    if (!src) return;
+    currentLightboxSrc = src;
+    currentLightboxZoom = 1;
+    currentLightboxRotate = 0;
+    const modal = $("#hse-image-lightbox-modal");
+    const img = $("#hse-lightbox-img");
+    const cap = $("#hse-lightbox-caption");
+    if (!modal || !img) return;
+    img.src = src;
+    applyLightboxTransform();
+    if (cap) cap.textContent = caption || "";
+    modal.style.display = "flex";
+  }
+
+  function closeLightbox() {
+    const modal = $("#hse-image-lightbox-modal");
+    if (modal) modal.style.display = "none";
+    const img = $("#hse-lightbox-img");
+    if (img) img.src = "";
+    currentLightboxSrc = "";
+  }
+
+  function zoomLightbox(delta) {
+    currentLightboxZoom = Math.max(0.4, Math.min(3.5, +(currentLightboxZoom + delta).toFixed(2)));
+    applyLightboxTransform();
+  }
+
+  function rotateLightbox() {
+    currentLightboxRotate = (currentLightboxRotate + 90) % 360;
+    applyLightboxTransform();
+  }
+
+  function downloadLightboxImage() {
+    if (!currentLightboxSrc) return;
+    const a = document.createElement("a");
+    a.href = currentLightboxSrc;
+    a.download = `HSE_Loi_Hien_Truong_${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // ==========================================================================
+  // INLINE TABLE ACTIONS (AUTO-SAVE)
+  // ==========================================================================
+  async function handleInlineStatusChange(defectId, newStatusVal, rowEl) {
+    const isImproved = newStatusVal === "Cải thiện";
+    const nowIsoDate = new Date().toISOString().substring(0, 10);
+    const improveDateVal = isImproved ? nowIsoDate : "";
+
+    const statusSelect = rowEl ? rowEl.querySelector(".hse-table-status-select") : null;
+    if (statusSelect) {
+      statusSelect.style.background = isImproved ? "#dcfce7" : "#ffedd5";
+      statusSelect.style.color = isImproved ? "#166534" : "#9a3412";
+      statusSelect.style.borderColor = isImproved ? "#86efac" : "#fdba74";
+    }
+
+    const dateInput = rowEl ? rowEl.querySelector(".hse-table-improve-date") : null;
+    if (dateInput) {
+      dateInput.value = improveDateVal;
+      dateInput.disabled = !isImproved;
+      dateInput.style.background = isImproved ? "#ffffff" : "#f8fafc";
+      dateInput.style.color = isImproved ? "#0f172a" : "#94a3b8";
+      dateInput.style.cursor = isImproved ? "pointer" : "not-allowed";
+    }
+
+    // Cập nhật state in-memory
+    const target = state.allDefects.find(d => d.id === defectId || d.code === defectId);
+    if (target) {
+      target.improved = isImproved;
+      target.status = isImproved ? "Cải thiện" : "Chưa cải thiện";
+      target.improve_date = improveDateVal;
+    }
+
+    // Cập nhật lại thanh KPI
+    const tot = state.filteredDefects.length;
+    const imp = state.filteredDefects.filter(d => d.improved).length;
+    const pnd = tot - imp;
+    const rate = tot > 0 ? (imp / tot) * 100 : 0.0;
+    state.kpis = { total: tot, improved: imp, pending: pnd, rate: rate };
+    renderKPIs();
+
+    // Auto-save lên server
+    try {
+      const payload = {
+        defectId: defectId,
+        status: isImproved ? "Cải thiện" : "Chưa cải thiện",
+        improved: isImproved,
+        improveDate: improveDateVal,
+        improve_date: improveDateVal
+      };
+      const resp = await fetch("/api/hse/defects/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) throw new Error("Không thể cập nhật trạng thái");
+      showToast(isImproved ? `✓ Đã lưu trạng thái: CẢI THIỆN (${defectId})` : `⚠️ Đã lưu trạng thái: CHƯA CẢI THIỆN (${defectId})`);
+    } catch (err) {
+      showToast("Lỗi lưu trạng thái: " + err.message, true);
+    }
+  }
+
+  async function handleInlineImproveDateChange(defectId, newDate) {
+    const target = state.allDefects.find(d => d.id === defectId || d.code === defectId);
+    if (target) {
+      target.improve_date = newDate;
+    }
+    try {
+      await fetch("/api/hse/defects/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          defectId: defectId,
+          improveDate: newDate,
+          improve_date: newDate
+        })
+      });
+      showToast(`✓ Đã lưu ngày cải thiện: ${newDate}`);
+    } catch (err) {
+      showToast("Lỗi lưu ngày: " + err.message, true);
+    }
+  }
+
+  // ==========================================================================
+  // DEFECT FORM MODAL (CRUD - 7 FIELDS)
+  // ==========================================================================
+  function updateFormImageDisplay(src) {
+    formCurrentImage = src || "";
+    const thumb = $("#hse-form-img-thumb");
+    const emptyLabel = $("#hse-form-img-empty-label");
+    const removeBtn = $("#hse-form-remove-img-btn");
+    if (src) {
+      if (thumb) {
+        thumb.src = src;
+        thumb.style.display = "block";
+      }
+      if (emptyLabel) emptyLabel.style.display = "none";
+      if (removeBtn) removeBtn.style.display = "inline-flex";
+    } else {
+      if (thumb) {
+        thumb.src = "";
+        thumb.style.display = "none";
+      }
+      if (emptyLabel) emptyLabel.style.display = "block";
+      if (removeBtn) removeBtn.style.display = "none";
+    }
+  }
+
+  function updateFormStatusStyling(statusVal) {
+    const isImp = statusVal === "Cải thiện";
+    const select = $("#hse-form-status-select");
+    if (select) {
+      select.value = statusVal;
+      select.style.background = isImp ? "#dcfce7" : "#ffedd5";
+      select.style.color = isImp ? "#166534" : "#9a3412";
+      select.style.borderColor = isImp ? "#86efac" : "#fdba74";
+    }
+  }
+
+  function openDefectFormModal(defectId = null) {
+    const modal = $("#hse-defect-form-modal");
+    if (!modal) return;
+
+    const titleEl = $("#hse-form-modal-title");
+    const idInp = $("#hse-form-defect-id");
+    const dateInp = $("#hse-form-date");
+    const deptSelect = $("#hse-form-dept-select");
+    const deptCustom = $("#hse-form-dept-custom");
+    const issueVnInp = $("#hse-form-issue-vn");
+    const issueZhInp = $("#hse-form-issue-zh");
+    const improveDateInp = $("#hse-form-improve-date");
+
+    if (defectId) {
+      // Chỉnh sửa lỗi hiện có
+      const d = state.allDefects.find(x => x.id === defectId || x.code === defectId);
+      if (!d) return;
+      if (titleEl) titleEl.textContent = `✏️ Chỉnh Sửa Sự Cố HSE / 编辑HSE隐患 (${d.code || d.id})`;
+      if (idInp) idInp.value = d.code || d.id;
+      if (dateInp) dateInp.value = d.date || d.created_at || (d.month ? `${d.month}-01` : new Date().toISOString().substring(0, 10));
+
+      const dept = d.department || "";
+      let foundDept = false;
+      if (deptSelect) {
+        for (const opt of deptSelect.options) {
+          if (opt.value !== "__custom__" && (opt.value === dept || dept.includes(opt.value.split(" / ")[0]) || (opt.value.split(" / ")[1] && dept.includes(opt.value.split(" / ")[1])))) {
+            deptSelect.value = opt.value;
+            foundDept = true;
+            break;
+          }
+        }
+        if (!foundDept) {
+          deptSelect.value = "__custom__";
+          if (deptCustom) {
+            deptCustom.value = dept;
+            deptCustom.style.display = "block";
+          }
+        } else {
+          if (deptCustom) {
+            deptCustom.value = "";
+            deptCustom.style.display = "none";
+          }
+        }
+      }
+
+      if (issueVnInp) issueVnInp.value = d.vn_issue || "";
+      if (issueZhInp) issueZhInp.value = d.zh_issue || "";
+      updateFormImageDisplay(d.img_before || d.img_after || "");
+
+      const isImp = Boolean(d.improved);
+      updateFormStatusStyling(isImp ? "Cải thiện" : "Chưa cải thiện");
+      if (improveDateInp) improveDateInp.value = d.improve_date || "";
+    } else {
+      // Thêm mới lỗi
+      if (titleEl) titleEl.textContent = "➕ Thêm Mới Sự Cố HSE / 新增HSE隐患";
+      if (idInp) idInp.value = "";
+      if (dateInp) dateInp.value = new Date().toISOString().substring(0, 10);
+      if (deptSelect) deptSelect.value = "技术部 / Kỹ thuật";
+      if (deptCustom) {
+        deptCustom.value = "";
+        deptCustom.style.display = "none";
+      }
+      if (issueVnInp) issueVnInp.value = "";
+      if (issueZhInp) issueZhInp.value = "";
+      updateFormImageDisplay("");
+      updateFormStatusStyling("Chưa cải thiện");
+      if (improveDateInp) improveDateInp.value = "";
+    }
+
+    modal.style.display = "flex";
+  }
+
+  function closeDefectFormModal() {
+    const modal = $("#hse-defect-form-modal");
+    if (modal) modal.style.display = "none";
+    updateFormImageDisplay("");
+  }
+
+  async function translateVnToZh() {
+    const vnInp = $("#hse-form-issue-vn");
+    const zhInp = $("#hse-form-issue-zh");
+    const btn = $("#hse-btn-ai-translate-zh");
+    const text = (vnInp?.value || "").trim();
+    if (!text) {
+      showToast("Vui lòng nhập mô tả Tiếng Việt trước khi dịch!", true);
+      return;
+    }
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "⏳ Đang dịch...";
+      }
+      const resp = await fetch("/api/hse/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text, kind: "vi_to_zh" })
+      });
+      if (!resp.ok) throw new Error("Lỗi kết nối dịch thuật AI");
+      const res = await resp.json();
+      const translated = res.translated || res.text || "";
+      if (zhInp && translated) {
+        zhInp.value = translated;
+      }
+      showToast("🌐 Đã dịch sang Tiếng Trung thành công!");
+    } catch (err) {
+      showToast("Lỗi dịch AI: " + err.message, true);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = "🌐 Dịch sang Tiếng Trung";
+      }
+    }
+  }
+
+  async function translateZhToVn() {
+    const zhInp = $("#hse-form-issue-zh");
+    const vnInp = $("#hse-form-issue-vn");
+    const btn = $("#hse-btn-ai-translate-vn");
+    const text = (zhInp?.value || "").trim();
+    if (!text) {
+      showToast("Vui lòng nhập mô tả Tiếng Trung trước khi dịch!", true);
+      return;
+    }
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "⏳ Đang dịch...";
+      }
+      const resp = await fetch("/api/hse/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text, kind: "zh_to_vi" })
+      });
+      if (!resp.ok) throw new Error("Lỗi kết nối dịch thuật AI");
+      const res = await resp.json();
+      const translated = res.translated || res.text || "";
+      if (vnInp && translated) {
+        vnInp.value = translated;
+      }
+      showToast("🌐 Đã dịch sang Tiếng Việt thành công!");
+    } catch (err) {
+      showToast("Lỗi dịch AI: " + err.message, true);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = "🌐 Dịch sang Tiếng Việt";
+      }
+    }
+  }
+
+  async function analyzePhotoWithAIVision() {
+    if (!formCurrentImage) {
+      showToast("Vui lòng tải hoặc dán ảnh hiện trường trước khi phân tích AI!", true);
+      return;
+    }
+    const btn = $("#hse-btn-ai-vision-analyze");
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "⏳ AI đang nhìn & phân tích...";
+      }
+      setLoading(true, "AI Vision đang đọc hiện trường và soạn thảo đối sách...");
+      const resp = await fetch("/api/hse/ai_analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageData: formCurrentImage,
+          hint: "HSE site inspection defect hazard analysis"
+        })
+      });
+      if (!resp.ok) throw new Error("Lỗi phân tích AI Vision");
+      const res = await resp.json();
+      const data = res.data || res;
+
+      const zhInp = $("#hse-form-issue-zh");
+      const vnInp = $("#hse-form-issue-vn");
+      const deptSelect = $("#hse-form-dept-select");
+
+      if (data.zh_issue && zhInp) zhInp.value = data.zh_issue;
+      if (data.vn_issue && vnInp) vnInp.value = data.vn_issue;
+      if (data.department && deptSelect) {
+        for (const opt of deptSelect.options) {
+          if (opt.value.includes(data.department) || data.department.includes(opt.value.split(" / ")[0])) {
+            deptSelect.value = opt.value;
+            break;
+          }
+        }
+      }
+      showToast("✨ AI đã phân tích ảnh hiện trường và tự động soạn thảo mô tả song ngữ!");
+    } catch (err) {
+      showToast("Lỗi AI Vision: " + err.message, true);
+    } finally {
+      setLoading(false);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = "✨ AI Phân tích lỗi từ ảnh";
+      }
+    }
+  }
+
+  async function handleDefectFormSubmit(e) {
+    if (e) e.preventDefault();
+    const idInp = $("#hse-form-defect-id");
+    const dateInp = $("#hse-form-date");
+    const deptSelect = $("#hse-form-dept-select");
+    const deptCustom = $("#hse-form-dept-custom");
+    const issueVnInp = $("#hse-form-issue-vn");
+    const issueZhInp = $("#hse-form-issue-zh");
+    const statusSelect = $("#hse-form-status-select");
+    const improveDateInp = $("#hse-form-improve-date");
+
+    const defectId = (idInp?.value || "").trim();
+    const rawDate = (dateInp?.value || "").trim() || new Date().toISOString().substring(0, 10);
+    let department = deptSelect?.value || "";
+    if (department === "__custom__") {
+      department = (deptCustom?.value || "").trim() || "HSE / An toàn Môi trường";
+    }
+    const vnIssue = (issueVnInp?.value || "").trim();
+    const zhIssue = (issueZhInp?.value || "").trim();
+    const statusVal = statusSelect?.value || "Chưa cải thiện";
+    const isImproved = statusVal === "Cải thiện";
+    const improveDate = isImproved ? (improveDateInp?.value || new Date().toISOString().substring(0, 10)) : "";
+
+    if (!vnIssue && !zhIssue) {
+      showToast("Vui lòng nhập mô tả sự cố (tiếng Việt hoặc tiếng Trung)!", true);
+      return;
+    }
+
+    const payload = {
+      defectId: defectId,
+      date: rawDate,
+      department: department,
+      vn_issue: vnIssue,
+      zh_issue: zhIssue,
+      img_before: formCurrentImage,
+      status: statusVal,
+      improved: isImproved,
+      improveDate: improveDate,
+      improve_date: improveDate
+    };
+
+    try {
+      setLoading(true, defectId ? `Đang cập nhật sự cố ${defectId}...` : "Đang tạo mới sự cố HSE...");
+      const url = defectId ? "/api/hse/defects/update" : "/api/hse/defects/create";
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) throw new Error("Lỗi khi lưu dữ liệu lên server");
+      const res = await resp.json();
+
+      closeDefectFormModal();
+      showToast(res.message || "✓ Đã lưu sự cố thành công!");
+      await loadDefects(false);
+    } catch (err) {
+      showToast("Lỗi lưu sự cố: " + err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ==========================================================================
+  // CARDS & TABLE VIEW RENDERING
+  // ==========================================================================
   function renderCards(root, defects) {
     root.innerHTML = defects.map(d => {
       const isDone = Boolean(d.improved);
       const hasAfterImg = Boolean(d.img_after);
       const hasBeforeImg = Boolean(d.img_before);
       const initialImg = (isDone && hasAfterImg) ? d.img_after : (d.img_before || d.img_after || "");
+      const captionText = `${d.code || d.id} - ${d.zh_issue || d.vn_issue || ''}`;
 
       return `
         <article class="hse-defect-card ${isDone ? "card-improved" : ""}" data-id="${escapeHtml(d.id)}">
           <!-- Card Photo Box -->
-          <div class="hse-defect-photo-box">
+          <div class="hse-defect-photo-box" ${initialImg ? `data-action="open-lightbox" data-src="${initialImg}" data-caption="${escapeHtml(captionText)}" style="cursor:pointer;" title="Bấm xem ảnh phóng to"` : ''}>
             ${initialImg ? `
               <img src="${initialImg}" alt="Ảnh sự cố" id="photo-${escapeHtml(d.id)}" loading="lazy">
             ` : `
@@ -283,7 +725,7 @@
             `}
 
             <!-- Month Tag -->
-            <div class="hse-photo-month-tag">📅 ${escapeHtml(d.month || 'HSE')}</div>
+            <div class="hse-photo-month-tag">📅 ${escapeHtml(d.date || d.month || 'HSE')}</div>
 
             <!-- Status Badge -->
             <div class="hse-photo-status-badge ${isDone ? 'done' : 'pending'}">
@@ -292,7 +734,7 @@
 
             <!-- Before/After Toggle Switch if both photos exist -->
             ${(hasBeforeImg && hasAfterImg) ? `
-              <div class="hse-photo-toggle-bar">
+              <div class="hse-photo-toggle-bar" onclick="event.stopPropagation();">
                 <button type="button" class="hse-toggle-photo-btn ${!isDone ? 'active' : ''}" data-action="toggle-photo" data-target="photo-${escapeHtml(d.id)}" data-src="${escapeHtml(d.img_before)}">Trước (整改前)</button>
                 <button type="button" class="hse-toggle-photo-btn ${isDone ? 'active' : ''}" data-action="toggle-photo" data-target="photo-${escapeHtml(d.id)}" data-src="${escapeHtml(d.img_after)}">Sau (整改后)</button>
               </div>
@@ -313,24 +755,18 @@
 
             <p class="hse-defect-zh">${escapeHtml(d.zh_issue || '暂无详细描述')}</p>
             <p class="hse-defect-vn">${escapeHtml(d.vn_issue || '(Chưa có mô tả tiếng Việt)')}</p>
-
-            ${d.note ? `
-              <div class="hse-defect-note-box">
-                <strong>Đối sách / 改善对策:</strong> ${escapeHtml(d.note)}
-              </div>
-            ` : ""}
           </div>
 
           <!-- Card Footer -->
           <div class="hse-defect-footer" style="display:flex; justify-content:space-between; align-items:center;">
             <label class="hse-checkbox-label ${isDone ? 'done' : 'pending'}">
               <input type="checkbox" data-action="quick-toggle" data-id="${escapeHtml(d.id)}" ${isDone ? 'checked' : ''}>
-              <span>${isDone ? `✓ Cải thiện / 已改善 (${escapeHtml(d.improve_date || 'Xong')})` : '⚠️ Chưa cải thiện / 未改善'}</span>
+              <span>${isDone ? `✓ Cải thiện (${escapeHtml(d.improve_date || 'Xong')})` : '⚠️ Chưa cải thiện'}</span>
             </label>
 
             <div style="display:inline-flex; gap:6px; align-items:center;">
-              <button type="button" class="hse-btn-detail" data-action="open-detail" data-id="${escapeHtml(d.id)}">
-                Chi Tiết / 详情
+              <button type="button" class="hse-btn-detail" data-action="edit-defect" data-id="${escapeHtml(d.id)}">
+                ✏️ Sửa / 编辑
               </button>
               <button type="button" class="hse-btn-delete-defect" data-action="delete-defect" data-id="${escapeHtml(d.id)}" title="Xóa vĩnh viễn sự cố này" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.15s;">
                 🗑️
@@ -346,44 +782,72 @@
     const rows = defects.map(d => {
       const isDone = Boolean(d.improved);
       const img = d.img_before || d.img_after || "";
+      const rawDate = d.date || d.created_at || (d.month ? `${d.month}-01` : "---");
+      const captionText = `${d.code || d.id} - ${d.zh_issue || d.vn_issue || ''}`;
 
       return `
-        <tr>
-          <td style="font-family:monospace; font-weight:800; color:#0f172a; white-space:nowrap;">
-            ${escapeHtml(d.code || d.id)}
+        <tr data-defect-id="${escapeHtml(d.id || d.code)}" style="border-bottom:1px solid #e2e8f0; transition:background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+          <!-- Cột A: Ngày ghi nhận (记录日期) -->
+          <td style="padding:10px 12px; vertical-align:middle; white-space:nowrap;">
+            <div style="font-weight:700; color:#0f172a; font-size:13px;">${escapeHtml(rawDate)}</div>
+            <div style="font-family:monospace; font-size:11px; font-weight:800; color:#1e3a8a; margin-top:3px; background:#eff6ff; padding:2px 6px; border-radius:4px; display:inline-block; border:1px solid #dbeafe;">
+              ${escapeHtml(d.code || d.id)}
+            </div>
           </td>
-          <td style="white-space:nowrap; font-weight:600;">
-            ${escapeHtml(d.month || '---')}
-          </td>
-          <td style="white-space:nowrap;">
-            <span class="hse-defect-dept-badge">${escapeHtml(d.dept_icon || '🏢')} ${escapeHtml(d.department)}</span>
-          </td>
-          <td style="text-align:center;">
-            ${img ? `
-              <img src="${img}" alt="Ảnh" style="width:48px; height:36px; object-fit:cover; border-radius:4px; border:1px solid #cbd5e1; cursor:pointer;" onclick="window.open('${img}', '_blank')" title="Bấm mở ảnh lớn">
-            ` : `<span style="font-size:11px; color:#94a3b8;">无图片</span>`}
-          </td>
-          <td style="max-width:380px;">
-            <div style="font-weight:700; color:#0f172a; line-height:1.35; margin-bottom:3px;">${escapeHtml(d.zh_issue)}</div>
-            <div style="font-size:12px; font-style:italic; color:#64748b;">${escapeHtml(d.vn_issue)}</div>
-          </td>
-          <td style="text-align:center; white-space:nowrap;">
-            <span class="hse-photo-status-badge ${isDone ? 'done' : 'pending'}" style="position:static; box-shadow:none;">
-              ${isDone ? '✓ CẢI THIỆN / 已改善' : '⚠️ CHƯA CẢI THIỆN / 未改善'}
+
+          <!-- Cột B: Bộ phận (部门) -->
+          <td style="padding:10px 12px; vertical-align:middle; white-space:nowrap;">
+            <span class="hse-defect-dept-badge" style="font-size:12px; padding:4px 8px; border-radius:6px; background:#f1f5f9; color:#334155; font-weight:700; display:inline-flex; align-items:center; gap:4px; border:1px solid #cbd5e1;">
+              ${escapeHtml(d.dept_icon || '🏢')} ${escapeHtml(d.department)}
             </span>
           </td>
-          <td style="font-size:12px; color:#64748b; white-space:nowrap;">
-            ${escapeHtml(d.improve_date || '---')}
+
+          <!-- Cột C: Mô tả chi tiết (Tiếng Trung) -->
+          <td style="padding:10px 12px; vertical-align:top; min-width:260px; max-width:380px;">
+            <div style="font-size:13px; line-height:1.5; color:#0f172a; word-break:break-word; white-space:pre-wrap; font-weight:500;">
+              ${escapeHtml(d.zh_issue || '---')}
+            </div>
           </td>
-          <td style="text-align:right; white-space:nowrap;">
+
+          <!-- Cột D: Mô tả chi tiết (Tiếng Việt) -->
+          <td style="padding:10px 12px; vertical-align:top; min-width:260px; max-width:380px;">
+            <div style="font-size:13px; line-height:1.5; color:#334155; word-break:break-word; white-space:pre-wrap;">
+              ${escapeHtml(d.vn_issue || '---')}
+            </div>
+          </td>
+
+          <!-- Cột E: Xem ảnh (图片预览) -->
+          <td style="padding:10px 12px; vertical-align:middle; text-align:center; white-space:nowrap;">
+            ${img ? `
+              <div style="display:inline-block; position:relative; cursor:pointer;" data-action="open-lightbox" data-src="${img}" data-caption="${escapeHtml(captionText)}" title="Click để phóng to ảnh chất lượng cao">
+                <img src="${img}" alt="Ảnh hiện trường" style="width:72px; height:54px; object-fit:cover; border-radius:6px; border:1.5px solid #cbd5e1; box-shadow:0 1px 3px rgba(0,0,0,0.1); display:block; transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+                <span style="position:absolute; bottom:2px; right:2px; background:rgba(0,0,0,0.65); color:#fff; font-size:10px; border-radius:3px; padding:1px 4px; pointer-events:none;">🔍</span>
+              </div>
+            ` : `
+              <span style="font-size:11px; color:#94a3b8; font-style:italic;">(Không có ảnh<br>无图片)</span>
+            `}
+          </td>
+
+          <!-- Cột F: Trạng thái (状态) - Dropdown inline chuẩn 2 giá trị -->
+          <td style="padding:10px 12px; vertical-align:middle; text-align:center; white-space:nowrap;">
+            <select class="hse-table-status-select" data-id="${escapeHtml(d.id || d.code)}" style="padding:6px 10px; border-radius:6px; font-size:12.5px; font-weight:800; cursor:pointer; outline:none; border:1.5px solid ${isDone ? '#86efac' : '#fdba74'}; background:${isDone ? '#dcfce7' : '#ffedd5'}; color:${isDone ? '#166534' : '#9a3412'}; transition:all 0.15s;">
+              <option value="Chưa cải thiện" ${!isDone ? 'selected' : ''} style="background:#ffedd5; color:#9a3412; font-weight:700;">Chưa cải thiện</option>
+              <option value="Cải thiện" ${isDone ? 'selected' : ''} style="background:#dcfce7; color:#166534; font-weight:700;">Cải thiện</option>
+            </select>
+          </td>
+
+          <!-- Cột G: Ngày cải thiện (改善日期) -->
+          <td style="padding:10px 12px; vertical-align:middle; text-align:center; white-space:nowrap;">
+            <input type="date" class="hse-table-improve-date" data-id="${escapeHtml(d.id || d.code)}" value="${escapeHtml(d.improve_date || '')}" ${!isDone ? 'disabled' : ''} style="width:125px; height:32px; padding:3px 6px; font-size:12px; border-radius:6px; border:1.5px solid ${isDone ? '#cbd5e1' : '#e2e8f0'}; background:${isDone ? '#ffffff' : '#f8fafc'}; color:${isDone ? '#0f172a' : '#94a3b8'}; cursor:${isDone ? 'pointer' : 'not-allowed'}; box-sizing:border-box;">
+          </td>
+
+          <!-- Cột Thao tác -->
+          <td style="padding:10px 12px; vertical-align:middle; text-align:center; white-space:nowrap;">
             <div style="display:inline-flex; gap:6px; align-items:center;">
-              <button type="button" class="hse-btn-detail" data-action="quick-toggle-btn" data-id="${escapeHtml(d.id)}" data-improved="${isDone}">
-                ${isDone ? '⚠️ Chưa cải thiện / 未改善' : '✓ Cải thiện / 已改善'}
+              <button type="button" class="hse-btn-edit-row" data-action="edit-defect" data-id="${escapeHtml(d.id || d.code)}" title="Chỉnh sửa chi tiết sự cố này" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
+                ✏️ Sửa
               </button>
-              <button type="button" class="hse-btn-detail" data-action="open-detail" data-id="${escapeHtml(d.id)}">
-                Chi Tiết / 详情
-              </button>
-              <button type="button" class="hse-btn-delete-defect" data-action="delete-defect" data-id="${escapeHtml(d.id)}" title="Xóa vĩnh viễn sự cố này" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.15s;">
+              <button type="button" class="hse-btn-delete-row" data-action="delete-defect" data-id="${escapeHtml(d.id || d.code)}" title="Xóa vĩnh viễn sự cố này" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
                 🗑️
               </button>
             </div>
@@ -393,18 +857,34 @@
     }).join("");
 
     root.innerHTML = `
-      <div class="hse-defects-table-wrapper">
-        <table class="hse-defects-table">
-          <thead>
-            <tr>
-              <th>Mã sự cố / 隐患编号</th>
-              <th>Tháng / 月份</th>
-              <th>Bộ phận / 责任部门</th>
-              <th style="text-align:center;">Ảnh / 现场图片</th>
-              <th>Mô tả chi tiết song ngữ / 详细描述 (中/越)</th>
-              <th style="text-align:center;">Trạng thái / 改善状态</th>
-              <th>Ngày cải thiện / 改善日期</th>
-              <th style="text-align:right;">Thao tác / 操作</th>
+      <div class="hse-defects-table-wrapper" style="overflow-x:auto; background:#ffffff; border-radius:10px; border:1px solid #cbd5e1; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <table class="hse-defects-table" style="width:100%; border-collapse:collapse; min-width:1150px;">
+          <thead style="background:#1e3a8a; color:#ffffff; position:sticky; top:0; z-index:10;">
+            <tr style="height:44px;">
+              <th style="padding:10px 12px; text-align:left; font-size:13px; font-weight:700; border-right:1px solid rgba(255,255,255,0.15); width:130px; white-space:nowrap;">
+                Ngày ghi nhận<br><span style="font-size:11px; font-weight:400; opacity:0.85;">记录日期</span>
+              </th>
+              <th style="padding:10px 12px; text-align:left; font-size:13px; font-weight:700; border-right:1px solid rgba(255,255,255,0.15); width:180px; white-space:nowrap;">
+                Bộ phận<br><span style="font-size:11px; font-weight:400; opacity:0.85;">部门</span>
+              </th>
+              <th style="padding:10px 12px; text-align:left; font-size:13px; font-weight:700; border-right:1px solid rgba(255,255,255,0.15); min-width:260px;">
+                Mô tả chi tiết (Tiếng Trung)<br><span style="font-size:11px; font-weight:400; opacity:0.85;">详细描述 (中文)</span>
+              </th>
+              <th style="padding:10px 12px; text-align:left; font-size:13px; font-weight:700; border-right:1px solid rgba(255,255,255,0.15); min-width:260px;">
+                Mô tả chi tiết (Tiếng Việt)<br><span style="font-size:11px; font-weight:400; opacity:0.85;">详细描述 (越南语)</span>
+              </th>
+              <th style="padding:10px 12px; text-align:center; font-size:13px; font-weight:700; border-right:1px solid rgba(255,255,255,0.15); width:110px; white-space:nowrap;">
+                Xem ảnh<br><span style="font-size:11px; font-weight:400; opacity:0.85;">图片预览</span>
+              </th>
+              <th style="padding:10px 12px; text-align:center; font-size:13px; font-weight:700; border-right:1px solid rgba(255,255,255,0.15); width:160px; white-space:nowrap;">
+                Trạng thái<br><span style="font-size:11px; font-weight:400; opacity:0.85;">状态</span>
+              </th>
+              <th style="padding:10px 12px; text-align:center; font-size:13px; font-weight:700; border-right:1px solid rgba(255,255,255,0.15); width:140px; white-space:nowrap;">
+                Ngày cải thiện<br><span style="font-size:11px; font-weight:400; opacity:0.85;">改善日期</span>
+              </th>
+              <th style="padding:10px 12px; text-align:center; font-size:13px; font-weight:700; width:120px; white-space:nowrap;">
+                Thao tác<br><span style="font-size:11px; font-weight:400; opacity:0.85;">操作</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -976,9 +1456,112 @@
       }
     });
 
+    // Nút Thêm Lỗi Mới (Mở Form 7 Trường Chuẩn Excel)
+    $("#hse-btn-add-defect")?.addEventListener("click", () => openDefectFormModal(null));
+
+    // Form CRUD Modal Events
+    $("#hse-defect-crud-form")?.addEventListener("submit", handleDefectFormSubmit);
+    $("#hse-form-modal-close-btn")?.addEventListener("click", closeDefectFormModal);
+    $("#hse-form-cancel-btn")?.addEventListener("click", closeDefectFormModal);
+
+    $("#hse-form-dept-select")?.addEventListener("change", (e) => {
+      const isCustom = e.target.value === "__custom__";
+      const customInp = $("#hse-form-dept-custom");
+      if (customInp) {
+        customInp.style.display = isCustom ? "block" : "none";
+        if (isCustom) customInp.focus();
+      }
+    });
+
+    $("#hse-form-status-select")?.addEventListener("change", (e) => {
+      const val = e.target.value;
+      updateFormStatusStyling(val);
+      const dateInp = $("#hse-form-improve-date");
+      if (val === "Cải thiện") {
+        if (dateInp && !dateInp.value) {
+          dateInp.value = new Date().toISOString().substring(0, 10);
+        }
+      } else {
+        if (dateInp) dateInp.value = "";
+      }
+    });
+
+    // AI Translation Buttons in Form
+    $("#hse-btn-ai-translate-zh")?.addEventListener("click", translateVnToZh);
+    $("#hse-btn-ai-translate-vn")?.addEventListener("click", translateZhToVn);
+
+    // AI Vision Button in Form
+    $("#hse-btn-ai-vision-analyze")?.addEventListener("click", analyzePhotoWithAIVision);
+
+    // Form Image Upload & Remove
+    $("#hse-form-img-preview-box")?.addEventListener("click", () => {
+      $("#hse-form-file-input")?.click();
+    });
+    $("#hse-form-file-input")?.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        showToast("📸 Đang nén ảnh...");
+        const compressed = await compressImageClient(file);
+        updateFormImageDisplay(compressed);
+        showToast("✓ Đã tải ảnh lên thành công!");
+      } catch (err) {
+        showToast("Lỗi nạp ảnh: " + err.message, true);
+      } finally {
+        e.target.value = "";
+      }
+    });
+    $("#hse-form-remove-img-btn")?.addEventListener("click", () => {
+      updateFormImageDisplay("");
+      showToast("🗑️ Đã xóa ảnh!");
+    });
+
+    // Lightbox Controls
+    $("#hse-lightbox-zoom-in")?.addEventListener("click", () => zoomLightbox(0.25));
+    $("#hse-lightbox-zoom-out")?.addEventListener("click", () => zoomLightbox(-0.25));
+    $("#hse-lightbox-rotate")?.addEventListener("click", rotateLightbox);
+    $("#hse-lightbox-download")?.addEventListener("click", downloadLightboxImage);
+    $("#hse-lightbox-close")?.addEventListener("click", closeLightbox);
+
+    // Clipboard Paste Listener (Ctrl + V để dán ảnh vào Form)
+    window.addEventListener("paste", async (e) => {
+      const modal = $("#hse-defect-form-modal");
+      if (!modal || modal.style.display === "none") return;
+
+      const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.indexOf("image") !== -1) {
+          const blob = item.getAsFile();
+          if (blob) {
+            showToast("📸 Đang nạp ảnh từ Clipboard...");
+            const compressed = await compressImageClient(blob);
+            updateFormImageDisplay(compressed);
+            showToast("✓ Đã dán ảnh từ Clipboard thành công!");
+            break;
+          }
+        }
+      }
+    });
+
     // Global delegation for dynamic card/table clicks
     document.addEventListener("click", (e) => {
-      // Toggle before/after photo preview
+      // Lightbox open from image thumbnail
+      const lbBtn = e.target.closest("[data-action='open-lightbox']");
+      if (lbBtn) {
+        openLightbox(lbBtn.dataset.src, lbBtn.dataset.caption);
+        return;
+      }
+
+      // Edit defect in full form modal
+      const editBtn = e.target.closest("[data-action='edit-defect']");
+      if (editBtn) {
+        openDefectFormModal(editBtn.dataset.id);
+        return;
+      }
+
+      // Toggle before/after photo preview in card
       const togBtn = e.target.closest("[data-action='toggle-photo']");
       if (togBtn) {
         const targetId = togBtn.dataset.target;
@@ -992,14 +1575,14 @@
         return;
       }
 
-      // Quick toggle checkbox
+      // Quick toggle checkbox in card
       const chk = e.target.closest("input[data-action='quick-toggle']");
       if (chk) {
         quickToggleStatus(chk.dataset.id, chk.checked);
         return;
       }
 
-      // Quick toggle button in table
+      // Quick toggle button in table/card
       const qBtn = e.target.closest("[data-action='quick-toggle-btn']");
       if (qBtn) {
         const currentImproved = qBtn.dataset.improved === "true";
@@ -1018,6 +1601,21 @@
       const dBtn = e.target.closest("[data-action='open-detail']");
       if (dBtn) {
         openDetailModal(dBtn.dataset.id);
+        return;
+      }
+    });
+
+    // Inline Table Delegations (Status Select & Improve Date Input)
+    document.addEventListener("change", (e) => {
+      const statusSel = e.target.closest(".hse-table-status-select");
+      if (statusSel) {
+        const row = statusSel.closest("tr");
+        handleInlineStatusChange(statusSel.dataset.id, statusSel.value, row);
+        return;
+      }
+      const dtInp = e.target.closest(".hse-table-improve-date");
+      if (dtInp) {
+        handleInlineImproveDateChange(dtInp.dataset.id, dtInp.value);
         return;
       }
     });
@@ -1047,9 +1645,25 @@
       }
     });
 
+    const formModal = $("#hse-defect-form-modal");
+    formModal?.addEventListener("click", (e) => {
+      if (e.target === formModal) {
+        closeDefectFormModal();
+      }
+    });
+
+    const lbModal = $("#hse-image-lightbox-modal");
+    lbModal?.addEventListener("click", (e) => {
+      if (e.target === lbModal) {
+        closeLightbox();
+      }
+    });
+
     // Close on Escape key
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
+        closeLightbox();
+        closeDefectFormModal();
         closeDetailModal();
         closeGasConfigModal();
       }
@@ -1195,6 +1809,10 @@
     closeGasConfigModal,
     openDetailModal,
     closeDetailModal,
+    openDefectFormModal,
+    closeDefectFormModal,
+    openLightbox,
+    closeLightbox,
     testGasConnection,
     saveGasConfig
   };

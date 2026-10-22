@@ -46,6 +46,7 @@ else:
 DATA_DIR = PROJECT_ROOT / "data"
 HSE_REPORTS_DIR = DATA_DIR / "hse_reports"
 OVERRIDES_FILE = DATA_DIR / "hse_defect_tracker_overrides.json"
+MASTER_DEFECTS_FILE = DATA_DIR / "hse_master_defects.json"
 
 TRACKER_STATE_FILE = DATA_DIR / "hse_tracker_state.json"
 BASE_HSE_DIR = Path(__file__).resolve().parent / "data" / "hse"
@@ -58,11 +59,17 @@ DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbzc2q-vTj-8xCykJqEiH8
 
 class DefectUpdatePayload(BaseModel):
     defectId: str
-    improved: bool = False
+    improved: Optional[bool] = False
+    status: Optional[str] = None
     improveDate: Optional[str] = ""
+    improve_date: Optional[str] = ""
     note: Optional[str] = ""
     afterImageData: Optional[str] = ""
     date: Optional[str] = ""
+    department: Optional[str] = ""
+    zh_issue: Optional[str] = ""
+    vn_issue: Optional[str] = ""
+    img_before: Optional[str] = ""
 
 
 TOMBSTONES_FILE = DATA_DIR / "hse_tombstones.json"
@@ -392,6 +399,17 @@ class DefectAggregatorService:
         if changed:
             cls.save_overrides(overrides)
 
+        # Xóa khỏi MASTER_DEFECTS_FILE nếu có
+        if MASTER_DEFECTS_FILE.exists():
+            try:
+                with open(MASTER_DEFECTS_FILE, "r", encoding="utf-8") as mf:
+                    m_list = json.load(mf)
+                m_list = [d for d in m_list if d.get("code") != code and d.get("id") != code and d.get("source_item_key") != src_key]
+                with open(MASTER_DEFECTS_FILE, "w", encoding="utf-8") as mf:
+                    json.dump(m_list, mf, ensure_ascii=False, indent=2)
+            except Exception as ex:
+                logger.warning(f"Error removing defect from master file: {ex}")
+
         # Gửi lệnh xóa lên Google Apps Script
         gas_url = cls.get_gas_url()
         try:
@@ -424,12 +442,15 @@ class DefectAggregatorService:
         except Exception as e:
             logger.error(f"Could not write tracker state file: {e}")
 
-        # 2. Xóa sạch file overrides
+        # 2. Xóa sạch file overrides & master defects
         try:
             with open(OVERRIDES_FILE, "w", encoding="utf-8") as of:
                 json.dump({}, of, ensure_ascii=False, indent=2)
+            if MASTER_DEFECTS_FILE.exists():
+                with open(MASTER_DEFECTS_FILE, "w", encoding="utf-8") as mf:
+                    json.dump([], mf, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"Could not clear overrides file: {e}")
+            logger.error(f"Could not clear overrides/master file: {e}")
 
         # 3. Gửi lệnh xóa sạch lên Google Apps Script (hỗ trợ cả script mới lẫn script cũ)
         gas_url = cls.get_gas_url()
@@ -696,11 +717,29 @@ class DefectAggregatorService:
                 if not HSETombstoneManager.is_defect_deleted(code, item.get("source_item_key"), item.get("source_report_id")):
                     coded_report_defects.append(item)
 
-        has_september_report = any(d.get("month") == "2026-09" for d in coded_report_defects)
-        if has_september_report:
-            raw_defects = coded_report_defects
+        # Nguồn 0: Master Defects từ file Tổng hợp lỗi (MASTER_DEFECTS_FILE)
+        master_defects: List[Dict[str, Any]] = []
+        if not tb.get("cleared_all_defects") and MASTER_DEFECTS_FILE.exists():
+            try:
+                with open(MASTER_DEFECTS_FILE, "r", encoding="utf-8") as mf:
+                    raw_master = json.load(mf)
+                for item in raw_master:
+                    code = item.get("code") or item.get("id")
+                    if not HSETombstoneManager.is_defect_deleted(code, item.get("source_item_key", ""), item.get("source_report_id", "")):
+                        master_defects.append(dict(item))
+            except Exception as e:
+                logger.warning(f"Error loading master defects from {MASTER_DEFECTS_FILE}: {e}")
+
+        if master_defects:
+            master_months = {d.get("month") for d in master_defects if d.get("month")}
+            non_master_report_defects = [d for d in coded_report_defects if d.get("month") not in master_months]
+            raw_defects = master_defects + non_master_report_defects
         else:
-            raw_defects = baseline_defects + coded_report_defects
+            has_september_report = any(d.get("month") == "2026-09" for d in coded_report_defects)
+            if has_september_report:
+                raw_defects = coded_report_defects
+            else:
+                raw_defects = baseline_defects + coded_report_defects
 
         # Lọc lại lần cuối theo Tombstones
         final_defects: List[Dict[str, Any]] = []
@@ -719,16 +758,33 @@ class DefectAggregatorService:
             if ov:
                 if "improved" in ov:
                     d["improved"] = bool(ov["improved"])
-                    d["status"] = "Cải thiện / 已改善" if d["improved"] else "Chưa cải thiện / 未改善"
-                if ov.get("improve_date"):
+                if ov.get("status"):
+                    d["status"] = "Cải thiện" if "cải thiện" in str(ov["status"]).lower() and "chưa" not in str(ov["status"]).lower() else "Chưa cải thiện"
+                else:
+                    d["status"] = "Cải thiện" if d.get("improved") else "Chưa cải thiện"
+                if ov.get("improve_date") is not None:
                     d["improve_date"] = ov["improve_date"]
-                if ov.get("note"):
+                if ov.get("note") is not None:
                     d["note"] = ov["note"]
                 if ov.get("img_after"):
                     d["img_after"] = cls.clean_image_uri(ov["img_after"])
+                if ov.get("img_before"):
+                    d["img_before"] = cls.clean_image_uri(ov["img_before"])
+                if ov.get("vn_issue"):
+                    d["vn_issue"] = ov["vn_issue"]
+                if ov.get("zh_issue"):
+                    d["zh_issue"] = ov["zh_issue"]
+                if ov.get("department"):
+                    d["department"] = ov["department"]
+            else:
+                d["status"] = "Cải thiện" if d.get("improved") else "Chưa cải thiện"
 
-        # Sắp xếp danh sách: Ngày giảm dần, Mã giảm dần
-        raw_defects.sort(key=lambda x: (x.get("date", ""), x.get("code", "")), reverse=True)
+        # Sắp xếp danh sách: Tháng mới nhất lên đầu, trong cùng tháng mã tăng dần (DEF-YYYYMM-01, 02...)
+        raw_defects.sort(key=lambda x: (
+            -int((x.get("month") or "2026-09").replace("-", "") or 0),
+            x.get("order_idx") if x.get("order_idx") is not None else 999,
+            x.get("code") or ""
+        ))
 
         # Thu thập danh mục tháng & bộ phận khả dụng
         available_months = sorted(list({d.get("month") for d in raw_defects if d.get("month")}), reverse=True)
@@ -782,10 +838,76 @@ class DefectAggregatorService:
         }
 
     @classmethod
+    def add_defect(cls, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Thêm mới một sự cố HSE vào hệ thống Master Tracker."""
+        raw_date = str(payload.get("date") or datetime.now().strftime("%Y-%m-%d")).strip()
+        month = raw_date[:7] if len(raw_date) >= 7 else datetime.now().strftime("%Y-%m")
+        month_compact = month.replace("-", "")
+
+        # Tải danh sách hiện tại để xác định index tiếp theo
+        current_data = cls.aggregate_all_defects()
+        existing_defects = current_data.get("defects", [])
+        month_defects = [d for d in existing_defects if d.get("month") == month]
+        next_seq = len(month_defects) + 1
+
+        code = f"DEF-{month_compact}-{next_seq:02d}"
+        all_codes = {d.get("code") for d in existing_defects}
+        while code in all_codes:
+            next_seq += 1
+            code = f"DEF-{month_compact}-{next_seq:02d}"
+
+        dept_val = str(payload.get("department") or "HSE / An toàn Môi trường").strip()
+        dept_full, dept_k, dept_icon = cls.normalize_department(dept_val, dept_val)
+        zh_issue = cls.clean_text(payload.get("zh_issue") or "")
+        vn_issue = cls.clean_text(payload.get("vn_issue") or "")
+        img_b = cls.clean_image_uri(payload.get("img_before") or payload.get("imageData") or "")
+        status_val = str(payload.get("status") or "Chưa cải thiện").strip()
+        is_improved = ("cải thiện" in status_val.lower() and "chưa" not in status_val.lower()) or bool(payload.get("improved"))
+        improve_date = payload.get("improve_date") or (datetime.now().strftime("%Y-%m-%d") if is_improved else "")
+
+        new_defect = {
+            "id": code,
+            "code": code,
+            "date": raw_date,
+            "month": month,
+            "department": dept_full,
+            "dept_key": dept_k,
+            "dept_icon": dept_icon,
+            "category": cls.categorize_hse(f"{zh_issue} {vn_issue}"),
+            "zh_issue": zh_issue,
+            "vn_issue": vn_issue,
+            "status": "Cải thiện" if is_improved else "Chưa cải thiện",
+            "improved": is_improved,
+            "improve_date": improve_date if is_improved else "",
+            "img_before": img_b,
+            "img_after": "",
+            "source_type": "user_created",
+            "order_idx": next_seq
+        }
+
+        # Lưu vào MASTER_DEFECTS_FILE
+        master_list = []
+        if MASTER_DEFECTS_FILE.exists():
+            try:
+                with open(MASTER_DEFECTS_FILE, "r", encoding="utf-8") as mf:
+                    master_list = json.load(mf)
+            except Exception:
+                master_list = []
+        master_list.append(new_defect)
+        with open(MASTER_DEFECTS_FILE, "w", encoding="utf-8") as mf:
+            json.dump(master_list, mf, ensure_ascii=False, indent=2)
+
+        return {"success": True, "defect": new_defect, "message": f"Đã thêm thành công sự cố {code}!"}
+
+    @classmethod
     def update_defect(cls, payload: DefectUpdatePayload) -> Dict[str, Any]:
         """Cập nhật trạng thái sự cố và đồng bộ 2 chiều ngược về file báo cáo gốc & Google Apps Script."""
         code = payload.defectId
-        now_str = payload.improveDate or datetime.now().strftime("%Y-%m-%d %H:%M")
+        is_imp = bool(payload.improved)
+        if payload.status:
+            is_imp = ("cải thiện" in str(payload.status).lower() and "chưa" not in str(payload.status).lower())
+        
+        now_str = payload.improveDate or payload.improve_date or (datetime.now().strftime("%Y-%m-%d") if is_imp else "")
 
         # 1. Tra cứu thông tin sự cố hiện tại
         all_data = cls.aggregate_all_defects(force_reconcile=True)
@@ -799,15 +921,63 @@ class DefectAggregatorService:
 
         for k in keys_to_update:
             item_ov = overrides.get(k, {})
-            item_ov["improved"] = payload.improved
-            item_ov["improve_date"] = now_str if payload.improved else ""
+            item_ov["improved"] = is_imp
+            item_ov["status"] = "Cải thiện" if is_imp else "Chưa cải thiện"
+            item_ov["improve_date"] = now_str if is_imp else ""
             if payload.note is not None:
                 item_ov["note"] = payload.note
             if payload.afterImageData:
                 item_ov["img_after"] = cls.clean_image_uri(payload.afterImageData)
+            if payload.vn_issue:
+                item_ov["vn_issue"] = payload.vn_issue
+            if payload.zh_issue:
+                item_ov["zh_issue"] = payload.zh_issue
+            if payload.department:
+                item_ov["department"] = payload.department
+            if payload.date:
+                item_ov["date"] = payload.date
+            if payload.img_before:
+                item_ov["img_before"] = cls.clean_image_uri(payload.img_before)
             overrides[k] = item_ov
 
         cls.save_overrides(overrides)
+
+        # Cập nhật trực tiếp vào MASTER_DEFECTS_FILE nếu có
+        if MASTER_DEFECTS_FILE.exists():
+            try:
+                with open(MASTER_DEFECTS_FILE, "r", encoding="utf-8") as mf:
+                    m_list = json.load(mf)
+                m_changed = False
+                for item in m_list:
+                    if item.get("code") == code or item.get("id") == code:
+                        item["improved"] = is_imp
+                        item["status"] = "Cải thiện" if is_imp else "Chưa cải thiện"
+                        item["improve_date"] = now_str if is_imp else ""
+                        if payload.note is not None:
+                            item["note"] = payload.note
+                        if payload.afterImageData:
+                            item["img_after"] = cls.clean_image_uri(payload.afterImageData)
+                        if payload.vn_issue:
+                            item["vn_issue"] = payload.vn_issue
+                        if payload.zh_issue:
+                            item["zh_issue"] = payload.zh_issue
+                        if payload.department:
+                            dept_f, dept_k, dept_ic = cls.normalize_department(payload.department, payload.department)
+                            item["department"] = dept_f
+                            item["dept_key"] = dept_k
+                            item["dept_icon"] = dept_ic
+                        if payload.date:
+                            item["date"] = payload.date
+                            item["month"] = payload.date[:7] if len(payload.date) >= 7 else item.get("month", "2026-09")
+                        if payload.img_before:
+                            item["img_before"] = cls.clean_image_uri(payload.img_before)
+                        m_changed = True
+                        break
+                if m_changed:
+                    with open(MASTER_DEFECTS_FILE, "w", encoding="utf-8") as mf:
+                        json.dump(m_list, mf, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning(f"Error updating master defect file: {e}")
 
         # 3. Đồng bộ ngược vào file JSON báo cáo gốc nếu sự cố bắt nguồn từ báo cáo
         if matched and matched.get("source_file"):
@@ -950,10 +1120,10 @@ class DefectAggregatorService:
     @classmethod
     def import_master_excel(cls, file_bytes: bytes) -> Dict[str, Any]:
         """
-        Nhập và đồng bộ dữ liệu từ tệp Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx lên hệ thống:
-        - Bóc tách trạng thái (Cải thiện / Chưa cải thiện), ngày hoàn thành, ghi chú đối sách.
-        - Tự động bóc tách ảnh từ cellimages.xml nếu có.
-        - Cập nhật persistent overrides và đồng bộ hóa hai chiều.
+        Nhập và đồng bộ dữ liệu từ tệp Master Excel (ví dụ Tổng hợp lỗi tháng 9 2026.xlsx) lên hệ thống:
+        - Bóc tách 100% ảnh nhúng từ xl/cellimages.xml (WPS _xlfn.DISPIMG) và drawings.
+        - Đọc chính xác 7 cột từ Row 5 trở đi theo đúng thứ tự bản ghi.
+        - Lưu vào MASTER_DEFECTS_FILE và đồng bộ.
         """
         import openpyxl
         buf = io.BytesIO(file_bytes)
@@ -961,27 +1131,28 @@ class DefectAggregatorService:
 
         target_sheet = None
         for sname in wb.sheetnames:
-            if any(k in sname.lower() for k in ["tổng hợp", "tong hop", "tat ca", "all", "lỗi"]):
+            if any(k in sname.lower() for k in ["tổng hợp", "tong hop", "tat ca", "all", "lỗi", "sheet1"]):
                 target_sheet = wb[sname]
                 break
         if not target_sheet:
             target_sheet = wb.active
 
         # Trích xuất ảnh nhúng từ cellimages.xml nếu có
-        cell_images_map = {}
+        cell_images_map: Dict[str, str] = {}
         try:
             buf.seek(0)
             with zipfile.ZipFile(buf, 'r') as z:
                 if 'xl/cellimages.xml' in z.namelist() and 'xl/_rels/cellimages.xml.rels' in z.namelist():
-                    rels_xml = z.read('xl/_rels/cellimages.xml.rels').decode('utf-8')
+                    rels_xml = z.read('xl/_rels/cellimages.xml.rels').decode('utf-8', errors='ignore')
                     rid_to_media = dict(re.findall(r'Id="([^"]+)"[^>]*Target="([^"]+)"', rels_xml))
-                    cell_xml = z.read('xl/cellimages.xml').decode('utf-8')
-                    uuid_to_rid = dict(re.findall(r'name="([^"]+)"[^>]*>.*?r:embed="([^"]+)"', cell_xml, re.DOTALL))
-                    
+                    cell_xml = z.read('xl/cellimages.xml').decode('utf-8', errors='ignore')
+                    name_embed = re.findall(r'<xdr:cNvPr[^>]*name="([^"]+)".*?<a:blip[^>]*r:embed="([^"]+)"', cell_xml, re.DOTALL)
+                    uuid_to_rid = dict(name_embed)
+
                     sheet_filenames = [n for n in z.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
                     for s_fn in sheet_filenames:
-                        sheet_xml = z.read(s_fn).decode('utf-8')
-                        for cell_coord, formula in re.findall(r'<c\s+r="([A-Z0-9]+)"[^>]*>.*?<f>_xlfn\.DISPIMG\(&quot;([^&]+)&quot;,1\)</f>', sheet_xml):
+                        sheet_xml = z.read(s_fn).decode('utf-8', errors='ignore')
+                        for cell_coord, formula in re.findall(r'<c\s+r="([A-Z0-9]+)"[^>]*>.*?<f>(?:_xlfn\.)?DISPIMG\(&quot;([^&]+)&quot;,1\)</f>', sheet_xml):
                             rid = uuid_to_rid.get(formula)
                             if rid:
                                 target_media = rid_to_media.get(rid)
@@ -996,20 +1167,47 @@ class DefectAggregatorService:
         except Exception as ex:
             logger.warning(f"Could not extract cell images during import: {ex}")
 
-        all_defects = cls.aggregate_all_defects(force_reconcile=True)["defects"]
-        updated_count = 0
+        # Hỗ trợ ảnh drawing nếu có
+        try:
+            if hasattr(target_sheet, '_images'):
+                for img in target_sheet._images:
+                    row = getattr(img.anchor._from, 'row', None)
+                    col = getattr(img.anchor._from, 'col', None)
+                    if row is not None and col is not None:
+                        cell_coord = f"{openpyxl.utils.get_column_letter(col+1)}{row+1}"
+                        if cell_coord not in cell_images_map and hasattr(img, '_data'):
+                            img_b = img._data()
+                            b64 = base64.b64encode(img_b).decode('utf-8')
+                            cell_images_map[cell_coord] = f"data:image/jpeg;base64,{b64}"
+        except Exception as ex:
+            logger.warning(f"Could not extract drawing images: {ex}")
 
+        new_defects = []
         for r in range(5, target_sheet.max_row + 1):
             date_val = str(target_sheet.cell(r, 1).value or "").strip()
             dept_val = str(target_sheet.cell(r, 2).value or "").strip()
             zh_val = str(target_sheet.cell(r, 3).value or "").strip()
             vn_val = str(target_sheet.cell(r, 4).value or "").strip()
+            img_formula = str(target_sheet.cell(r, 5).value or "").strip()
             status_val = str(target_sheet.cell(r, 6).value or "").strip()
             improve_date_val = str(target_sheet.cell(r, 7).value or "").strip()
-            note_val = str(target_sheet.cell(r, 8).value or "").strip() if target_sheet.max_column >= 8 else ""
 
             if not vn_val and not zh_val and not date_val:
                 continue
+
+            idx = r - 4
+            month_val = date_val[:7] if len(date_val) >= 7 else "2026-09"
+            month_compact = month_val.replace("-", "")
+            code = f"DEF-{month_compact}-{idx:02d}"
+
+            img_b64 = cell_images_map.get(f"E{r}", "")
+            if not img_b64 and 'DISPIMG' in img_formula:
+                m = re.search(r'"([^"]+)"', img_formula)
+                if m:
+                    for c_coord, c_b64 in cell_images_map.items():
+                        if c_coord.endswith(str(r)):
+                            img_b64 = c_b64
+                            break
 
             is_improved = False
             s_lower = status_val.lower()
@@ -1019,80 +1217,52 @@ class DefectAggregatorService:
             if improve_date_val and improve_date_val.lower() not in ["none", "---", "", "null"]:
                 is_improved = True
 
-            matched = None
-            for d in all_defects:
-                d_vn = (d.get("vn_issue") or "").strip()
-                d_zh = (d.get("zh_issue") or "").strip()
-                if (vn_val and (vn_val in d_vn or d_vn in vn_val)) or (zh_val and (zh_val in d_zh or d_zh in zh_val)):
-                    matched = d
-                    break
-            
-            if not matched and (r - 5) < len(all_defects):
-                matched = all_defects[r - 5]
+            clean_status = "Cải thiện" if is_improved else "Chưa cải thiện"
+            clean_improve_date = improve_date_val if (is_improved and improve_date_val.lower() not in ["none", "---", "", "null"]) else ""
 
-            if matched:
-                code = matched.get("code") or matched.get("id")
-                after_img = cell_images_map.get(f"E{r}")
-                now_str = improve_date_val if is_improved else ""
-                
-                overrides = cls.load_overrides()
-                keys_to_update = [code]
-                if matched.get("source_item_key"):
-                    keys_to_update.append(matched["source_item_key"])
-                
-                for k in keys_to_update:
-                    item_ov = overrides.get(k, {})
-                    item_ov["improved"] = is_improved
-                    item_ov["improve_date"] = now_str
-                    if note_val:
-                        item_ov["note"] = note_val
-                    if after_img:
-                        item_ov["img_after"] = cls.clean_image_uri(after_img)
-                    overrides[k] = item_ov
-                cls.save_overrides(overrides)
+            dept_full, dept_k, dept_icon = cls.normalize_department(dept_val, dept_val)
 
-                if matched.get("source_file"):
-                    source_file_path = HSE_REPORTS_DIR / matched["source_file"]
-                    if source_file_path.exists():
-                        try:
-                            with open(source_file_path, "r", encoding="utf-8") as jf:
-                                rep_data = json.load(jf)
-                            changed = False
-                            finding_id = matched.get("finding_id")
-                            if "findings" in rep_data:
-                                for f_idx, f in enumerate(rep_data["findings"], 1):
-                                    if f.get("id") == finding_id or f_idx == matched.get("f_idx"):
-                                        f["improved"] = is_improved
-                                        f["improve_date"] = now_str
-                                        if note_val:
-                                            f["note"] = note_val
-                                        changed = True
-                                        break
-                            if changed:
-                                with open(source_file_path, "w", encoding="utf-8") as jf:
-                                    json.dump(rep_data, jf, ensure_ascii=False, indent=2)
-                        except Exception as e:
-                            logger.warning(f"Error syncing to source report file: {e}")
+            defect_item = {
+                "id": code,
+                "code": code,
+                "date": date_val or "2026-09-30",
+                "month": month_val,
+                "department": dept_full,
+                "dept_key": dept_k,
+                "dept_icon": dept_icon,
+                "category": cls.categorize_hse(f"{zh_val} {vn_val}"),
+                "zh_issue": zh_val,
+                "vn_issue": vn_val,
+                "status": clean_status,
+                "improved": is_improved,
+                "improve_date": clean_improve_date,
+                "img_before": img_b64,
+                "img_after": "",
+                "source_type": "imported_master",
+                "source_file": "imported.xlsx",
+                "order_idx": idx
+            }
+            new_defects.append(defect_item)
 
-                updated_count += 1
-
-        # Reconcile once at the end
-        cls.aggregate_all_defects(force_reconcile=True)
+        if new_defects:
+            with open(MASTER_DEFECTS_FILE, "w", encoding="utf-8") as mf:
+                json.dump(new_defects, mf, ensure_ascii=False, indent=2)
+            HSETombstoneManager.reset_clear_all_for_new_report()
 
         return {
             "success": True,
-            "updated_count": updated_count,
-            "total_rows": max(0, target_sheet.max_row - 4),
-            "message": f"Đã đồng bộ thành công {updated_count} sự cố từ file Master Excel lên hệ thống!"
+            "updated_count": len(new_defects),
+            "total_rows": len(new_defects),
+            "message": f"Đã đồng bộ thành công {len(new_defects)} sự cố và toàn bộ hình ảnh hiện trường từ file Master Excel lên hệ thống!"
         }
 
 
 # =============================================================================
-# Master Multi-Month Excel Exporter
+# Master HSE Excel Exporter (100% Fidelity Matching Reference Template)
 # =============================================================================
 
 class MasterHSEExcelExporter:
-    """Generates the enterprise multi-month master defect tracking spreadsheet."""
+    """Generates the enterprise master defect tracking spreadsheet matching 100% of the reference template."""
 
     def __init__(self, font_family: str = "Arial"):
         self.font_family = font_family
@@ -1101,12 +1271,6 @@ class MasterHSEExcelExporter:
             right=Side(style="thin", color="CBD5E1"),
             top=Side(style="thin", color="CBD5E1"),
             bottom=Side(style="thin", color="CBD5E1")
-        )
-        self.header_border = Border(
-            left=Side(style="thin", color="3B82F6"),
-            right=Side(style="thin", color="3B82F6"),
-            top=Side(style="medium", color="1E3A8A"),
-            bottom=Side(style="medium", color="1E3A8A")
         )
         self.images_by_cell: Dict[str, Dict[str, Any]] = {}
 
@@ -1119,12 +1283,6 @@ class MasterHSEExcelExporter:
         wb = openpyxl.Workbook()
 
         total_items = len(defects)
-        improved_items = sum(1 for d in defects if d.get("improved"))
-        pending_items = total_items - improved_items
-        rate_val = (improved_items / total_items) if total_items > 0 else 0.0
-
-        months = sorted(list({d.get("month") for d in defects if d.get("month")}), reverse=True)
-        departments = sorted(list({d.get("department") for d in defects if d.get("department")}))
 
         # =====================================================================
         # SHEET 1: 📋 Tổng Hợp Tất Cả Lỗi (ACTIVE FORM MATCHING DESKTOP MASTER)
@@ -1135,7 +1293,7 @@ class MasterHSEExcelExporter:
         ws_all.views.sheetView[0].showGridLines = True
 
         # Sheet 1 Banners
-        ws_all.merge_cells("A1:H1")
+        ws_all.merge_cells("A1:G1")
         h1 = ws_all["A1"]
         h1.value = "BẢNG TỔNG HỢP LỖI HSE TOÀN CÔNG TY - 全公司HSE隐患跟踪汇总表"
         h1.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
@@ -1143,42 +1301,38 @@ class MasterHSEExcelExporter:
         h1.alignment = Alignment(horizontal="center", vertical="center")
         ws_all.row_dimensions[1].height = 36.0
 
-        ws_all.merge_cells("A2:H2")
+        ws_all.merge_cells("A2:G2")
         h2 = ws_all["A2"]
         h2.value = "CÔNG TY TNHH VISION NEW MATERIALS VIỆT NAM / 威逊新材料（越南）有限公司"
         h2.fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
-        h2.font = Font(name=self.font_family, size=10, italic=True, color="FFFFFF")
+        h2.font = Font(name=self.font_family, size=10, italic=False, color="FFFFFF")
         h2.alignment = Alignment(horizontal="center", vertical="center")
         ws_all.row_dimensions[2].height = 22.0
         ws_all.row_dimensions[3].height = 10.0
 
-        # Exact 7-8 Column Headers (Col A..G + H Note)
+        # Exact 7 Column Headers (Col A..G)
         headers = [
-            ("A", "Ngày ghi nhận\n记录日期", 14),
-            ("B", "Bộ phận\n部门", 24),
-            ("C", "Mô tả chi tiết (Tiếng Trung)\n详细描述 (中文)", 48),
-            ("D", "Mô tả chi tiết (Tiếng Việt)\n详细描述 (越南语)", 48),
-            ("E", "Xem ảnh\n图片预览", 20),
-            ("F", "Trạng thái\n状态", 18),
-            ("G", "Ngày cải thiện\n改善日期", 16),
-            ("H", "Ghi chú & Đối sách\n备注与改善对策", 28)
+            ("A", "Ngày ghi nhận\n记录日期", 14.0),
+            ("B", "Bộ phận\n部门", 24.0),
+            ("C", "Mô tả chi tiết (Tiếng Trung)\n详细描述 (中文)", 48.0),
+            ("D", "Mô tả chi tiết (Tiếng Việt)\n详细描述 (越南语)", 48.0),
+            ("E", "Xem ảnh\n图片预览", 20.0),
+            ("F", "Trạng thái\n状态", 18.0),
+            ("G", "Ngày cải thiện\n改善日期", 16.0)
         ]
 
         ws_all.row_dimensions[4].height = 36.0
         for col_l, col_name, width in headers:
             c = ws_all[f"{col_l}4"]
             c.value = col_name
-            if col_l == "E":
-                c.fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
-            else:
-                c.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+            c.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
             c.font = Font(name=self.font_family, size=10, bold=True, color="FFFFFF")
             c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            c.border = self.header_border
+            c.border = self.thin_border
             ws_all.column_dimensions[col_l].width = width
 
-        fill_done = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
-        font_done = Font(name=self.font_family, size=9.5, bold=True, color="065F46")
+        fill_done = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+        font_done = Font(name=self.font_family, size=9.5, bold=True, color="166534")
         fill_pending = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
         font_pending = Font(name=self.font_family, size=9.5, bold=True, color="9A3412")
 
@@ -1186,22 +1340,21 @@ class MasterHSEExcelExporter:
             r = 4 + idx
             ws_all.row_dimensions[r].height = 75.0
 
-            ws_all[f"A{r}"] = item.get("date") or "2026-09-30"
-            ws_all[f"B{r}"] = item.get("department") or ""
+            ws_all[f"A{r}"] = str(item.get("date") or "2026-09-30").strip()
+            ws_all[f"B{r}"] = str(item.get("department") or "").strip()
 
-            zh = item.get("zh_issue") or ""
+            zh = str(item.get("zh_issue") or "").strip()
             zh = re.sub(r'^(?:问题|隐患|Vấn đề)[:：\s]*', '', zh).strip()
-            vn = item.get("vn_issue") or ""
+            vn = str(item.get("vn_issue") or "").strip()
             vn = re.sub(r'^(?:Vấn đề|Lỗi|Sự cố)[:：\s]*', '', vn).strip()
 
             ws_all[f"C{r}"] = zh
             ws_all[f"D{r}"] = vn
 
-            is_improved = bool(item.get("improved")) or bool(item.get("improve_date"))
-            status_text = "Cải thiện / 已改善" if is_improved else "Chưa cải thiện / 未改善"
+            is_improved = bool(item.get("improved")) or (str(item.get("status") or "").strip().lower() in ["cải thiện", "đã cải thiện", "hoàn thành", "已改善"])
+            status_text = "Cải thiện" if is_improved else "Chưa cải thiện"
             ws_all[f"F{r}"] = status_text
-            ws_all[f"G{r}"] = item.get("improve_date") or ""
-            ws_all[f"H{r}"] = item.get("note") or ""
+            ws_all[f"G{r}"] = str(item.get("improve_date") or "").strip()
 
             # Embedded image in Col E
             img_b = item.get("img_before") or ""
@@ -1216,10 +1369,10 @@ class MasterHSEExcelExporter:
                         "bytes": raw_bytes,
                         "ext": ext
                     }
-                    ws_all[f"E{r}"] = f'=DISPIMG("{img_uuid}",1)'
+                    ws_all[f"E{r}"] = f'=_xlfn.DISPIMG("{img_uuid}",1)'
                 except Exception as ex:
                     logger.warning(f"Error decoding img_before for defect {item.get('code')}: {ex}")
-                    ws_all[f"E{r}"] = "Không có ảnh\n无图片"
+                    ws_all[f"E{r}"] = ""
             elif img_b and os.path.exists(img_b):
                 try:
                     with open(img_b, "rb") as f_img:
@@ -1231,11 +1384,11 @@ class MasterHSEExcelExporter:
                         "bytes": raw_bytes,
                         "ext": ext
                     }
-                    ws_all[f"E{r}"] = f'=DISPIMG("{img_uuid}",1)'
+                    ws_all[f"E{r}"] = f'=_xlfn.DISPIMG("{img_uuid}",1)'
                 except Exception:
-                    ws_all[f"E{r}"] = "Không có ảnh\n无图片"
+                    ws_all[f"E{r}"] = ""
             else:
-                ws_all[f"E{r}"] = "Không có ảnh\n无图片"
+                ws_all[f"E{r}"] = ""
 
             for col_l, _, _ in headers:
                 cell = ws_all[f"{col_l}{r}"]
@@ -1245,10 +1398,11 @@ class MasterHSEExcelExporter:
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif col_l == "B":
                     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                elif col_l in ["C", "D", "H"]:
+                elif col_l in ["C", "D"]:
                     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 elif col_l == "F":
                     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    cell.font = Font(name=self.font_family, size=9.5, bold=True)
                     if is_improved:
                         cell.fill = fill_done
                         cell.font = font_done
@@ -1259,160 +1413,16 @@ class MasterHSEExcelExporter:
                     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
         # Data Validation on Col F (Trạng thái)
-        # Thiết lập vùng tham chiếu cố định tại Z1:Z2 để dropdown hiển thị chuẩn 100% trên mọi phiên bản Excel/WPS
-        ws_all["Z1"] = "Cải thiện / 已改善"
-        ws_all["Z2"] = "Chưa cải thiện / 未改善"
-        ws_all.column_dimensions["Z"].hidden = True
-
-        dv = DataValidation(type="list", formula1="=$Z$1:$Z$2", allow_blank=True)
-        dv.error = 'Vui lòng chọn từ danh sách: Cải thiện / 已改善 hoặc Chưa cải thiện / 未改善\n请从下拉列表选择：Cải thiện / 已改善 或 Chưa cải thiện / 未改善'
-        dv.errorTitle = 'Lựa chọn không hợp lệ / 无效选择'
-        dv.prompt = 'Chọn trạng thái / 选择状态: Cải thiện / 已改善 hoặc Chưa cải thiện / 未改善'
-        dv.promptTitle = 'Trạng thái xử lý / 改善状态'
+        dv = DataValidation(type="list", formula1='"Cải thiện,Chưa cải thiện"', allow_blank=True)
+        dv.error = 'Vui lòng chọn từ danh sách: Cải thiện hoặc Chưa cải thiện'
+        dv.errorTitle = 'Lựa chọn không hợp lệ'
+        dv.prompt = 'Chọn trạng thái: Cải thiện / Chưa cải thiện'
+        dv.promptTitle = 'Trạng thái xử lý'
         ws_all.add_data_validation(dv)
-        dv.add(f"F5:F{4 + total_items + 100}")
+        dv.add(f"F5:F{max(4 + total_items + 50, 100)}")
 
         ws_all.freeze_panes = "A5"
-        ws_all.auto_filter.ref = f"A4:H{4 + total_items}"
-
-        # =====================================================================
-        # SHEET 2: 📊 DASHBOARD TỔNG THỂ (KPI & TRENDS)
-        # =====================================================================
-        ws_dash = wb.create_sheet(title="📊 DASHBOARD TỔNG THỂ")
-        ws_dash.sheet_properties.tabColor = "1E40AF"
-        ws_dash.views.sheetView[0].showGridLines = False
-
-        ws_dash.merge_cells("B2:M2")
-        b2 = ws_dash["B2"]
-        b2.value = "HỆ THỐNG THEO DÕI & KHẮC PHỤC LỖI HSE TOÀN CÔNG TY (MASTER DEFECT TRACKER)"
-        b2.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        b2.font = Font(name=self.font_family, size=15, bold=True, color="FFFFFF")
-        b2.alignment = Alignment(horizontal="center", vertical="center")
-        ws_dash.row_dimensions[2].height = 42
-
-        ws_dash.merge_cells("B3:M3")
-        b3 = ws_dash["B3"]
-        b3.value = f"Tổng hợp dữ liệu toàn diện qua tất cả các tháng ({len(months)} tháng) — Cập nhật ngày {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-        b3.fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
-        b3.font = Font(name=self.font_family, size=10, italic=True, color="FFFFFF")
-        b3.alignment = Alignment(horizontal="center", vertical="center")
-        ws_dash.row_dimensions[3].height = 24
-        ws_dash.row_dimensions[4].height = 12
-
-        kpi_cards = [
-            ("B", "D", "TỔNG SỐ LỖI PHÁT HIỆN\n总缺陷数", total_items, "2563EB", "EFF6FF", "1E40AF", "0"),
-            ("E", "G", "CẢI THIỆN / 已改善\n已改善完成", improved_items, "16A34A", "F0FDF4", "15803D", "0"),
-            ("H", "J", "CHƯA CẢI THIỆN / 未改善\n待处理/未改善", pending_items, "EA580C", "FFF7ED", "C2410C", "0"),
-            ("K", "M", "TỶ LỆ HOÀN THÀNH\n综合改善率", rate_val, "7C3AED", "FAF5FF", "6D28D9", "0.0%")
-        ]
-
-        for sc, ec, title, val, border_c, bg_c, text_c, num_fmt in kpi_cards:
-            ws_dash.merge_cells(f"{sc}5:{ec}5")
-            ws_dash.merge_cells(f"{sc}6:{ec}6")
-            
-            c_top = ws_dash[f"{sc}5"]
-            c_top.value = title
-            c_top.fill = PatternFill(start_color=bg_c, end_color=bg_c, fill_type="solid")
-            c_top.font = Font(name=self.font_family, size=9, bold=True, color="475569")
-            c_top.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-            c_val = ws_dash[f"{sc}6"]
-            c_val.value = val
-            c_val.fill = PatternFill(start_color=bg_c, end_color=bg_c, fill_type="solid")
-            c_val.font = Font(name=self.font_family, size=22, bold=True, color=text_c)
-            c_val.alignment = Alignment(horizontal="center", vertical="center")
-            c_val.number_format = num_fmt
-
-        ws_dash.row_dimensions[5].height = 32
-        ws_dash.row_dimensions[6].height = 42
-        ws_dash.row_dimensions[7].height = 14
-
-        # Table 1: Progress by Month
-        ws_dash.merge_cells("B8:F8")
-        h_m = ws_dash["B8"]
-        h_m.value = "1. TIẾN ĐỘ THEO DÕI THEO TỪNG THÁNG (按月份统计趋势)"
-        h_m.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        h_m.font = Font(name=self.font_family, size=11, bold=True, color="FFFFFF")
-        h_m.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-        ws_dash.row_dimensions[8].height = 26
-
-        m_cols = [("B", "Tháng\n月份"), ("C", "Tổng lỗi\n总数"), ("D", "Cải thiện\n已改善"), ("E", "Chưa cải thiện\n未改善"), ("F", "Tỷ lệ %\n改善率")]
-        ws_dash.row_dimensions[9].height = 26
-        for col_l, name in m_cols:
-            c = ws_dash[f"{col_l}9"]
-            c.value = name
-            c.fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
-            c.font = Font(name=self.font_family, size=9.5, bold=True, color="FFFFFF")
-            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-        m_row = 10
-        for m in months:
-            m_items = [d for d in defects if d.get("month") == m]
-            m_tot = len(m_items)
-            m_imp = sum(1 for d in m_items if d.get("improved"))
-            m_pnd = m_tot - m_imp
-            m_rate = (m_imp / m_tot) if m_tot > 0 else 0.0
-
-            ws_dash.row_dimensions[m_row].height = 22
-            ws_dash[f"B{m_row}"] = m
-            ws_dash[f"C{m_row}"] = m_tot
-            ws_dash[f"D{m_row}"] = m_imp
-            ws_dash[f"E{m_row}"] = m_pnd
-            ws_dash[f"F{m_row}"] = m_rate
-            ws_dash[f"F{m_row}"].number_format = "0.0%"
-
-            for col_l, _ in m_cols:
-                cell = ws_dash[f"{col_l}{m_row}"]
-                cell.font = Font(name=self.font_family, size=9.5)
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-                cell.border = self.thin_border
-            m_row += 1
-
-        # Table 2: Breakdown by Department
-        ws_dash.merge_cells("H8:M8")
-        h_d = ws_dash["H8"]
-        h_d.value = "2. TIẾN ĐỘ THEO DÕI THEO BỘ PHẬN (按责任部门统计)"
-        h_d.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        h_d.font = Font(name=self.font_family, size=11, bold=True, color="FFFFFF")
-        h_d.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-
-        d_cols = [("H", "Bộ phận\n部门"), ("I", "Tổng lỗi\n总数"), ("J", "Cải thiện\n已改善"), ("K", "Chưa cải thiện\n未改善"), ("L", "Tỷ lệ %\n改善率")]
-        for col_l, name in d_cols:
-            c = ws_dash[f"{col_l}9"]
-            c.value = name
-            c.fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
-            c.font = Font(name=self.font_family, size=9.5, bold=True, color="FFFFFF")
-            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-        d_row = 10
-        for d_name in departments:
-            d_items = [d for d in defects if d.get("department") == d_name]
-            d_tot = len(d_items)
-            d_imp = sum(1 for d in d_items if d.get("improved"))
-            d_pnd = d_tot - d_imp
-            d_rate = (d_imp / d_tot) if d_tot > 0 else 0.0
-
-            ws_dash.row_dimensions[d_row].height = 22
-            ws_dash[f"H{d_row}"] = d_name
-            ws_dash[f"I{d_row}"] = d_tot
-            ws_dash[f"J{d_row}"] = d_imp
-            ws_dash[f"K{d_row}"] = d_pnd
-            ws_dash[f"L{d_row}"] = d_rate
-            ws_dash[f"L{d_row}"].number_format = "0.0%"
-
-            for col_l, _ in d_cols:
-                cell = ws_dash[f"{col_l}{d_row}"]
-                cell.font = Font(name=self.font_family, size=9.5)
-                cell.alignment = Alignment(horizontal="center" if col_l != "H" else "left", vertical="center")
-                cell.border = self.thin_border
-            d_row += 1
-
-        dash_widths = {
-            "A": 3, "B": 24, "C": 12, "D": 12, "E": 12, "F": 12, "G": 4,
-            "H": 28, "I": 10, "J": 10, "K": 10, "L": 10, "M": 3
-        }
-        for cl, w in dash_widths.items():
-            ws_dash.column_dimensions[cl].width = w
+        ws_all.auto_filter.ref = f"A4:G{4 + total_items}"
 
         return wb
 
