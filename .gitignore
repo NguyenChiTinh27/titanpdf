@@ -45,6 +45,7 @@ uploads/
 tests/
 *.docx
 *.pdf
+*.xlsx
 !sample_5pages.pdf
 
 temp/

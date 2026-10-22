@@ -1103,6 +1103,48 @@
     }
   }
 
+  async function exportExcelDocument() {
+    try {
+      setLoading(true, "Đang khởi tạo báo cáo Excel (.xlsx) đa Sheet chuyên nghiệp kèm Dashboard & Biểu đồ...");
+      const payload = makePayload();
+
+      const resp = await fetch("/api/hse/export_excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || `Lỗi xuất file Excel (Mã ${resp.status}).`);
+      }
+
+      const blob = await resp.blob();
+      const disposition = resp.headers.get("Content-Disposition") || "";
+      const rawDate = payload.metadata?.date || "2026-09";
+      const monthStr = rawDate.split("T")[0].substring(0, 7).replace("-", "_");
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `HSE_Bao_Cao_Tong_Hop_${monthStr}.xlsx`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
+
+      const isDriveLocked = resp.headers.get("X-Drive-Locked") === "true";
+      if (isDriveLocked) {
+        showToast("⚠️ Tệp Excel đang được mở ở máy trạm, hệ thống đã lưu bản sao dự phòng an toàn!");
+      } else {
+        showToast("✓ Đã xuất file Excel (.xlsx) chuẩn Dashboard thành công!");
+      }
+    } catch (err) {
+      showToast(err.message || "Lỗi khi xuất file Excel.", true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function importWordOld(file) {
     if (!file) return;
     try {
@@ -1801,9 +1843,10 @@
     // Mark all pass
     $("#hse-mark-all-pass-btn")?.addEventListener("click", markAllChecklistPass);
 
-    // Export Word
+    // Export Word & Excel
     $("#hse-export-word-btn")?.addEventListener("click", exportWordDocument);
     $("#hse-preview-export-btn")?.addEventListener("click", exportWordDocument);
+    $("#hse-export-excel-btn")?.addEventListener("click", exportExcelDocument);
 
     // Metadata inputs
     $("#hse-inspection-date")?.addEventListener("input", (e) => {

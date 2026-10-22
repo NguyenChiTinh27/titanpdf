@@ -1,0 +1,155 @@
+[
+  {
+    "page": 5,
+    "date": "2026-09-30",
+    "zh_dept": "技术部",
+    "vn_dept": "Kỹ thuật",
+    "zh_issue": "技术调样台（小搅拌机）区域未保持整洁，机器 运转时，机台周围的实验色杯、溶剂、吸管和刮刀未摆 放整齐；台面沾染油漆污渍",
+    "vn_issue": "Khu vực bàn pha chế mẫu kỹ thuật (máy khuấy nhỏ) chưa gọn gàng, cụ thể các ly màu thí nghiệm, dung môi, ống hút và dao cạo không gọn gàng xung quanh bệ máy khi máy đang vận hành; bề mặt bàn dính bẩn sơn.",
+    "num_images": 3
+  },
+  {
+    "page": 5,
+    "date": "2026-09-30",
+    "zh_dept": "营业部",
+    "vn_dept": "Bán hàng",
+    "zh_issue": "铁罐子集中堆放，占用通行走廊并堵塞疏散楼梯 上下通道。这缩窄了安全通行距离，并在发生紧急事故 时阻碍工人的逃生通道。",
+    "vn_issue": "Các kiện lon thiết được tập kết lấn chiếm hành lang di chuyển và chắn lối lên xuống cầu thang thoát hiểm. Việc này làm thu hẹp khoảng cách lưu thông an toàn và cản trở lối thoát nạn của công nhân khi xảy ra sự cố khẩn cấp.",
+    "num_images": 3
+  },
+  {
+    "page": 6,
+    "date": "2026-09-30",
+    "zh_dept": "营业部",
+    "vn_dept": "Bán hàng",
+    "zh_issue": "使用后的废塑料包装物杂乱堆积在原料托盘上成 堆，未按规定分类并定点收集。",
+    "vn_issue": "Phế liệu bao bì nilon sau khi sử dụng bị vứt tích tụ bừa bãi thành đống trên pallet nguyên liệu, không được phân loại và thu gom đúng nơi quy định.",
+    "num_images": 3
+  },
+  {
+    "page": 6,
+    "date": "2026-09-30",
+    "zh_dept": "营业部",
+    "vn_dept": "Bán hàng",
+    "zh_issue": "大块木板/垫板临时斜立在靠近通道的货物托盘 侧面。需要按规定存放到物资仓库。",
+    "vn_issue": "Tấm ván gỗ/ván lót lớn dựng nghiêng tạm bợ, bên hông pallet hàng hóa sát lối đi. Cần được cất giữ vào kho vật tư đúng quy định.",
+    "num_images": 3
+  },
+  {
+    "page": 7,
+    "date": "2026-09-30",
+    "zh_dept": "营业部",
+    "vn_dept": "Bán hàng",
+    "zh_issue": "化学品铁桶顶部桶盖处积聚较多积尘污垢。需进行擦拭 清洁并保持桶面整洁。",
+    "vn_issue": "Các thùng phuy hóa chất trên nắp phuy bám nhiều bụi bẩn.",
+    "num_images": 3
+  },
+  {
+    "page": 7,
+    "date": "2026-09-30",
+    "zh_dept": "营业部",
+    "vn_dept": "Bán hàng",
+    "zh_issue": "垃圾已满溢出垃圾桶口但未及时收集倾倒，且未 加盖密封。",
+    "vn_issue": "Rác thải đã đầy tràn miệng thùng rác nhưng không được thu gom đổ rác kịp thời và không có nắp đậy kín.",
+    "num_images": 3
+  },
+  {
+    "page": 8,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "生产区域的手提式灭火器组瓶身被厚厚的灰尘覆 盖。需要擦拭干净所有灭火器、支架，并保持消防设备 的定期清洁。",
+    "vn_issue": "Cụm bình chữa cháy xách tay tại khu vực sản xuất bị phủ lớp bụi bẩn dày đặc trên thân bình. Cần được chùi sạch sẽ toàn bộ bình chữa cháy, kệ đỡ và duy trì vệ sinh thiết bị PCCC định kỳ.",
+    "num_images": 3
+  },
+  {
+    "page": 8,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "车间清洁后，粉末状化学品袋存放区域的车间地 面出现积水，水流蔓延至货物件底部。粉末化学品接触 水存在变质、结块的风险。粉末化学品存放区域不得积 水，且清洁后须立即擦干地面。",
+    "vn_issue": "Nền xưởng tại khu vực lưu trữ bao hóa chất dạng bột bị đọng nước sau khi vệ sinh nhà xưởng, nước chảy tràn sát chân các kiện hàng. Hóa chất bột tiếp xúc với nước có nguy cơ bị biến tính, vón cục. Không để nước đọng tại khu vực chứa hóa chất bột và lau khô ngay bề mặt sàn sau khi vệ sinh.",
+    "num_images": 3
+  },
+  {
+    "page": 9,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "应急灭火器放置点被原料桶和原料袋严密遮挡了 进入通道。在紧急情况下，受阻会导致工人无法迅速取 用灭火器。",
+    "vn_issue": "Điểm đặt bình chữa cháy khẩn cấp bị các thùng phuy hóa chất và bao nguyên liệu xếp che chắn kín lối vào. Trong tình huống khẩn cấp, việc bị cản trở khiến công nhân không thể tiếp cận lấy bình chữa cháy nhanh chóng.",
+    "num_images": 3
+  },
+  {
+    "page": 9,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "铁桶拆卸后的小螺纹盖未及时收集管理；拆卸后需按规 定妥善收集并定点存放。",
+    "vn_issue": "Các nắp Ren trên các thùng phuy sau khi tháo ra cần được thu gom và lưu trữ theo quy định.",
+    "num_images": 3
+  },
+  {
+    "page": 10,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "蓝色塑料托盘竖立在紧靠门口处，遮挡了应急火 灾报警按钮。使用后须立即移走托盘并存放在规定地点",
+    "vn_issue": "Pallet nhựa xanh dựng đứng ngay sát cửa, che chắn nút chuông báo cháy khẩn cấp. Cần di dời ngay pallet và lưu trữ dúng nơi quy định sau khi sử dụng.",
+    "num_images": 3
+  },
+  {
+    "page": 10,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "高空投料操作平台（阁楼/夹层）区域：护栏门打 开，且在将原料送上平台后未关上插销。",
+    "vn_issue": "Khu vực sàn thao tác nạp liệu trên cao (sàn lửng): cửa cổng an toàn/lan can mở và không được đóng chốt lại sau khi đưa nguyên liệu lên sàn.",
+    "num_images": 3
+  },
+  {
+    "page": 11,
+    "date": "2026-09-30",
+    "zh_dept": "营业部",
+    "vn_dept": "Bán hàng",
+    "zh_issue": "卸货后的一个空木托盘被遗留在仓库主通道中 央。需要将空托盘收回至规定的托盘堆放场地。",
+    "vn_issue": "Một pallet gỗ rỗng sau khi bốc dỡ hàng bị bỏ lại giữa lòng lối đi chính trong kho. Cần được thu gom pallet rỗng về bãi tập kết pallet quy định.",
+    "num_images": 3
+  },
+  {
+    "page": 11,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "放置在分散搅拌机下方的溶剂/化学品容器未盖 上防飞溅防护盖。桶口敞开无盖导致溶剂蒸汽挥发到工 作环境中。",
+    "vn_issue": "Thùng chứa dung môi/hóa chất đặt dưới máy khuấy phân tán không được đậy nắp che chắn chống văng bắn. Miệng thùng mở không có nắp đậy khiến hơi dung môi bay hơi ra môi trường làm việc.",
+    "num_images": 3
+  },
+  {
+    "page": 12,
+    "date": "2026-09-30",
+    "zh_dept": "生产部",
+    "vn_dept": "Sản xuất",
+    "zh_issue": "多袋粉末状化学品在开包取料后未扎紧袋口。需 要将所有已开包的袋口全部扎紧，并整齐摆放在规定的 托盘上。",
+    "vn_issue": "Nhiều bao hóa chất dạng bột sau khi mở lấy liệu không được buộc túm kín miệng bao. Cần được buộc túm kín miệng toàn bộ bao mở dở và xếp đặt ngay ngắn trên pallet quy định.",
+    "num_images": 3
+  },
+  {
+    "page": 12,
+    "date": "2026-09-30",
+    "zh_dept": "技术部",
+    "vn_dept": "Kỹ thuật",
+    "zh_issue": "UV 干燥机底部区域及穿电缆软管管线处积聚了一 层污垢。需要彻底清洁机械底部，清除电线上附着的灰 尘。",
+    "vn_issue": "Khu vực gầm máy sấy UV và tuyến ống ruột gà luồn dây cáp điện bị tích tụ lớp bụi bẩn công nghiệp. Cần được vệ sinh sạch sẽ gầm máy móc, làm sạch bụi bám trên đường dây điện.",
+    "num_images": 3
+  },
+  {
+    "page": 13,
+    "date": "2026-09-30",
+    "zh_dept": "技术部",
+    "vn_dept": "Kỹ thuật",
+    "zh_issue": "实验操作台与电子天平被一层化学品粉尘/污垢 覆盖，抹布与溶剂样杯在台面上摆放不整齐。需要清洁 干净，擦拭样品搅拌机，并将工作台重新整理整齐。",
+    "vn_issue": "Bàn thao tác và cân điện tử thí nghiệm bị bao phủ lớp bụi bẩn hóa chất, giẻ lau và cốc mẫu dung môi để không gọn gàng trên mặt bàn. Cần được vệ sinh sạch sẽ, lau chùi máy khuấy mẫu, sắp xếp lại bàn làm việc ngăn nắp.",
+    "num_images": 2
+  }
+]

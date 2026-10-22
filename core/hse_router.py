@@ -285,6 +285,65 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
     )
 
 
+@hse_router.post("/export_excel")
+@hse_router.get("/export_excel")
+async def export_excel_endpoint(request: Request):
+    from core.hse_excel_exporter import HSEExcelExporter
+    from core.hse_report_engine import safe_write_bytes
+
+    payload_dict = None
+    if request.method == "POST":
+        try:
+            body = await request.body()
+            if body:
+                payload_dict = json.loads(body)
+        except Exception:
+            payload_dict = None
+
+    try:
+        exporter = HSEExcelExporter()
+        excel_bytes = exporter.export_bytes(payload_dict)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo tài liệu Excel: {exc}")
+
+    meta = (payload_dict or {}).get("metadata", {})
+    raw_date = meta.get("date") or "2026-09-30"
+    clean_date = raw_date.split("T")[0]
+    month_str = clean_date[:7].replace("-", "_") if len(clean_date) >= 7 else "2026_09"
+    filename = f"HSE_Bao_Cao_Tong_Hop_{month_str}.xlsx"
+    target_path = REPORTS_DIR / filename
+
+    actual_path, was_locked = safe_write_bytes(target_path, excel_bytes)
+
+    # Google Drive auto-backup check
+    drive_backup = False
+    drive_path = detect_google_drive()
+    drive_locked = was_locked
+    drive_filename = actual_path.name
+    if drive_path:
+        try:
+            month_dir = drive_path / clean_date[:7]
+            month_dir.mkdir(parents=True, exist_ok=True)
+            drive_file, drive_locked = safe_write_bytes(month_dir / filename, excel_bytes)
+            drive_filename = drive_file.name
+            drive_backup = True
+        except Exception:
+            pass
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{actual_path.name}"',
+        "X-Drive-Locked": "true" if was_locked else "false",
+        "X-Drive-File": urllib.parse.quote(drive_filename),
+        "X-Drive-Backup": "true" if drive_backup else "false",
+        "Access-Control-Expose-Headers": "Content-Disposition, X-Drive-Locked, X-Drive-File, X-Drive-Backup"
+    }
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers
+    )
+
+
 @hse_router.post("/preview_docx")
 def preview_docx_endpoint(payload: GenerateReportRequest):
     from core.hse_report_engine import build_docx, safe_write_bytes
