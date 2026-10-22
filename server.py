@@ -2463,10 +2463,25 @@ def api_msds_detail(chem_id: str):
 
         compositions = []
         for comp in chem.get("composition", []):
+            c_min = comp.get("concentration_min")
+            c_max = comp.get("concentration_max")
+            c_text = comp.get("concentration_text") or ""
+            if (c_min is None or c_max is None) and c_text:
+                from core.msds_intelligence import extract_concentration_min_max
+                p_min, p_max = extract_concentration_min_max(c_text)
+                if c_min is None:
+                    c_min = p_min
+                if c_max is None:
+                    c_max = p_max
+
+            pct_str = c_text or (f"{c_min}-{c_max}%" if c_min is not None else "")
             compositions.append({
                 "component_name": comp.get("ingredient_name_vi") or comp.get("ingredient_name_original"),
                 "cas_number": comp.get("cas_number"),
-                "percentage": comp.get("concentration_text") or (f"{comp.get('concentration_min')}-{comp.get('concentration_max')}%" if comp.get("concentration_min") is not None else ""),
+                "percentage": pct_str,
+                "concentration_text": c_text,
+                "concentration_min": c_min,
+                "concentration_max": c_max,
                 "validation_status": comp.get("cas_status", "VALID")
             })
 

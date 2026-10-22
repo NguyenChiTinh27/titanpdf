@@ -106,6 +106,70 @@ def normalize_str(s: Any) -> str:
     return unicodedata.normalize("NFC", t)
 
 
+def extract_concentration_min_max(conc_str: Any) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Trích xuất ngưỡng Min (%) và Max (%) từ chuỗi hàm lượng hóa chất / CAS.
+    Hỗ trợ dải tỷ lệ (vd: 20-30%, 10 - 20 %), bất đẳng thức (vd: < 5%, > 90%),
+    giá trị đơn (vd: 15%, ~15%), đơn vị trọng lượng (wt%, w/w).
+    Trả về tuple (min_val, max_val) dạng float.
+    """
+    if conc_str is None:
+        return None, None
+    if isinstance(conc_str, (int, float)):
+        v = float(conc_str)
+        return v, v
+    s = str(conc_str).strip()
+    if not s or s.lower() in ('kcdl', 'n/a', 'na', 'none', 'null', '-', 'chưa rõ', 'xem chi tiết msds', 'xem msds'):
+        return None, None
+
+    # 1. Dải tỷ lệ: vd: 20-30%, 20 - 30 %, 20~30%, 20 – 30 %, 20 to 30%, 20 đến 30%, 20 至 30%
+    m_range = re.search(r'(\d+(?:\.\d+)?)\s*(?:[-~–—]|to|đến|至)\s*(\d+(?:\.\d+)?)', s, re.IGNORECASE)
+    if m_range:
+        v1 = float(m_range.group(1))
+        v2 = float(m_range.group(2))
+        return min(v1, v2), max(v1, v2)
+
+    # 2. Nhỏ hơn: < 5%, <= 5%, ≤ 5%, dưới 5%, nhỏ hơn 5%
+    m_lt = re.search(r'(?:<=|≤|<|dưới|nhỏ hơn|ít hơn|less than)\s*(\d+(?:\.\d+)?)', s, re.IGNORECASE)
+    if m_lt:
+        return 0.0, float(m_lt.group(1))
+
+    # 3. Lớn hơn: > 90%, >= 90%, ≥ 90%, trên 90%, lớn hơn 90%
+    m_gt = re.search(r'(?:>=|≥|>|trên|lớn hơn|more than)\s*(\d+(?:\.\d+)?)', s, re.IGNORECASE)
+    if m_gt:
+        return float(m_gt.group(1)), 100.0
+
+    # 4. Giá trị đơn kèm % hoặc wt% hoặc đứng một mình
+    m_single = re.search(r'(\d+(?:\.\d+)?)\s*(?:%|wt%|w/w)?', s, re.IGNORECASE)
+    if m_single and m_single.group(1):
+        if '%' in s or 'wt' in s.lower() or len(s) < 15:
+            v = float(m_single.group(1))
+            return v, v
+
+    return None, None
+
+
+def format_concentration_display(val: Any) -> str:
+    """
+    Định dạng hiển thị ngưỡng Min/Max % cho cột Excel hoặc UI.
+    Vd: 20.0 -> '20%', 0.5 -> '0.5%', 0 -> '0%', None -> ''
+    """
+    if val is None or val == "":
+        return ""
+    if isinstance(val, (int, float)):
+        return f"{int(val)}%" if val == int(val) else f"{val}%"
+    s = str(val).strip()
+    if not s or s.lower() in ("none", "null", "kcdl", "n/a"):
+        return ""
+    if not s.endswith("%"):
+        try:
+            f_val = float(s)
+            return f"{int(f_val)}%" if f_val == int(f_val) else f"{f_val}%"
+        except ValueError:
+            return s
+    return s
+
+
 # ==============================================================================
 # 1. CƠ SỞ DỮ LIỆU SQLITE MSDS CHEMICAL INVENTORY
 # ==============================================================================
@@ -292,6 +356,26 @@ class MSDSDatabase:
                                         sec_cols = [k for k in sec.keys() if k != "id"]
                                         conn.execute(f"INSERT INTO sections ({', '.join(sec_cols)}) VALUES ({', '.join(['?']*len(sec_cols))})", [sec[k] for k in sec_cols])
                                 conn.commit()
+            except Exception:
+                pass
+
+            # Tự động đồng bộ cập nhật concentration_min, concentration_max cho compositions
+            try:
+                unfilled = conn.execute("""
+                    SELECT id, concentration_text FROM compositions 
+                    WHERE (concentration_min IS NULL OR concentration_max IS NULL)
+                      AND concentration_text IS NOT NULL AND concentration_text != ''
+                """).fetchall()
+                for row in unfilled:
+                    row_id = row["id"]
+                    c_txt = row["concentration_text"]
+                    c_min, c_max = extract_concentration_min_max(c_txt)
+                    if c_min is not None or c_max is not None:
+                        conn.execute(
+                            "UPDATE compositions SET concentration_min = ?, concentration_max = ? WHERE id = ?",
+                            (c_min, c_max, row_id)
+                        )
+                conn.commit()
             except Exception:
                 pass
         cls._initialized = True
@@ -598,6 +682,17 @@ class MSDSDatabase:
             # Lưu danh sách thành phần / CAS
             compositions = data.get("composition", [])
             for c in compositions:
+                c_min = c.get("concentration_min")
+                c_max = c.get("concentration_max")
+                if (c_min is None or c_max is None) and c.get("concentration_text"):
+                    p_min, p_max = extract_concentration_min_max(c.get("concentration_text"))
+                    if c_min is None:
+                        c_min = p_min
+                    if c_max is None:
+                        c_max = p_max
+                    c["concentration_min"] = c_min
+                    c["concentration_max"] = c_max
+
                 conn.execute("""
                 INSERT INTO compositions (
                     chemical_id, ingredient_name_vi, ingredient_name_original, cas_number,
@@ -606,7 +701,7 @@ class MSDSDatabase:
                 """, (
                     chem_id, c.get("ingredient_name_vi", ""), c.get("ingredient_name_original", ""),
                     c.get("cas_number", ""), c.get("cas_status", "VALID"),
-                    c.get("concentration_text", ""), c.get("concentration_min"), c.get("concentration_max"),
+                    c.get("concentration_text", ""), c_min, c_max,
                     c.get("unit", "%")
                 ))
 
@@ -717,7 +812,14 @@ class MSDSDatabase:
                         tuple(chunk)
                     ).fetchall()
                     for cr in c_rows:
-                        comps_by_id.setdefault(cr["chemical_id"], []).append(dict(cr))
+                        c_dict = dict(cr)
+                        if (c_dict.get("concentration_min") is None or c_dict.get("concentration_max") is None) and c_dict.get("concentration_text"):
+                            p_min, p_max = extract_concentration_min_max(c_dict["concentration_text"])
+                            if c_dict.get("concentration_min") is None:
+                                c_dict["concentration_min"] = p_min
+                            if c_dict.get("concentration_max") is None:
+                                c_dict["concentration_max"] = p_max
+                        comps_by_id.setdefault(cr["chemical_id"], []).append(c_dict)
                 for item in result:
                     item["composition"] = comps_by_id.get(item["chemical_id"], [])
             else:
@@ -742,7 +844,17 @@ class MSDSDatabase:
             item["plant_name"] = item.get("plant_name") or "Nhà máy Bình Dương"
             cls._enrich_chemical_spec_fields(item)
             comps = conn.execute("SELECT * FROM compositions WHERE chemical_id = ?", (actual_id,)).fetchall()
-            item["composition"] = [dict(c) for c in comps]
+            c_list = []
+            for c in comps:
+                c_dict = dict(c)
+                if (c_dict.get("concentration_min") is None or c_dict.get("concentration_max") is None) and c_dict.get("concentration_text"):
+                    p_min, p_max = extract_concentration_min_max(c_dict["concentration_text"])
+                    if c_dict.get("concentration_min") is None:
+                        c_dict["concentration_min"] = p_min
+                    if c_dict.get("concentration_max") is None:
+                        c_dict["concentration_max"] = p_max
+                c_list.append(c_dict)
+            item["composition"] = c_list
             sects = conn.execute("SELECT * FROM sections WHERE chemical_id = ? ORDER BY section_no ASC", (actual_id,)).fetchall()
             item["sections"] = [dict(s) for s in sects]
             try:
@@ -1667,7 +1779,9 @@ class MSDSExtractorEngine:
             '      "name_vi": "Tên thành phần tiếng Việt",\n'
             '      "name_original": "Tên gốc",\n'
             '      "cas": "Số CAS",\n'
-            '      "percent": "Hàm lượng (vd: 30 - 50%)"\n'
+            '      "percent": "Hàm lượng (vd: 30 - 50%)",\n'
+            '      "min_percent": 30.0,\n'
+            '      "max_percent": 50.0\n'
             '    }\n'
             '  ],\n'
             '  "summary": "Tóm tắt an toàn điều hành bằng tiếng Việt (3-5 câu)"\n'
@@ -1716,13 +1830,32 @@ class MSDSExtractorEngine:
             if parsed.get("components") and not parsed.get("composition"):
                 parsed["composition"] = []
                 for comp in parsed["components"]:
+                    conc_txt = comp.get("percent") or comp.get("concentration_text") or ""
+                    c_min = comp.get("min_percent") or comp.get("concentration_min")
+                    c_max = comp.get("max_percent") or comp.get("concentration_max")
+                    if c_min is None or c_max is None:
+                        p_min, p_max = extract_concentration_min_max(conc_txt)
+                        if c_min is None:
+                            c_min = p_min
+                        if c_max is None:
+                            c_max = p_max
                     parsed["composition"].append({
                         "ingredient_name_vi": comp.get("name_vi") or comp.get("name") or "",
                         "ingredient_name_original": comp.get("name_original") or comp.get("name") or "",
                         "cas_number": comp.get("cas") or comp.get("cas_number") or "",
-                        "concentration_text": comp.get("percent") or comp.get("concentration_text") or "",
+                        "concentration_text": conc_txt,
+                        "concentration_min": c_min,
+                        "concentration_max": c_max,
                         "unit": "%"
                     })
+            elif parsed.get("composition"):
+                for comp in parsed["composition"]:
+                    if comp.get("concentration_min") is None or comp.get("concentration_max") is None:
+                        c_min, c_max = extract_concentration_min_max(comp.get("concentration_text") or comp.get("percent") or "")
+                        if comp.get("concentration_min") is None:
+                            comp["concentration_min"] = c_min
+                        if comp.get("concentration_max") is None:
+                            comp["concentration_max"] = c_max
 
             # Chuẩn hóa 11 trường thông số MSDS / CIL
             cls._enrich_chemical_spec_fields(parsed)
@@ -2280,19 +2413,9 @@ class MSDSExtractorEngine:
                         c_min, c_max = None, None
                         if cas_idx + 1 < len(cells):
                             conc_txt = cells[cas_idx + 1]
-                            m_range = re.search(r"(\d+(?:\.\d+)?)\s*[-~–]\s*(\d+(?:\.\d+)?)", conc_txt)
-                            if m_range:
-                                c_min = float(m_range.group(1))
-                                c_max = float(m_range.group(2))
-                                if "%" not in conc_txt:
-                                    conc_txt = f"{conc_txt}%"
-                            else:
-                                m_single = re.search(r"(\d+(?:\.\d+)?)", conc_txt)
-                                if m_single:
-                                    c_min = float(m_single.group(1))
-                                    c_max = c_min
-                                    if "%" not in conc_txt:
-                                        conc_txt = f"{conc_txt}%"
+                            c_min, c_max = extract_concentration_min_max(conc_txt)
+                            if c_min is not None and "%" not in conc_txt:
+                                conc_txt = f"{conc_txt}%"
                         data["composition"].append({
                             "ingredient_name_vi": ing_name,
                             "ingredient_name_original": ing_name,
@@ -2716,6 +2839,18 @@ class CILExcelExporter:
                 is_valid = cas_checksum_valid(cas_val) if cas_val else False
                 status_str = "HỢP LỆ (VALID)" if is_valid else ("CHƯA RÕ" if not cas_val else "CẦN RÀ SOÁT")
 
+                c_min = cp.get("concentration_min")
+                c_max = cp.get("concentration_max")
+                if (c_min is None or c_max is None) and cp.get("concentration_text"):
+                    p_min, p_max = extract_concentration_min_max(cp["concentration_text"])
+                    if c_min is None:
+                        c_min = p_min
+                    if c_max is None:
+                        c_max = p_max
+
+                disp_min = format_concentration_display(c_min)
+                disp_max = format_concentration_display(c_max)
+
                 row_vals = [
                     stt_cas,
                     c.get("chemical_id", ""),
@@ -2724,8 +2859,8 @@ class CILExcelExporter:
                     cas_val,
                     status_str,
                     cp.get("concentration_text", ""),
-                    cp.get("concentration_min", ""),
-                    cp.get("concentration_max", "")
+                    disp_min,
+                    disp_max
                 ]
 
                 for col_idx, val in enumerate(row_vals, 1):

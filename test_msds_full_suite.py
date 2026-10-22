@@ -759,6 +759,58 @@ class TestTier2_BoundaryAndCornerCases(BaseMsdsTestCase):
         resp = CLIENT.get("/mobile-msds/NON_EXISTENT_CHEM_99999")
         self.assertEqual(resp.status_code, 404, f"Invalid chemical ID must return 404, got: {resp.status_code}")
 
+    def test_t2_cas_concentration_min_max_extraction_and_excel_export(self):
+        """T2: CAS concentration extraction handles ranges, inequalities, and populates CIL Excel Col H & I."""
+        from core.msds_intelligence import extract_concentration_min_max, format_concentration_display, CILExcelExporter
+        import openpyxl
+
+        # 1. Extraction checks
+        self.assertEqual(extract_concentration_min_max("20-30%"), (20.0, 30.0))
+        self.assertEqual(extract_concentration_min_max("10 - 20 %"), (10.0, 20.0))
+        self.assertEqual(extract_concentration_min_max("15~25%"), (15.0, 25.0))
+        self.assertEqual(extract_concentration_min_max("< 5%"), (0.0, 5.0))
+        self.assertEqual(extract_concentration_min_max("> 90%"), (90.0, 100.0))
+        self.assertEqual(extract_concentration_min_max("15%"), (15.0, 15.0))
+        self.assertEqual(extract_concentration_min_max("0.5 - 2.5 wt%"), (0.5, 2.5))
+        self.assertEqual(extract_concentration_min_max("Xem chi tiết MSDS"), (None, None))
+        self.assertEqual(extract_concentration_min_max(None), (None, None))
+
+        # 2. Display formatting checks
+        self.assertEqual(format_concentration_display(20.0), "20%")
+        self.assertEqual(format_concentration_display(0.5), "0.5%")
+        self.assertEqual(format_concentration_display(None), "")
+
+        # 3. Excel CIL export check for Sheet 02_CHI_TIẾT_CAS
+        mock_chem = [{
+            "chemical_id": "TEST_CAS_MINMAX",
+            "product_name_vi": "Test MinMax Chemical",
+            "composition": [
+                {
+                    "ingredient_name_vi": "Acrylate monomer",
+                    "cas_number": "42978-66-5",
+                    "concentration_text": "20-30%"
+                }
+            ]
+        }]
+        out_path = CILExcelExporter.generate_cil_excel(mock_chem)
+        self.assertTrue(out_path.exists())
+        wb = openpyxl.load_workbook(out_path)
+        self.assertIn("02_CHI_TIẾT_CAS", wb.sheetnames)
+        ws = wb["02_CHI_TIẾT_CAS"]
+        # Verify Headers: Col 7=Hàm Lượng %, Col 8=Ngưỡng Min %, Col 9=Ngưỡng Max %
+        self.assertEqual(ws.cell(row=2, column=7).value, "Hàm Lượng %")
+        self.assertEqual(ws.cell(row=2, column=8).value, "Ngưỡng Min %")
+        self.assertEqual(ws.cell(row=2, column=9).value, "Ngưỡng Max %")
+        # Verify Row 3 data values: Col 7="20-30%", Col 8="20%", Col 9="30%"
+        self.assertEqual(ws.cell(row=3, column=7).value, "20-30%")
+        self.assertEqual(ws.cell(row=3, column=8).value, "20%")
+        self.assertEqual(ws.cell(row=3, column=9).value, "30%")
+        wb.close()
+        try:
+            out_path.unlink()
+        except Exception:
+            pass
+
 
 # =============================================================================
 # 5. Tier 3: Cross-Feature Combinations
