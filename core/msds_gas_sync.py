@@ -38,7 +38,8 @@ DATA_DIR = PROJECT_ROOT / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR / "msds_gas_config.json"
 
-DEFAULT_SECRET_TOKEN = "LUV_MSDS_SECURE_TOKEN_2026"
+DEFAULT_SECRET_TOKEN = "LUV_PDF_SYNC_KEY_2026"
+ALT_SECRET_TOKEN = "LUV_MSDS_SECURE_TOKEN_2026"
 DEFAULT_TIMEOUT = 12.0  # Google Apps Script redirection latency tolerance
 
 # 38 Tiêu đề cột chuẩn hóa đồng nhất với Google Apps Script và test suite

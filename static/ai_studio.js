@@ -1107,6 +1107,23 @@ async function runMsdsAnalysis() {
 
             const savedCode = data.chemical_id || (data.data && data.data.chem_id) || "";
             const savedName = (data.data && data.data.product_name) || "Thành công";
+            const chemObj = data.data || { chemical_id: savedCode, product_name: savedName };
+
+            // Tự động đẩy file gốc lên Google Drive & đồng bộ 2 chiều vào Google Sheets qua GAS Web App
+            if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+                try {
+                    const fileBase64 = await readFileAsBase64(file);
+                    const gasResult = await window.MsdsGasSync.upsertChemical(chemObj, fileBase64, file.name, file.type);
+                    if (gasResult && gasResult.item) {
+                        if (gasResult.item.drive_view_url) chemObj.drive_view_url = gasResult.item.drive_view_url;
+                        if (gasResult.item.drive_download_url) chemObj.drive_download_url = gasResult.item.drive_download_url;
+                        if (gasResult.item.drive_file_id) chemObj.drive_file_id = gasResult.item.drive_file_id;
+                    }
+                } catch (gasErr) {
+                    console.warn("GAS auto-sync in runMsdsAnalysis warning:", gasErr);
+                }
+            }
+
             results.success.push({ name: file.name, code: savedCode, productName: savedName });
         } catch (err) {
             results.failed.push({ name: file.name, error: err.message });
@@ -1445,6 +1462,427 @@ function updateMsdsKpiStats(allItems) {
     if (navBadge) navBadge.textContent = total > 0 ? `${total} CIL` : "CIL";
 }
 
+
+function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = err => reject(err);
+        reader.readAsDataURL(file);
+    });
+}
+
+// ==============================================================================
+// MSDS & CIL CONTINUOUS 2-WAY GOOGLE SHEETS & DRIVE SYNC ENGINE
+// ==============================================================================
+const MsdsGasSync = {
+    DEFAULT_TOKEN: "LUV_PDF_SYNC_KEY_2026",
+    DEFAULT_FOLDER_URL: "https://drive.google.com/drive/u/0/my-drive",
+
+    getUrl() {
+        return (localStorage.getItem("msds_gas_url") || "").trim();
+    },
+    setUrl(url) {
+        localStorage.setItem("msds_gas_url", (url || "").trim());
+    },
+    getToken() {
+        return (localStorage.getItem("msds_gas_token") || this.DEFAULT_TOKEN).trim();
+    },
+    setToken(token) {
+        localStorage.setItem("msds_gas_token", (token || this.DEFAULT_TOKEN).trim());
+    },
+    getFolderUrl() {
+        return localStorage.getItem("msds_gas_folder_url") || this.DEFAULT_FOLDER_URL;
+    },
+    setFolderUrl(url) {
+        if (url) localStorage.setItem("msds_gas_folder_url", url);
+    },
+    getLocalVersion() {
+        return parseInt(localStorage.getItem("luv_msds_version") || "0", 10);
+    },
+    setLocalVersion(v) {
+        localStorage.setItem("luv_msds_version", String(v || 0));
+    },
+    getOutbox() {
+        try {
+            return JSON.parse(localStorage.getItem("cil_sync_outbox") || "[]");
+        } catch (_) {
+            return [];
+        }
+    },
+    setOutbox(list) {
+        localStorage.setItem("cil_sync_outbox", JSON.stringify(list || []));
+        this.updateBadgeFromOutbox();
+    },
+    queueOutbox(actionPayload) {
+        const queue = this.getOutbox();
+        queue.push({
+            id: "outbox_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+            payload: actionPayload,
+            queuedAt: new Date().toISOString()
+        });
+        this.setOutbox(queue);
+    },
+    updateBadge(status, text) {
+        const badge = document.getElementById("msds-cloud-sync-status");
+        if (!badge) return;
+        if (status === "syncing") {
+            badge.style.background = "#eff6ff";
+            badge.style.color = "#1d4ed8";
+            badge.style.borderColor = "#93c5fd";
+            badge.innerHTML = `<span style="display:inline-block; animation:spin 1s linear infinite; margin-right:4px;">⏳</span> ${text || "Đang đồng bộ Drive..."}`;
+        } else if (status === "synced") {
+            badge.style.background = "#ecfdf5";
+            badge.style.color = "#065f46";
+            badge.style.borderColor = "#a7f3d0";
+            badge.innerHTML = `☁️ ${text || "Đã đồng bộ Drive"}`;
+        } else if (status === "pending" || status === "error") {
+            badge.style.background = "#fff7ed";
+            badge.style.color = "#c2410c";
+            badge.style.borderColor = "#fdba74";
+            const outboxCount = this.getOutbox().length;
+            const countText = outboxCount > 0 ? ` (${outboxCount})` : "";
+            badge.innerHTML = `⚠️ ${text || ("Chờ đồng bộ Drive" + countText)}`;
+        }
+    },
+    updateBadgeFromOutbox() {
+        const count = this.getOutbox().length;
+        if (count > 0) {
+            this.updateBadge("pending", `Chờ đồng bộ Drive (${count})`);
+        } else {
+            this.updateBadge("synced", "Đã đồng bộ Drive");
+        }
+    },
+
+    // Convert any chemical object to 16-field standard format
+    normalizeItem(item) {
+        if (!item || typeof item !== "object") return null;
+        const id = item.id || item.chemical_id || item.chem_id || item.product_code || ("CHEM_" + Date.now());
+        const product_code = item.product_code || item.chem_id || item.chemical_id || id;
+        const chemical_name = item.chemical_name || item.product_name_vi || item.product_name || item.product_name_original || product_code;
+        const rawType = String(item.category || item.item_type || "").toLowerCase();
+        const category = (rawType.includes("finish") || rawType.includes("thành phẩm")) ? "Thành phẩm" : "Nguyên liệu";
+        const usage = item.usage || item.intended_use || item.storage_condition || "Sử dụng trong sản xuất công nghiệp";
+        const updated_date = item.updated_date || item.revision_date || item.updated_at || item.created_at || new Date().toISOString().slice(0, 10);
+        const cas_number = item.cas_number || item.cas_primary || item.cas_numbers || "";
+        const supplier = item.supplier || item.manufacturer_supplier || item.manufacturer || "";
+
+        let ghs_classifications = [];
+        if (Array.isArray(item.ghs_classifications)) {
+            ghs_classifications = item.ghs_classifications;
+        } else if (Array.isArray(item.ghs_codes)) {
+            ghs_classifications = item.ghs_codes;
+        } else if (typeof item.ghs_symbols === "string") {
+            ghs_classifications = item.ghs_symbols.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+        }
+        if (ghs_classifications.length === 0) ghs_classifications = ["NON DG"];
+
+        const drive_file_id = item.drive_file_id || "";
+        const drive_view_url = item.drive_view_url || (drive_file_id ? `https://drive.google.com/file/d/${drive_file_id}/preview` : "");
+        const drive_download_url = item.drive_download_url || (drive_file_id ? `https://drive.google.com/uc?export=download&id=${drive_file_id}` : "");
+
+        const normalized = {
+            id,
+            product_code,
+            category,
+            chemical_name,
+            usage,
+            updated_date,
+            cas_number,
+            legal_flags: Array.isArray(item.legal_flags) ? item.legal_flags : [],
+            supplier,
+            ghs_classifications,
+            ghs_16_sections: item.ghs_16_sections || item.composition || {},
+            file_name: item.file_name || item.source_file || item.source_file_name || (product_code ? `MSDS-${product_code}.pdf` : ""),
+            drive_file_id,
+            drive_view_url,
+            drive_download_url,
+            last_synced_at: item.last_synced_at || new Date().toISOString(),
+
+            // Backward compatibility aliases
+            chem_id: id,
+            chemical_id: id,
+            product_name: chemical_name,
+            product_name_vi: chemical_name,
+            product_name_original: supplier || chemical_name,
+            item_type: category === "Thành phẩm" ? "finished_product" : "raw_material",
+            intended_use: usage,
+            revision_date: updated_date,
+            cas_primary: cas_number,
+            cas_numbers: cas_number,
+            manufacturer_supplier: supplier,
+            manufacturer: supplier,
+            ghs_codes: ghs_classifications,
+            ghs_symbols: ghs_classifications.join(", "),
+            source_file: item.file_name || item.source_file || (product_code ? `MSDS-${product_code}.pdf` : "")
+        };
+        return normalized;
+    },
+
+    async ping() {
+        const url = this.getUrl();
+        if (!url) return null;
+        try {
+            const resp = await fetch(`${url}?action=ping&t=${Date.now()}`);
+            if (!resp.ok) return null;
+            return await resp.json();
+        } catch (e) {
+            console.warn("GAS Ping failed:", e);
+            return null;
+        }
+    },
+
+    async fetchList() {
+        const url = this.getUrl();
+        if (!url) return null;
+        try {
+            const resp = await fetch(`${url}?action=list&t=${Date.now()}`);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (data && data.folderUrl) {
+                this.setFolderUrl(data.folderUrl);
+            }
+            return data;
+        } catch (e) {
+            console.warn("GAS FetchList failed:", e);
+            return null;
+        }
+    },
+
+    async postAction(payload) {
+        const url = this.getUrl();
+        if (!url) throw new Error("Chưa cấu hình Webhook URL của Google Apps Script.");
+        payload.token = payload.token || this.getToken();
+
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+            throw new Error(`GAS HTTP error ${resp.status}`);
+        }
+        return await resp.json();
+    },
+
+    async upsertChemical(item, fileBase64, fileName, mimeType) {
+        const normItem = this.normalizeItem(item);
+        const payload = {
+            token: this.getToken(),
+            action: "upsert",
+            item: normItem
+        };
+        if (fileBase64) {
+            payload.fileBase64 = fileBase64;
+            payload.fileName = fileName || normItem.file_name;
+            payload.mimeType = mimeType || "application/pdf";
+        }
+
+        this.updateBadge("syncing", "Đang lưu lên Drive & Sheets...");
+        try {
+            const res = await this.postAction(payload);
+            if (res && (res.status === "ok" || res.success)) {
+                if (res.drive_view_url) normItem.drive_view_url = res.drive_view_url;
+                if (res.drive_download_url) normItem.drive_download_url = res.drive_download_url;
+                if (res.drive_file_id) normItem.drive_file_id = res.drive_file_id;
+                if (res.version) this.setLocalVersion(res.version);
+                this.updateBadge("synced", "Đã đồng bộ Drive");
+                return { success: true, res, item: normItem };
+            } else {
+                throw new Error((res && res.error) || "Lỗi lưu dữ liệu GAS");
+            }
+        } catch (err) {
+            console.warn("Lưu lên GAS thất bại, lưu vào hàng đợi outbox:", err);
+            this.queueOutbox(payload);
+            this.updateBadge("pending", "Chờ đồng bộ Drive");
+            return { success: false, queued: true, item: normItem, error: err.message };
+        }
+    },
+
+    async bulkSync(items) {
+        if (!items || !items.length) return { success: true, count: 0 };
+        const normList = items.map(it => this.normalizeItem(it));
+        const payload = {
+            token: this.getToken(),
+            action: "bulk_sync",
+            items: normList
+        };
+
+        this.updateBadge("syncing", "Đang đồng bộ hàng loạt lên Drive...");
+        try {
+            const res = await this.postAction(payload);
+            if (res && (res.status === "ok" || res.success)) {
+                if (res.version) this.setLocalVersion(res.version);
+                this.updateBadge("synced", "Đã đồng bộ Drive");
+                return { success: true, count: normList.length, res };
+            } else {
+                throw new Error((res && res.error) || "Lỗi bulk_sync");
+            }
+        } catch (err) {
+            console.warn("Bulk sync thất bại, lưu hàng đợi outbox:", err);
+            this.queueOutbox(payload);
+            this.updateBadge("pending", "Chờ đồng bộ Drive");
+            return { success: false, queued: true, count: normList.length, error: err.message };
+        }
+    },
+
+    async deleteChemical(id, productCode, deleteDriveFile = true) {
+        const payload = {
+            token: this.getToken(),
+            action: "delete",
+            id: id || productCode,
+            product_code: productCode || id,
+            deleteDriveFile: deleteDriveFile !== false
+        };
+
+        this.updateBadge("syncing", "Đang xóa trên Drive...");
+        try {
+            const res = await this.postAction(payload);
+            if (res && (res.status === "ok" || res.success)) {
+                if (res.version) this.setLocalVersion(res.version);
+                this.updateBadge("synced", "Đã đồng bộ Drive");
+                return { success: true, res };
+            } else {
+                throw new Error((res && res.error) || "Lỗi xóa GAS");
+            }
+        } catch (err) {
+            console.warn("Xóa trên GAS thất bại, lưu hàng đợi outbox:", err);
+            this.queueOutbox(payload);
+            this.updateBadge("pending", "Chờ đồng bộ Drive");
+            return { success: false, queued: true, error: err.message };
+        }
+    },
+
+    async flushOutbox() {
+        const queue = this.getOutbox();
+        if (!queue || queue.length === 0) {
+            this.updateBadge("synced", "Đã đồng bộ Drive");
+            return;
+        }
+
+        this.updateBadge("syncing", `Đang đẩy ${queue.length} tác vụ tồn đọng...`);
+        const remaining = [];
+        let successCount = 0;
+
+        for (let i = 0; i < queue.length; i++) {
+            const item = queue[i];
+            try {
+                const res = await this.postAction(item.payload);
+                if (res && (res.status === "ok" || res.success)) {
+                    if (res.version) this.setLocalVersion(res.version);
+                    successCount++;
+                } else {
+                    remaining.push(item);
+                }
+            } catch (err) {
+                remaining.push(item);
+                for (let k = i + 1; k < queue.length; k++) {
+                    remaining.push(queue[k]);
+                }
+                break;
+            }
+        }
+
+        this.setOutbox(remaining);
+        if (remaining.length === 0) {
+            this.updateBadge("synced", "Đã đồng bộ Drive");
+        } else {
+            this.updateBadge("pending", `Chờ đồng bộ Drive (${remaining.length})`);
+        }
+        return { successCount, remainingCount: remaining.length };
+    },
+
+    async pullFromCloud(force = false) {
+        const url = this.getUrl();
+        if (!url) return false;
+
+        this.updateBadge("syncing", "Đang kiểm tra Google Sheets...");
+        try {
+            await this.flushOutbox();
+
+            const cloudRes = await this.fetchList();
+            if (cloudRes && (cloudRes.status === "ok" || cloudRes.success)) {
+                const rawData = Array.isArray(cloudRes.data) ? cloudRes.data : (Array.isArray(cloudRes.chemicals) ? cloudRes.chemicals : []);
+                const cloudVersion = cloudRes.version || 1;
+                const cloudCount = cloudRes.count || rawData.length;
+
+                // AUTO-MIGRATION: If cloud has 0 rows but local cache has chemicals, migrate up!
+                if (cloudCount === 0 && ALL_MSDS_CHEMICALS_CACHE && ALL_MSDS_CHEMICALS_CACHE.length > 0) {
+                    console.log("Google Sheets đang trống, kích hoạt Auto-Migration tự động đẩy danh mục cục bộ lên đám mây...");
+                    this.updateBadge("syncing", "Tự động di trú dữ liệu lên Google Sheets...");
+                    await this.bulkSync(ALL_MSDS_CHEMICALS_CACHE);
+                    this.updateBadge("synced", "Đã đồng bộ Drive");
+                    return true;
+                }
+
+                if (cloudCount > 0 || force) {
+                    const normalizedList = rawData.map(it => this.normalizeItem(it));
+                    ALL_MSDS_CHEMICALS_CACHE = normalizedList;
+                    try {
+                        localStorage.setItem("luv_msds_cache", JSON.stringify(ALL_MSDS_CHEMICALS_CACHE));
+                    } catch (_) {}
+                    this.setLocalVersion(cloudVersion);
+                    updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+                    const activeSearch = (document.getElementById("msds-search-input")?.value || "").trim();
+                    renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
+                    this.updateBadge("synced", "Đã đồng bộ Drive");
+                    return true;
+                }
+            }
+            this.updateBadgeFromOutbox();
+            return false;
+        } catch (err) {
+            console.warn("Lỗi khi kéo dữ liệu từ Google Sheets:", err);
+            this.updateBadgeFromOutbox();
+            return false;
+        }
+    },
+
+    async checkHeartbeat() {
+        const url = this.getUrl();
+        if (!url) return;
+        try {
+            const pingRes = await this.ping();
+            if (pingRes && pingRes.version) {
+                const cloudVer = parseInt(pingRes.version, 10);
+                const localVer = this.getLocalVersion();
+                if (cloudVer > localVer) {
+                    console.log(`Phát hiện phiên bản Cloud mới (${cloudVer} > ${localVer}), tự động đồng bộ về...`);
+                    await this.pullFromCloud(true);
+                }
+            }
+        } catch (_) {}
+    }
+};
+window.MsdsGasSync = MsdsGasSync;
+
+if (!window._msdsGasSyncIntervalStarted) {
+    window._msdsGasSyncIntervalStarted = true;
+    setInterval(() => {
+        if (window.MsdsGasSync) window.MsdsGasSync.checkHeartbeat();
+    }, 15000);
+
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && window.MsdsGasSync) {
+            window.MsdsGasSync.checkHeartbeat();
+        }
+    });
+
+    window.addEventListener("online", () => {
+        if (window.MsdsGasSync) window.MsdsGasSync.flushOutbox();
+    });
+}
+
+async function refreshMsdsCatalogWithCloud() {
+    if (window.MsdsGasSync) {
+        await window.MsdsGasSync.flushOutbox();
+        await window.MsdsGasSync.pullFromCloud(true);
+    } else {
+        await loadMsdsChemicalsList();
+    }
+}
+window.refreshMsdsCatalogWithCloud = refreshMsdsCatalogWithCloud;
+
 async function loadMsdsChemicalsList(query = "") {
     const tbody = document.getElementById("msds-table-body");
     if (!tbody) return;
@@ -1467,32 +1905,47 @@ async function loadMsdsChemicalsList(query = "") {
         console.warn("Lỗi đọc cache MSDS từ localStorage:", _cacheErr);
     }
 
-    // 2. Fetch fresh live data in background
+    // 2. Fetch fresh live data: ưu tiên kéo dữ liệu đồng bộ hai chiều từ Google Sheets / Google Drive
     try {
-        const [respMsds] = await Promise.all([
-            fetch("/api/msds/list"),
-            preloadCilLegalMatches()
-        ]);
-        const res = await respMsds.json();
+        let syncedWithGas = false;
+        if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+            syncedWithGas = await window.MsdsGasSync.pullFromCloud(false);
+        }
 
-        if (respMsds.ok && res.success && Array.isArray(res.data) && res.data.length > 0) {
-            ALL_MSDS_CHEMICALS_CACHE = res.data;
-            try {
-                localStorage.setItem("luv_msds_cache", JSON.stringify(ALL_MSDS_CHEMICALS_CACHE));
-            } catch (_saveErr) {}
-            updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
-            const activeSearch = query || (document.getElementById("msds-search-input")?.value || "").trim();
-            renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
-        } else if ((!res.data || res.data.length === 0) && ALL_MSDS_CHEMICALS_CACHE.length === 0) {
-            // Fallback to static catalog if SQLite is temporarily empty
-            const fallbackResp = await fetch("/api/msds/fallback-catalog");
-            if (fallbackResp.ok) {
-                const fbJson = await fallbackResp.json();
-                const fbList = Array.isArray(fbJson) ? fbJson : (fbJson.data || []);
-                if (fbList.length > 0) {
-                    ALL_MSDS_CHEMICALS_CACHE = fbList;
-                    updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
-                    renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, query);
+        if (!syncedWithGas) {
+            const [respMsds] = await Promise.all([
+                fetch("/api/msds/list"),
+                preloadCilLegalMatches()
+            ]);
+            const res = await respMsds.json();
+
+            if (respMsds.ok && res.success && Array.isArray(res.data) && res.data.length > 0) {
+                ALL_MSDS_CHEMICALS_CACHE = res.data;
+                try {
+                    localStorage.setItem("luv_msds_cache", JSON.stringify(ALL_MSDS_CHEMICALS_CACHE));
+                } catch (_saveErr) {}
+                updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+                const activeSearch = query || (document.getElementById("msds-search-input")?.value || "").trim();
+                renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, activeSearch);
+
+                // Auto-Migration: nếu Google Sheets đang rỗng và GAS URL đã cấu hình, đẩy toàn bộ dữ liệu lên Sheets
+                if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+                    await window.MsdsGasSync.pullFromCloud(false);
+                }
+            } else if ((!res.data || res.data.length === 0) && ALL_MSDS_CHEMICALS_CACHE.length === 0) {
+                // Fallback to static catalog if SQLite is temporarily empty
+                const fallbackResp = await fetch("/api/msds/fallback-catalog");
+                if (fallbackResp.ok) {
+                    const fbJson = await fallbackResp.json();
+                    const fbList = Array.isArray(fbJson) ? fbJson : (fbJson.data || []);
+                    if (fbList.length > 0) {
+                        ALL_MSDS_CHEMICALS_CACHE = fbList;
+                        updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+                        renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE, query);
+                        if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+                            await window.MsdsGasSync.bulkSync(ALL_MSDS_CHEMICALS_CACHE);
+                        }
+                    }
                 }
             }
         }
@@ -1681,11 +2134,16 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
         if (item.revision_date) subInfoParts.push("Cập nhật: " + escapeHtml(item.revision_date));
         const subInfoHtml = subInfoParts.length > 0 ? subInfoParts.join(" · ") : "Hóa chất công nghiệp";
 
-        const srcFileName = item.source_file || `MSDS-${displayCode}.docx`;
-        const downloadOriginalUrl = `/api/msds/download-original/${encodeURIComponent(item.chem_id || displayCode)}`;
+        const srcFileName = item.file_name || item.source_file || `MSDS-${displayCode}.docx`;
+        const driveDownloadUrl = item.drive_download_url || (item.drive_file_id ? `https://drive.google.com/uc?export=download&id=${item.drive_file_id}` : "");
+        const driveViewUrl = item.drive_view_url || (item.drive_file_id ? `https://drive.google.com/file/d/${item.drive_file_id}/preview` : "");
+        const downloadOriginalUrl = driveDownloadUrl || `/api/msds/download-original/${encodeURIComponent(item.chem_id || displayCode)}`;
         const exportWordDocxUrl = `/api/msds/export-safety-card/${encodeURIComponent(item.chem_id || displayCode)}`;
         const isSelected = SELECTED_MSDS_IDS.has(safeChemId);
         const driveFileId = item.drive_file_id || "";
+        const viewAction = driveViewUrl 
+            ? `window.open('${escapeHtml(driveViewUrl)}', '_blank')`
+            : `openMsdsDriveViewer('${safeChemId}', '${escapeHtml(driveFileId)}', '${escapeHtml(srcFileName)}')`;
 
         html += `
             <tr class="msds-table-row ${isSelected ? 'row-selected' : ''}" ondblclick="openMsdsSafetyModal('${safeChemId}')">
@@ -1718,10 +2176,10 @@ function renderMsdsFilteredTable(sourceItems, searchQuery = "") {
                 </td>
                 <td class="msds-col-file">
                     <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
-                        <a href="${downloadOriginalUrl}" download class="msds-dl-file-btn" title="Tải tệp MSDS gốc: ${escapeHtml(srcFileName)}">
+                        <a href="${downloadOriginalUrl}" target="_blank" download class="msds-dl-file-btn" title="Tải tệp MSDS gốc: ${escapeHtml(srcFileName)}">
                             <span>📥 Tải MSDS Gốc</span>
                         </a>
-                        <button type="button" class="msds-btn-preview-file" onclick="openMsdsDriveViewer('${safeChemId}', '${escapeHtml(driveFileId)}', '${escapeHtml(srcFileName)}')" title="Xem nhanh tệp MSDS gốc trực tiếp (Google Drive Preview)" style="display:inline-flex; align-items:center; gap:4px; padding:3px 7px; font-size:11px; font-weight:600; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; cursor:pointer;">
+                        <button type="button" class="msds-btn-preview-file" onclick="${viewAction}" title="Xem nhanh tệp MSDS gốc trực tiếp (Google Drive Preview)" style="display:inline-flex; align-items:center; gap:4px; padding:3px 7px; font-size:11px; font-weight:600; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; cursor:pointer;">
                             <span>👁️ Xem File Gốc</span>
                         </button>
                     </div>
@@ -2084,6 +2542,23 @@ async function deleteMsdsChemical(chemId) {
             throw new Error(res.error || "Không thể xóa hóa chất.");
         }
         SELECTED_MSDS_IDS.delete(chemId);
+
+        // Xóa trên Google Apps Script / Google Drive
+        if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+            try {
+                await window.MsdsGasSync.deleteChemical(chemId, chemId, true);
+            } catch (gDelErr) {
+                console.warn("GAS deleteChemical warning:", gDelErr);
+            }
+        }
+
+        // Cập nhật bộ nhớ đệm cục bộ
+        ALL_MSDS_CHEMICALS_CACHE = (ALL_MSDS_CHEMICALS_CACHE || []).filter(c => (c.id !== chemId && c.product_code !== chemId && c.chem_id !== chemId));
+        try {
+            localStorage.setItem("luv_msds_cache", JSON.stringify(ALL_MSDS_CHEMICALS_CACHE));
+        } catch (_) {}
+        updateMsdsKpiStats(ALL_MSDS_CHEMICALS_CACHE);
+        renderMsdsFilteredTable(ALL_MSDS_CHEMICALS_CACHE);
         await loadMsdsChemicalsList();
     } catch (err) {
         alert("Lỗi xóa hóa chất: " + err.message);
@@ -2410,6 +2885,22 @@ async function executeDeleteAllMsds() {
 
         closeMsdsDeleteAllModal();
         clearMsdsSelection();
+
+        ALL_MSDS_CHEMICALS_CACHE = [];
+        try {
+            localStorage.removeItem("luv_msds_cache");
+            localStorage.setItem("cil_sync_outbox", "[]");
+        } catch (_) {}
+
+        if (window.MsdsGasSync && window.MsdsGasSync.getUrl()) {
+            try {
+                await window.MsdsGasSync.postAction({
+                    token: window.MsdsGasSync.getToken(),
+                    action: "deleteAllChemicals"
+                });
+            } catch (_) {}
+        }
+
         await loadMsdsChemicalsList();
         alert("✅ Đã xóa sạch toàn bộ cơ sở dữ liệu hóa chất CIL thành công!");
     } catch (err) {
@@ -2429,21 +2920,11 @@ function exportCilExcel() {
     window.location.href = "/api/msds/export-cil";
 }
 
-async function openMsdsStorageFolder() {
-    if (isGuestUser()) {
-        alert("Khách (Guest) không có quyền mở thư mục lưu trữ máy chủ.");
-        return;
-    }
-    try {
-        const resp = await fetch("/api/msds/open-storage-folder", { method: "POST" });
-        const res = await resp.json();
-        if (!resp.ok || !res.success) {
-            throw new Error(res.detail || res.error || "Không thể mở thư mục lưu trữ MSDS.");
-        }
-    } catch (err) {
-        alert("Lỗi mở thư mục lưu trữ MSDS: " + err.message);
-    }
+function openMsdsStorageFolder() {
+    const folderUrl = (window.MsdsGasSync && window.MsdsGasSync.getFolderUrl()) || "https://drive.google.com/drive/u/0/my-drive";
+    window.open(folderUrl, "_blank", "noopener,noreferrer");
 }
+window.openMsdsStorageFolder = openMsdsStorageFolder;
 
 async function syncMsdsToGoogleDrive() {
     if (isGuestUser()) {
@@ -3414,6 +3895,18 @@ function closeMsdsGasSettingsModal() {
 window.closeMsdsGasSettingsModal = closeMsdsGasSettingsModal;
 
 async function loadMsdsGasConfig() {
+    const urlInput = document.getElementById("msds-gas-url-input");
+    const tokenInput = document.getElementById("msds-gas-token-input");
+    const autoSyncInput = document.getElementById("msds-gas-autosync-input");
+    const badge = document.getElementById("msds-gas-live-badge");
+    const statusMsg = document.getElementById("msds-gas-status-msg");
+
+    // Ưu tiên đọc cấu hình từ localStorage
+    const localUrl = (localStorage.getItem("msds_gas_url") || "").trim();
+    const localToken = (localStorage.getItem("msds_gas_token") || "LUV_PDF_SYNC_KEY_2026").trim();
+    if (urlInput && localUrl) urlInput.value = localUrl;
+    if (tokenInput && localToken) tokenInput.value = localToken;
+
     try {
         const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
         const role = sessionStorage.getItem("luv_user_role") || "owner";
@@ -3426,40 +3919,39 @@ async function loadMsdsGasConfig() {
         });
         const data = await resp.json();
         if (data && data.success) {
-            const urlInput = document.getElementById("msds-gas-url-input");
-            const tokenInput = document.getElementById("msds-gas-token-input");
-            const autoSyncInput = document.getElementById("msds-gas-autosync-input");
-            const badge = document.getElementById("msds-gas-live-badge");
-            const statusMsg = document.getElementById("msds-gas-status-msg");
-
-            if (urlInput) urlInput.value = data.webhook_url || "";
-            if (tokenInput && data.secret_token && !data.secret_token.includes("••••")) {
+            if (urlInput && !urlInput.value && data.webhook_url) {
+                urlInput.value = data.webhook_url;
+                localStorage.setItem("msds_gas_url", data.webhook_url);
+            }
+            if (tokenInput && (!tokenInput.value || tokenInput.value === "LUV_PDF_SYNC_KEY_2026") && data.secret_token && !data.secret_token.includes("••••")) {
                 tokenInput.value = data.secret_token;
+                localStorage.setItem("msds_gas_token", data.secret_token);
             }
             if (autoSyncInput) autoSyncInput.checked = (data.auto_sync !== false);
-
-            if (data.configured) {
-                if (badge) {
-                    badge.textContent = "Đã lưu URL";
-                    badge.style.background = "#dbeafe";
-                    badge.style.color = "#1d4ed8";
-                }
-                if (statusMsg) {
-                    statusMsg.textContent = "Webhook URL đã lưu. Bấm 'Kiểm Tra Kết Nối' để xác thực live.";
-                }
-            } else {
-                if (badge) {
-                    badge.textContent = "Chưa kết nối";
-                    badge.style.background = "#e2e8f0";
-                    badge.style.color = "#475569";
-                }
-                if (statusMsg) {
-                    statusMsg.textContent = "Chưa cấu hình Webhook URL.";
-                }
-            }
         }
     } catch (err) {
-        console.error("Lỗi khi tải cấu hình GAS:", err);
+        console.warn("Backend GAS config fallback:", err);
+    }
+
+    const currentUrl = urlInput ? urlInput.value.trim() : "";
+    if (currentUrl) {
+        if (badge) {
+            badge.textContent = "Đã cấu hình";
+            badge.style.background = "#dbeafe";
+            badge.style.color = "#1d4ed8";
+        }
+        if (statusMsg) {
+            statusMsg.textContent = "Webhook URL đã sẵn sàng. Bấm 'Kiểm Tra Kết Nối' để xác thực live.";
+        }
+    } else {
+        if (badge) {
+            badge.textContent = "Chưa kết nối";
+            badge.style.background = "#e2e8f0";
+            badge.style.color = "#475569";
+        }
+        if (statusMsg) {
+            statusMsg.textContent = "Nhập Webhook URL Google Apps Script và bấm Lưu Cài Đặt.";
+        }
     }
 }
 window.loadMsdsGasConfig = loadMsdsGasConfig;
@@ -3475,11 +3967,15 @@ async function saveMsdsGasConfig() {
     const btnSave = document.getElementById("btn-save-gas-config");
 
     const webhookUrl = (urlInput ? urlInput.value : "").trim();
-    let secretToken = (tokenInput ? tokenInput.value : "").trim();
+    let secretToken = (tokenInput ? tokenInput.value : "").trim() || "LUV_PDF_SYNC_KEY_2026";
     if (secretToken === "******" || secretToken.indexOf("•") !== -1) {
-        secretToken = "";
+        secretToken = localStorage.getItem("msds_gas_token") || "LUV_PDF_SYNC_KEY_2026";
     }
     const autoSync = autoSyncInput ? autoSyncInput.checked : true;
+
+    // Lưu vào localStorage ngay lập tức
+    localStorage.setItem("msds_gas_url", webhookUrl);
+    localStorage.setItem("msds_gas_token", secretToken);
 
     try {
         if (btnSave) {
@@ -3489,27 +3985,29 @@ async function saveMsdsGasConfig() {
 
         const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
         const role = sessionStorage.getItem("luv_user_role") || "owner";
-        const resp = await fetch("/api/msds/gas/config", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Titan-Session": token,
-                "X-Titan-Role": role,
-                "Authorization": "Bearer " + token
-            },
-            body: JSON.stringify({
-                webhook_url: webhookUrl,
-                secret_token: secretToken,
-                auto_sync: autoSync
-            })
-        });
-        const res = await resp.json();
-        if (!resp.ok || !res.success) {
-            throw new Error(res.detail || res.message || "Không thể lưu cấu hình.");
-        }
+        try {
+            await fetch("/api/msds/gas/config", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Titan-Session": token,
+                    "X-Titan-Role": role,
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({
+                    webhook_url: webhookUrl,
+                    secret_token: secretToken,
+                    auto_sync: autoSync
+                })
+            });
+        } catch (_) {}
 
         alert("✅ Đã lưu cấu hình Google Apps Script thành công!");
         await loadMsdsGasConfig();
+        // Kích hoạt đồng bộ đám mây ngay lập tức
+        if (webhookUrl && window.MsdsGasSync) {
+            await window.MsdsGasSync.pullFromCloud(true);
+        }
     } catch (err) {
         alert("Lỗi khi lưu cấu hình GAS: " + err.message);
     } finally {
@@ -3529,10 +4027,7 @@ async function testMsdsGasConnection() {
     const btnTest = document.getElementById("btn-gas-test-conn");
 
     const webhookUrl = (urlInput ? urlInput.value : "").trim();
-    let secretToken = (tokenInput ? tokenInput.value : "").trim();
-    if (secretToken === "******" || secretToken.indexOf("•") !== -1) {
-        secretToken = "";
-    }
+    let secretToken = (tokenInput ? tokenInput.value : "").trim() || "LUV_PDF_SYNC_KEY_2026";
 
     if (!webhookUrl) {
         alert("Vui lòng nhập Google Apps Script Webhook URL trước khi kiểm tra!");
@@ -3554,57 +4049,76 @@ async function testMsdsGasConnection() {
             statusMsg.textContent = "Đang gửi tín hiệu ping tới Google Apps Script...";
         }
 
-        const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
-        const role = sessionStorage.getItem("luv_user_role") || "owner";
-        const resp = await fetch("/api/msds/gas/test-connection", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Titan-Session": token,
-                "X-Titan-Role": role,
-                "Authorization": "Bearer " + token
-            },
-            body: JSON.stringify({
-                webhook_url: webhookUrl,
-                secret_token: secretToken
-            })
-        });
-        const res = await resp.json();
+        // Kiểm tra ping trực tiếp qua GET (không lo CORS preflight)
+        let pingData = null;
+        try {
+            const directResp = await fetch(`${webhookUrl}?action=ping&t=${Date.now()}`);
+            if (directResp.ok) {
+                pingData = await directResp.json();
+            }
+        } catch (_corsErr) {
+            console.warn("Direct ping warning, falling back to backend proxy:", _corsErr);
+        }
 
-        if (res && res.success) {
+        // Nếu direct ping không qua được thì gọi qua proxy Backend
+        if (!pingData) {
+            const token = sessionStorage.getItem("luv_auth_token") || localStorage.getItem("luv_auth_token") || "verified";
+            const role = sessionStorage.getItem("luv_user_role") || "owner";
+            const resp = await fetch("/api/msds/gas/test-connection", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Titan-Session": token,
+                    "X-Titan-Role": role,
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({
+                    webhook_url: webhookUrl,
+                    secret_token: secretToken
+                })
+            });
+            const res = await resp.json();
+            if (res.success && res.data) {
+                pingData = res.data;
+            } else {
+                throw new Error(res.error || res.detail || "Không thể kết nối.");
+            }
+        }
+
+        if (pingData && (pingData.status === "ok" || pingData.success)) {
             if (badge) {
-                badge.textContent = "🟢 Đã kết nối";
+                badge.textContent = "🟢 Kết Nối Hoạt Động";
                 badge.style.background = "#dcfce7";
                 badge.style.color = "#15803d";
             }
             if (statusMsg) {
-                const sheetInfo = res.sheet_name || "CIL_Chemical_Inventory";
-                const totalRows = (res.total_rows !== undefined) ? ` (${res.total_rows} dòng)` : "";
-                statusMsg.textContent = `Kết nối thành công! Sheet: ${sheetInfo}${totalRows}`;
+                const sheetRows = pingData.count ?? pingData.total_rows ?? pingData.total_chemicals_in_sheet ?? 0;
+                const cloudVer = pingData.version ? `v${pingData.version}` : "v1";
+                statusMsg.innerHTML = `<b>Kết nối Google Apps Script thành công!</b><br>` +
+                    `• Bảng tính: <b>${pingData.spreadsheetName || pingData.spreadsheet_name || "CIL_Chemical_Inventory"}</b><br>` +
+                    `• Số lượng hóa chất trong Sheet: <b>${sheetRows}</b><br>` +
+                    `• Phiên bản Cloud: <b>${cloudVer}</b><br>` +
+                    `• Thư mục Google Drive: <b>${pingData.driveSubFolder || pingData.drive_folder || "MSDS_Originals"}</b>`;
+            }
+            if (pingData.driveSubFolderUrl) {
+                localStorage.setItem("msds_gas_folder_url", pingData.driveSubFolderUrl);
             }
         } else {
-            if (badge) {
-                badge.textContent = "🔴 Lỗi kết nối";
-                badge.style.background = "#fee2e2";
-                badge.style.color = "#b91c1c";
-            }
-            if (statusMsg) {
-                statusMsg.textContent = res.message || res.error || "Không thể kết nối tới Google Apps Script.";
-            }
+            throw new Error((pingData && pingData.error) || "Phản hồi không xác thực");
         }
     } catch (err) {
         if (badge) {
-            badge.textContent = "🔴 Ngoại lệ";
+            badge.textContent = "🔴 Lỗi Kết Nối";
             badge.style.background = "#fee2e2";
             badge.style.color = "#b91c1c";
         }
         if (statusMsg) {
-            statusMsg.textContent = "Lỗi mạng hoặc không thể gọi API: " + err.message;
+            statusMsg.textContent = "Lỗi kết nối: " + err.message;
         }
     } finally {
         if (btnTest) {
             btnTest.disabled = false;
-            btnTest.textContent = "🔌 Kiểm Tra Kết Nối";
+            btnTest.textContent = "▶ Kiểm Tra Kết Nối";
         }
     }
 }
@@ -4156,6 +4670,12 @@ async function sanitizeMsdsCatalogWithAi() {
         const res = await resp.json();
         if (!resp.ok || !res.success) throw new Error(res.detail || res.message || "Lỗi chuẩn hóa CIL.");
         await loadMsdsChemicalsList();
+
+        // Tự động gọi POST (action: 'bulk_sync') để lưu toàn bộ thông tin đã chuẩn hóa lên Google Sheets
+        if (window.MsdsGasSync && window.MsdsGasSync.getUrl() && ALL_MSDS_CHEMICALS_CACHE.length > 0) {
+            await window.MsdsGasSync.bulkSync(ALL_MSDS_CHEMICALS_CACHE);
+        }
+
         alert("✅ " + (res.message || "Đã chuẩn hóa Sổ CIL thành công!"));
     } catch (err) {
         alert("❌ " + err.message);

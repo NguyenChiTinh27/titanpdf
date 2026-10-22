@@ -24,11 +24,37 @@ function testAuth() {
 
 // CẤU HÌNH HỆ THỐNG
 var CONFIG = {
-  SECRET_TOKEN: "LUV_MSDS_SECURE_TOKEN_2026",
+  SECRET_TOKEN: "LUV_PDF_SYNC_KEY_2026",
+  ALT_SECRET_TOKEN: "LUV_MSDS_SECURE_TOKEN_2026",
   DRIVE_ROOT_FOLDER: "LUV_PDF_Exports",
   DRIVE_SUB_FOLDER: "MSDS_Originals",
   SHEET_NAME_CIL: "CIL_Chemical_Inventory"
 };
+
+function getCilVersion() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var v = props.getProperty("CIL_VERSION");
+    if (!v) {
+      v = "1";
+      props.setProperty("CIL_VERSION", v);
+    }
+    return parseInt(v, 10);
+  } catch (e) {
+    return 1;
+  }
+}
+
+function incrementCilVersion() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var v = getCilVersion() + 1;
+    props.setProperty("CIL_VERSION", v.toString());
+    return v;
+  } catch (e) {
+    return 2;
+  }
+}
 
 /**
  * 38 TIÊU ĐỀ CỘT CHUẨN ĐỒNG BỘ HAI CHIỀU (SINGLE SOURCE OF TRUTH - SSOT)
@@ -59,7 +85,7 @@ function doGet(e) {
   // 1. Phục vụ API Webhook nếu có action hoặc yêu cầu format=json
   if (action || format === "json") {
     var configuredToken = getActiveSecretToken();
-    if (configuredToken && token && token !== configuredToken && action !== "ping" && action !== "test_connection") {
+    if (configuredToken && token && token !== configuredToken && token !== CONFIG.SECRET_TOKEN && token !== CONFIG.ALT_SECRET_TOKEN && action !== "ping" && action !== "test_connection") {
       return jsonResponse({ status: "error", error: "Sai mã Secret Token bảo mật!" }, 403);
     }
 
@@ -74,7 +100,7 @@ function doGet(e) {
     return jsonResponse({
       status: "ok",
       service: "TitanPDF MSDS Google Apps Script Gateway",
-      version: "3.5.0",
+      version: getCilVersion(),
       total_columns: CIL_HEADERS.length,
       timestamp: new Date().toISOString()
     });
@@ -111,7 +137,7 @@ function doPost(e) {
     var token = String(payload.token || (e.parameter && e.parameter.token) || "").trim();
     var configuredToken = getActiveSecretToken();
     if (action !== "ping" && action !== "test_connection") {
-      if (configuredToken && token && token !== "******" && token !== configuredToken && token !== CONFIG.SECRET_TOKEN) {
+      if (configuredToken && token && token !== "******" && token !== configuredToken && token !== CONFIG.SECRET_TOKEN && token !== CONFIG.ALT_SECRET_TOKEN) {
         return jsonResponse({ status: "error", error: "Xác thực thất bại: Sai Secret Token!" }, 403);
       }
     }
@@ -150,22 +176,100 @@ function doPost(e) {
       return jsonResponse(listRes);
     }
 
-    // 4. Lưu / Cập nhật Hóa chất (Upsert)
-    if (action === "saveChemical") {
-      var saveRes = handleSaveChemical(payload.chemical || payload.data);
-      return jsonResponse(saveRes);
+    // 4. Lưu / Cập nhật Hóa chất kèm tải tệp lên Google Drive (action: 'upsert' hoặc 'saveChemical')
+    if (action === "upsert" || action === "saveChemical") {
+      var item = payload.item || payload.chemical || payload.data || {};
+      if (payload.fileBase64) {
+        var uploadPayload = {
+          base64: payload.fileBase64,
+          fileName: payload.fileName || (item.product_code ? "MSDS-" + item.product_code + ".pdf" : "MSDS_" + new Date().getTime() + ".pdf"),
+          mimeType: payload.mimeType || "application/pdf"
+        };
+        var upRes = handleUploadFile(uploadPayload);
+        if (upRes && (upRes.fileId || upRes.viewUrl)) {
+          item.drive_file_id = upRes.fileId;
+          item.drive_view_url = upRes.viewUrl;
+          item.drive_download_url = upRes.downloadUrl;
+          item.source_file = uploadPayload.fileName;
+          item.file_name = uploadPayload.fileName;
+        }
+      }
+      var saveRes = handleSaveChemical(item);
+      var newVer = incrementCilVersion();
+      var ss = getOrCreateSpreadsheet();
+      var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_CIL);
+      var totalRows = Math.max(0, sheet.getLastRow() - 1);
+      return jsonResponse({
+        status: "ok",
+        success: true,
+        version: newVer,
+        count: totalRows,
+        item: item,
+        drive_file_id: item.drive_file_id || "",
+        drive_view_url: item.drive_view_url || "",
+        drive_download_url: item.drive_download_url || "",
+        saveDetails: saveRes
+      });
     }
 
-    // 5. Lưu hàng loạt Hóa chất (Batch Upsert)
-    if (action === "batchSaveChemicals") {
-      var batchRes = handleBatchSaveChemicals(payload.chemicals || payload.data || []);
-      return jsonResponse(batchRes);
+    // 5. Lưu hàng loạt Hóa chất (Batch Upsert / action: 'bulk_sync')
+    if (action === "bulk_sync" || action === "batchSaveChemicals") {
+      var items = payload.items || payload.chemicals || payload.data || [];
+      var batchRes = handleBatchSaveChemicals(items);
+      var newVer = incrementCilVersion();
+      var ss = getOrCreateSpreadsheet();
+      var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_CIL);
+      var totalRows = Math.max(0, sheet.getLastRow() - 1);
+      return jsonResponse({
+        status: "ok",
+        success: true,
+        version: newVer,
+        count: totalRows,
+        updatedCount: batchRes.count || items.length,
+        message: "Đã đồng bộ hàng loạt thành công (" + (batchRes.count || items.length) + " hóa chất)."
+      });
     }
 
-    // 6. Xóa vĩnh viễn 1 Hóa chất
-    if (action === "deleteChemical") {
-      var delRes = handleDeleteChemical(payload.chemical_id || payload.product_code);
-      return jsonResponse(delRes);
+    // 6. Xóa vĩnh viễn 1 Hóa chất (action: 'delete' hoặc 'deleteChemical')
+    if (action === "delete" || action === "deleteChemical") {
+      var chemId = payload.id || payload.chemical_id || payload.product_code || "";
+      var prodCode = payload.product_code || chemId;
+      if (payload.deleteDriveFile) {
+        try {
+          var ss = getOrCreateSpreadsheet();
+          var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_CIL);
+          var lastRow = sheet.getLastRow();
+          if (lastRow > 1) {
+            var idColData = sheet.getRange(2, 1, lastRow - 1, 32).getValues();
+            for (var di = 0; di < idColData.length; di++) {
+              var rChem = String(idColData[di][0] || "").trim().toUpperCase();
+              var rProd = String(idColData[di][1] || "").trim().toUpperCase();
+              if (rChem === String(chemId).toUpperCase() || rProd === String(prodCode).toUpperCase()) {
+                var driveFileId = idColData[di][30];
+                if (driveFileId) {
+                  DriveApp.getFileById(driveFileId).setTrashed(true);
+                }
+                break;
+              }
+            }
+          }
+        } catch (eDrive) {
+          Logger.log("Lỗi xóa file Google Drive: " + eDrive.toString());
+        }
+      }
+      var delRes = handleDeleteChemical(chemId || prodCode);
+      var newVer = incrementCilVersion();
+      var ss = getOrCreateSpreadsheet();
+      var sheet = getOrCreateSheet(ss, CONFIG.SHEET_NAME_CIL);
+      var totalRows = Math.max(0, sheet.getLastRow() - 1);
+      return jsonResponse({
+        status: "ok",
+        success: true,
+        version: newVer,
+        count: totalRows,
+        deleted: delRes.deleted,
+        message: delRes.message
+      });
     }
 
     // 7. Xóa vĩnh viễn nhiều Hóa chất
@@ -224,8 +328,11 @@ function handlePing() {
   var rootFolder = getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER);
   var subFolder = getOrCreateSubFolder(rootFolder, CONFIG.DRIVE_SUB_FOLDER);
 
+  var curVer = getCilVersion();
   return {
     status: "ok",
+    version: curVer,
+    count: totalRows,
     success: true,
     message: "Kết nối Google Apps Script Webhook thành công!",
     userEmail: email,
@@ -287,6 +394,7 @@ function handleUploadFile(payload) {
 
 /**
  * Lấy toàn bộ danh sách Hóa chất từ Google Sheet CIL_Chemical_Inventory
+ * Chuẩn hóa 16 trường + 38 trường mở rộng
  */
 function handleGetAllChemicals() {
   var ss = getOrCreateSpreadsheet();
@@ -294,8 +402,21 @@ function handleGetAllChemicals() {
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
 
+  var rootFolder = getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER);
+  var subFolder = getOrCreateSubFolder(rootFolder, CONFIG.DRIVE_SUB_FOLDER);
+  var folderUrl = subFolder.getUrl();
+  var curVersion = getCilVersion();
+
   if (lastRow <= 1 || lastCol < 1) {
-    return { status: "ok", success: true, total: 0, chemicals: [] };
+    return {
+      status: "ok",
+      version: curVersion,
+      count: 0,
+      total: 0,
+      folderUrl: folderUrl,
+      data: [],
+      chemicals: []
+    };
   }
 
   var values = sheet.getRange(2, 1, lastRow - 1, Math.min(lastCol, CIL_HEADERS.length)).getValues();
@@ -303,25 +424,56 @@ function handleGetAllChemicals() {
 
   for (var i = 0; i < values.length; i++) {
     var r = values[i];
+    var ghsList = r[11] ? String(r[11]).split(/[,;]+/).map(function(s){return s.trim();}).filter(Boolean) : [];
+    if (ghsList.length === 0) ghsList = ["NON DG"];
+
+    var driveFileId = r[30] || "";
+    var driveViewUrl = r[31] || (driveFileId ? "https://drive.google.com/file/d/" + driveFileId + "/preview" : "");
+    var driveDownloadUrl = r[32] || (driveFileId ? "https://drive.google.com/uc?export=download&id=" + driveFileId : "");
+
     var chemObj = {
-      chemical_id: r[0] || "",
+      // 16 TRƯỜNG CHUẨN HÓA THEO YÊU CẦU
+      id: r[0] || r[1] || ("CHEM_" + (i + 1)),
       product_code: r[1] || r[0] || "",
+      category: (String(r[4]).toLowerCase() === "finished_product" || r[4] === "Thành phẩm") ? "Thành phẩm" : "Nguyên liệu",
+      chemical_name: r[2] || r[3] || r[1] || "",
+      usage: r[17] || "Sử dụng trong sản xuất công nghiệp",
+      updated_date: r[36] || r[35] || "",
+      cas_number: r[6] || "",
+      legal_flags: [],
+      supplier: r[3] || "",
+      ghs_classifications: ghsList,
+      ghs_16_sections: {},
+      file_name: r[29] || "",
+      drive_file_id: driveFileId,
+      drive_view_url: driveViewUrl,
+      drive_download_url: driveDownloadUrl,
+      last_synced_at: r[36] || new Date().toISOString(),
+
+      // 38 CỘT GỐC ĐẢM BẢO TƯƠNG THÍCH TOÀN DIỆN
+      chemical_id: r[0] || "",
+      chem_id: r[0] || r[1] || "",
+      product_name: r[2] || r[3] || r[1] || "",
       product_name_vi: r[2] || "",
       product_name_original: r[3] || "",
       item_type: r[4] || "raw_material",
       mother_msds_id: r[5] || "",
       cas_primary: r[6] || "",
+      cas_numbers: r[6] || "",
       un_no: r[7] || "",
+      un_number: r[7] || "",
       transport_class: r[8] || "",
       packing_group: r[9] || "",
       signal_word: r[10] || "",
-      ghs_codes: r[11] ? String(r[11]).split(/[,;]+/).map(function(s){return s.trim();}) : [],
+      ghs_codes: ghsList,
+      ghs_symbols: ghsList.join(", "),
       hazard_statements: r[12] || "",
       precautionary_statements: r[13] || "",
       flash_point: r[14] || "",
       density: r[15] || "",
       appearance: r[16] || "",
       storage_condition: r[17] || "",
+      intended_use: r[17] || "",
       respiratory_protection: r[18] || "",
       hand_protection: r[19] || "",
       eye_protection: r[20] || "",
@@ -334,9 +486,6 @@ function handleGetAllChemicals() {
       spill_measures: r[27] || "",
       compositions_json: r[28] || "[]",
       source_file: r[29] || "",
-      drive_file_id: r[30] || "",
-      drive_view_url: r[31] || "",
-      drive_download_url: r[32] || "",
       sha256: r[33] || "",
       sync_status: r[34] || "synced",
       created_at: r[35] || "",
@@ -344,14 +493,14 @@ function handleGetAllChemicals() {
       deleted_at: r[37] || ""
     };
 
-    chemObj.chem_id = chemObj.chemical_id;
-    chemObj.product_name = chemObj.product_name_vi || chemObj.product_name_original || chemObj.chemical_id;
-    chemObj.cas_numbers = chemObj.cas_primary;
-    chemObj.un_number = chemObj.un_no;
-    chemObj.ghs_symbols = Array.isArray(chemObj.ghs_codes) ? chemObj.ghs_codes.join(", ") : String(chemObj.ghs_codes || "");
-
     try {
-      chemObj.composition = r[28] ? JSON.parse(r[28]) : [];
+      if (r[28]) {
+        var parsed = JSON.parse(r[28]);
+        if (parsed && typeof parsed === "object") {
+          chemObj.ghs_16_sections = parsed;
+          chemObj.composition = Array.isArray(parsed) ? parsed : (parsed.composition || []);
+        }
+      }
     } catch (e) {
       chemObj.composition = [];
     }
@@ -361,8 +510,11 @@ function handleGetAllChemicals() {
 
   return {
     status: "ok",
-    success: true,
+    version: curVersion,
+    count: chemicals.length,
     total: chemicals.length,
+    folderUrl: folderUrl,
+    data: chemicals,
     chemicals: chemicals
   };
 }
@@ -372,11 +524,13 @@ function handleGetAllChemicals() {
  */
 function buildRowFromChemical(chem, existingRow) {
   var nowStr = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
-  var chemId = String(chem.chemical_id || chem.product_code || "").trim();
-  var prodCode = String(chem.product_code || chemId).trim();
+  var chemId = String(chem.chemical_id || chem.product_code || chem.id || chem.chem_id || "").trim();
+  var prodCode = String(chem.product_code || chem.chem_id || chem.id || chemId).trim();
 
   var compJson = "";
-  if (chem.compositions_json) {
+  if (chem.ghs_16_sections) {
+    compJson = (typeof chem.ghs_16_sections === "string") ? chem.ghs_16_sections : JSON.stringify(chem.ghs_16_sections);
+  } else if (chem.compositions_json) {
     compJson = (typeof chem.compositions_json === "string") ? chem.compositions_json : JSON.stringify(chem.compositions_json);
   } else if (chem.composition) {
     compJson = JSON.stringify(chem.composition);
@@ -385,22 +539,26 @@ function buildRowFromChemical(chem, existingRow) {
   }
 
   var ghsCodesStr = "";
-  if (Array.isArray(chem.ghs_codes)) {
+  if (Array.isArray(chem.ghs_classifications)) {
+    ghsCodesStr = chem.ghs_classifications.join(", ");
+  } else if (Array.isArray(chem.ghs_codes)) {
     ghsCodesStr = chem.ghs_codes.join(", ");
   } else {
-    ghsCodesStr = String(chem.ghs_codes || chem.ghs_symbols || "");
+    ghsCodesStr = String(chem.ghs_codes || chem.ghs_symbols || chem.ghs_classifications || "");
   }
 
+  var itemType = chem.item_type || ((chem.category === "Thành phẩm" || chem.category === "finished_product") ? "finished_product" : "raw_material");
   var createdAt = chem.created_at || (existingRow ? existingRow[35] : nowStr);
+  var updatedAt = chem.updated_date || chem.updated_at || nowStr;
 
   return [
     chemId,                                              // 0: chemical_id
     prodCode,                                            // 1: product_code
-    chem.product_name_vi || chem.product_name || "",     // 2: product_name_vi
-    chem.product_name_original || "",                   // 3: product_name_original
-    chem.item_type || "raw_material",                   // 4: item_type
+    chem.chemical_name || chem.product_name_vi || chem.product_name || "", // 2: product_name_vi
+    chem.product_name_original || chem.supplier || "",   // 3: product_name_original / supplier
+    itemType,                                            // 4: item_type
     chem.mother_msds_id || "",                          // 5: mother_msds_id
-    chem.cas_primary || chem.cas_numbers || "",         // 6: cas_primary
+    chem.cas_number || chem.cas_primary || chem.cas_numbers || "", // 6: cas_primary
     chem.un_no || chem.un_number || "",                 // 7: un_no
     chem.transport_class || "",                         // 8: transport_class
     chem.packing_group || "",                           // 9: packing_group
@@ -411,7 +569,7 @@ function buildRowFromChemical(chem, existingRow) {
     chem.flash_point || "",                             // 14: flash_point
     chem.density || "",                                 // 15: density
     chem.appearance || "",                              // 16: appearance
-    chem.storage_condition || "",                       // 17: storage_condition
+    chem.usage || chem.intended_use || chem.storage_condition || "", // 17: storage_condition
     chem.respiratory_protection || "",                  // 18: respiratory_protection
     chem.hand_protection || "",                         // 19: hand_protection
     chem.eye_protection || "",                          // 20: eye_protection
@@ -423,14 +581,14 @@ function buildRowFromChemical(chem, existingRow) {
     chem.fire_measures || "",                           // 26: fire_measures
     chem.spill_measures || "",                          // 27: spill_measures
     compJson,                                           // 28: compositions_json
-    chem.source_file || chem.source_file_name || "",    // 29: source_file
-    chem.drive_file_id || "",                           // 30: drive_file_id
-    chem.drive_view_url || "",                          // 31: drive_view_url
-    chem.drive_download_url || "",                      // 32: drive_download_url
+    chem.file_name || chem.source_file || chem.source_file_name || "", // 29: source_file
+    chem.drive_file_id || (existingRow ? existingRow[30] : ""), // 30: drive_file_id
+    chem.drive_view_url || (existingRow ? existingRow[31] : ""), // 31: drive_view_url
+    chem.drive_download_url || (existingRow ? existingRow[32] : ""), // 32: drive_download_url
     chem.sha256 || "",                                  // 33: sha256
     chem.sync_status || "synced",                       // 34: sync_status
     createdAt,                                          // 35: created_at
-    nowStr,                                             // 36: updated_at
+    updatedAt,                                          // 36: updated_at
     ""                                                  // 37: deleted_at
   ];
 }
@@ -631,6 +789,14 @@ function getOrCreateSpreadsheet() {
     if (savedId) {
       try { ss = SpreadsheetApp.openById(savedId); } catch (e) {}
     }
+  }
+  if (!ss) {
+    try {
+      ss = SpreadsheetApp.openById("1v67i1XCsNWB8f9dTFW-uJcuzyce8zULQi6FcdjGvAts");
+      if (ss) {
+        PropertiesService.getScriptProperties().setProperty("SPREADSHEET_ID", ss.getId());
+      }
+    } catch (openErr) {}
   }
   if (!ss) {
     ss = SpreadsheetApp.create("TitanPDF_MSDS_Chemical_Database");
