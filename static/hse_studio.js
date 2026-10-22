@@ -2314,6 +2314,12 @@
       triggerAutoSave();
       await updateHseSavedCountBadge();
 
+      // Cập nhật ngay Defect Tracker và badge Navbar không cần F5
+      if (window.HseDefectTracker && typeof window.HseDefectTracker.loadDefects === 'function') {
+        window.HseDefectTracker.loadDefects(false);
+      }
+      window.dispatchEvent(new CustomEvent('hse-report-saved', { detail: res }));
+
       if (res.drive_saved) {
         showToast(`💾 Đã lưu báo cáo & đồng bộ Google Drive thành công!\n📁 Vị trí: ${res.drive_path || 'G:\\Drive của tôi\\HSE_BaoCao'}`);
       } else {
@@ -2544,10 +2550,11 @@
       const originalDate = original.metadata?.date || new Date().toISOString().split("T")[0];
       const todayDate = new Date().toISOString().split("T")[0];
 
-      // Update metadata
+      // Update metadata (gắn kết originalReportId để tự động liên kết 2 chiều với báo cáo gốc)
       state.metadata = {
         ...state.metadata,
         ...(original.metadata || {}),
+        originalReportId: original.id || original.metadata?.id || reportIdentifier,
         prevDate: originalDate,
         date: todayDate,
         title: (original.metadata?.title || "").replace(/kiểm tra/gi, "phục tra cải thiện") || `Báo cáo Phục tra Cải thiện ${todayDate}`
@@ -2566,6 +2573,7 @@
       const originalFindings = original.findings || [];
       state.findings = originalFindings.map((f, idx) => ({
         id: `finding_${Date.now()}_${idx + 1}`,
+        originalFindingId: f.id || `finding_${idx + 1}`,
         departmentKey: f.departmentKey || "san-xuat",
         departmentVi: f.departmentVi || "Sản xuất",
         departmentZh: f.departmentZh || "生产部",
@@ -2648,6 +2656,12 @@
       showToast(`✓ Đã xóa báo cáo "${filename}" thành công.`);
       await loadHseReportsList();
       await updateHseSavedCountBadge();
+
+      // Cập nhật ngay Defect Tracker và badge Navbar không cần F5
+      if (window.HseDefectTracker && typeof window.HseDefectTracker.loadDefects === 'function') {
+        window.HseDefectTracker.loadDefects(false);
+      }
+      window.dispatchEvent(new CustomEvent('hse-report-deleted', { detail: { filename } }));
     } catch (err) {
       showToast(`Lỗi xóa: ${err.message}`, true);
     } finally {

@@ -364,6 +364,13 @@ def get_hse_health():
     else:
         health_status = "ok"
 
+    # 3. Synchronize report violations directly into Master Defect Tracker
+    try:
+        from core.hse_defect_tracker import DefectAggregatorService
+        DefectAggregatorService.sync_report_to_defect_tracker(payload_dict, json_filename)
+    except Exception as _sync_err:
+        print(f"[HSE_DEFECT_SYNC_WARNING] Error syncing report to tracker: {_sync_err}", flush=True)
+
     return {
         "status": health_status,
         "module": "hse_report_studio",
@@ -943,6 +950,13 @@ def delete_report_endpoint(filename: Optional[str] = None, id: Optional[str] = N
                     break
     if not deleted:
         raise HTTPException(status_code=404, detail="Không tìm thấy bản ghi để xóa.")
+
+    try:
+        from core.hse_defect_tracker import DefectAggregatorService
+        DefectAggregatorService.remove_report_from_defect_tracker(target_identifier)
+    except Exception as _rem_err:
+        print(f"[HSE_DEFECT_REMOVE_WARNING] Error removing report from tracker: {_rem_err}", flush=True)
+
     return {"success": True, "message": "Đã xóa bản lưu thành công."}
 
 
@@ -1126,15 +1140,34 @@ def get_defects_endpoint(
     month: Optional[str] = None,
     department: Optional[str] = None,
     status: Optional[str] = None,
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    force_reconcile: bool = False
 ):
     from core.hse_defect_tracker import DefectAggregatorService
-    return DefectAggregatorService.aggregate_all_defects(
+    res = DefectAggregatorService.aggregate_all_defects(
         month_filter=month,
         dept_filter=department,
         status_filter=status,
-        search_query=search
+        search_query=search,
+        force_reconcile=force_reconcile
     )
+    # Tự động hòa giải / backfill nếu tracker rỗng mà thư mục có báo cáo
+    if res.get("total", 0) == 0 and any(REPORTS_DIR.glob("*.json")):
+        DefectAggregatorService.reconcile_all_reports_to_tracker()
+        res = DefectAggregatorService.aggregate_all_defects(
+            month_filter=month,
+            dept_filter=department,
+            status_filter=status,
+            search_query=search
+        )
+    return res
+
+
+@hse_router.get("/defects/reconcile")
+@hse_router.post("/defects/reconcile")
+def reconcile_defects_endpoint():
+    from core.hse_defect_tracker import DefectAggregatorService
+    return DefectAggregatorService.reconcile_all_reports_to_tracker()
 
 
 @hse_router.post("/defects/update")

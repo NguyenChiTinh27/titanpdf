@@ -80,11 +80,12 @@
   // DATA FETCHING & FILTERING
   // ==========================================================================
 
-  async function loadDefects(syncGas = false) {
+  async function loadDefects(syncGas = false, forceReconcile = false) {
     try {
       if (syncGas) setLoading(true, "Đang kết nối & đồng bộ Google Apps Script...");
 
-      const resp = await fetch("/api/hse/defects");
+      const url = forceReconcile ? "/api/hse/defects?force_reconcile=true" : "/api/hse/defects";
+      const resp = await fetch(url);
       if (!resp.ok) throw new Error(`Lỗi tải dữ liệu (Mã ${resp.status})`);
       const data = await resp.json();
 
@@ -92,10 +93,18 @@
       state.availableMonths = data.available_months || [];
       state.availableDepts = data.available_departments || [];
 
+      // Tự động thử lại hòa giải 1 lần nếu danh sách trống
+      if (state.allDefects.length === 0 && !forceReconcile) {
+        return await loadDefects(false, true);
+      }
+
       // Update badge on main header
       const badge = $("#nav-hse-tracker-count-badge");
       if (badge) {
-        badge.textContent = `${data.total || state.allDefects.length} LỖI`;
+        const total = data.total ?? state.allDefects.length;
+        badge.textContent = `${total} LỖI`;
+        const pendingCount = state.allDefects.filter(d => !d.improved).length;
+        badge.title = `🎯 Theo Dõi Lỗi HSE: ${total} lỗi tổng (${pendingCount} còn tồn đọng, ${total - pendingCount} đã cải thiện)`;
       }
 
       populateDropdowns();
@@ -109,7 +118,7 @@
   }
 
   function populateDropdowns() {
-    // 1. Month dropdown
+    // 1. Month dropdown - Động 100%, tự động tổng hợp tháng thực tế
     const mSelect = $("#hse-tracker-month-select");
     if (mSelect) {
       const curVal = state.selectedMonth;
@@ -119,7 +128,8 @@
         mHtml += `<option value="${escapeHtml(m)}" ${curVal === m ? "selected" : ""}>📅 Tháng ${escapeHtml(m)} (${count} lỗi)</option>`;
       }
       mSelect.innerHTML = mHtml;
-      mSelect.value = curVal;
+      mSelect.value = (curVal && (curVal === "all" || state.availableMonths.includes(curVal))) ? curVal : "all";
+      state.selectedMonth = mSelect.value;
     }
 
     // 2. Department dropdown
@@ -944,4 +954,25 @@
     saveGasConfig
   };
   window.HSEDefectTracker = window.HseDefectTracker;
+
+  // Lắng nghe các sự kiện vòng đời báo cáo để cập nhật UI tức thì không cần F5
+  window.addEventListener("hse-report-saved", () => {
+    loadDefects(false);
+  });
+  window.addEventListener("hse-report-deleted", () => {
+    loadDefects(false);
+  });
+
+  // Tự động khởi chạy ngầm khi tải trang để nạp số đếm badge Navbar
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      bindEvents();
+      loadDefects(false);
+    });
+  } else {
+    setTimeout(() => {
+      bindEvents();
+      loadDefects(false);
+    }, 100);
+  }
 })();

@@ -41,7 +41,8 @@ else:
 
 DATA_DIR = PROJECT_ROOT / "data"
 HSE_REPORTS_DIR = DATA_DIR / "hse_reports"
-OVERRIDES_FILE = DATA_DIR / "hse_defect_tracker_overrides.json"
+OVERRIDES_FILE = DATA_DIR / "hse_defect_tracker_overrides.json"
+
 TRACKER_STATE_FILE = DATA_DIR / "hse_tracker_state.json"
 BASE_HSE_DIR = Path(__file__).resolve().parent / "data" / "hse"
 EXTRACTED_DEFECTS_JSON = BASE_HSE_DIR / "extracted_defects.json"
@@ -140,41 +141,156 @@ class DefectAggregatorService:
             return "Thiết bị cơ khí & Bảo hộ (机械防护与劳保)"
         return "Vệ sinh 5S & Sắp xếp xưởng (现场卫生与5S)"
 
+    @staticmethod
+    def normalize_date(raw_date: Any, fallback_filename: str = "") -> Tuple[str, str]:
+        """Chuẩn hóa mọi định dạng ngày nhập vào về chuẩn (YYYY-MM-DD, YYYY-MM)."""
+        if raw_date:
+            s = str(raw_date).split("T")[0].strip()
+            # YYYY-MM-DD hoặc YYYY/MM/DD
+            m = re.match(r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$", s)
+            if m:
+                clean = f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+                return clean, clean[:7]
+            # DD-MM-YYYY hoặc DD/MM/YYYY
+            m = re.match(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$", s)
+            if m:
+                clean = f"{int(m.group(3)):04d}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+                return clean, clean[:7]
+            # Timestamp (ms hoặc s)
+            try:
+                ts = float(s)
+                if ts > 1000000000000:
+                    ts /= 1000.0
+                dt = datetime.fromtimestamp(ts)
+                clean = dt.strftime("%Y-%m-%d")
+                return clean, clean[:7]
+            except Exception:
+                pass
+
+        if fallback_filename:
+            m = re.search(r"(\d{4})[-_](\d{2})[-_](\d{2})", fallback_filename)
+            if m:
+                clean = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+                return clean, clean[:7]
+            m = re.search(r"hse_(\d{10,13})", fallback_filename)
+            if m:
+                try:
+                    ts = float(m.group(1))
+                    if ts > 1000000000000:
+                        ts /= 1000.0
+                    dt = datetime.fromtimestamp(ts)
+                    clean = dt.strftime("%Y-%m-%d")
+                    return clean, clean[:7]
+                except Exception:
+                    pass
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        return today, today[:7]
+
+    @staticmethod
+    def clean_image_uri(raw_img: Optional[str]) -> str:
+        """Đảm bảo chuỗi ảnh hợp lệ cho thẻ <img> trình duyệt."""
+        if not raw_img:
+            return ""
+        s = str(raw_img).strip()
+        if s.startswith("http://") or s.startswith("https://") or s.startswith("/api/"):
+            return s
+        if s.startswith("data:image/"):
+            return s
+        if len(s) > 50:
+            return f"data:image/jpeg;base64,{s}"
+        return s
+
+    @classmethod
+    def reconcile_all_reports_to_tracker(cls) -> Dict[str, Any]:
+        """Quét và hòa giải toàn bộ vi phạm từ data/hse_reports vào Tracker."""
+        logger.info("[HSE_TRACKER] Bắt đầu quét & hòa giải toàn bộ báo cáo vào Defect Tracker...")
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
+                json.dump({"cleared": False, "reconciled_at": datetime.now().isoformat()}, sf, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not update tracker state file: {e}")
+
+        data = cls.aggregate_all_defects(force_reconcile=True)
+        logger.info(f"[HSE_TRACKER] Đã hòa giải thành công {data.get('total', 0)} sự cố.")
+        return {
+            "success": True,
+            "total_defects": data.get("total", 0),
+            "kpis": data.get("kpis", {}),
+            "available_months": data.get("available_months", []),
+            "message": f"Đã hòa giải thành công {data.get('total', 0)} sự cố từ báo cáo đã lưu."
+        }
+
+    @classmethod
+    def sync_report_to_defect_tracker(cls, report_data: Dict[str, Any], filename: str = "") -> Dict[str, Any]:
+        """Tự động đồng bộ tức thì khi lưu hoặc cập nhật báo cáo trong HSE Report Studio."""
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf:
+                json.dump({"cleared": False, "updated_at": datetime.now().isoformat()}, sf, indent=2)
+        except Exception:
+            pass
+
+        rep_mode = report_data.get("reportType") or report_data.get("mode", "inspection")
+        rep_id = report_data.get("id") or (filename.replace(".json", "") if filename else "")
+
+        # Xử lý báo cáo Phục Tra Cải Thiện
+        if rep_mode == "improvement":
+            meta = report_data.get("metadata", {})
+            orig_id = meta.get("originalReportId") or report_data.get("originalReportId")
+            raw_d = meta.get("date") or report_data.get("date")
+            clean_d, _ = cls.normalize_date(raw_d, filename)
+
+            overrides = cls.load_overrides()
+            findings = report_data.get("findings", [])
+            for f_idx, f in enumerate(findings, 1):
+                if f.get("improved") or f.get("imageAfterData"):
+                    orig_f_id = f.get("originalFindingId") or f.get("id") or f"finding_{f_idx}"
+                    if orig_id:
+                        target_key = f"{orig_id}_{orig_f_id}"
+                        ov = overrides.setdefault(target_key, {})
+                        ov["improved"] = True
+                        ov["improve_date"] = clean_d
+                        if f.get("imageAfterData"):
+                            ov["img_after"] = cls.clean_image_uri(f.get("imageAfterData"))
+                        if f.get("note") or f.get("suggestion"):
+                            ov["note"] = f.get("note") or f.get("suggestion")
+            cls.save_overrides(overrides)
+
+        return cls.aggregate_all_defects(force_reconcile=True)
+
+    @classmethod
+    def remove_report_from_defect_tracker(cls, report_identifier: str) -> Dict[str, Any]:
+        """Gỡ bỏ các sự cố thuộc báo cáo bị xóa khỏi Defect Tracker."""
+        rep_stem = report_identifier.replace(".json", "")
+        overrides = cls.load_overrides()
+        keys_to_remove = [k for k in overrides if rep_stem in k]
+        for k in keys_to_remove:
+            del overrides[k]
+        if keys_to_remove:
+            cls.save_overrides(overrides)
+        return cls.aggregate_all_defects(force_reconcile=True)
+
     @classmethod
     def aggregate_all_defects(
         cls,
         month_filter: Optional[str] = None,
         dept_filter: Optional[str] = None,
         status_filter: Optional[str] = None,
-        search_query: Optional[str] = None
+        search_query: Optional[str] = None,
+        force_reconcile: bool = False
     ) -> Dict[str, Any]:
-        """Scans all sources and returns unified master defects list & KPI metrics."""
-        # Check if user explicitly cleared all tracker defects
-        if TRACKER_STATE_FILE.exists():
-            try:
-                with open(TRACKER_STATE_FILE, "r", encoding="utf-8") as sf:
-                    st = json.load(sf)
-                    if st.get("cleared") is True:
-                        return {
-                            "total": 0,
-                            "defects": [],
-                            "available_months": [],
-                            "available_departments": [],
-                            "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
-                        }
-            except Exception:
-                pass
-
+        """Tổng hợp toàn diện danh sách sự cố Master Defect Tracker & chỉ số KPIs."""
         overrides = cls.load_overrides()
-        raw_defects: List[Dict[str, Any]] = []
-        seen_codes = set()
+        baseline_defects: List[Dict[str, Any]] = []
 
-        # Source 1: Extracted baseline defects (September 2026 - 17 items)
+        # Nguồn 1: Sự cố nền tháng 09/2026 (17 lỗi chuẩn)
         if EXTRACTED_DEFECTS_JSON.exists():
             try:
                 with open(EXTRACTED_DEFECTS_JSON, "r", encoding="utf-8") as jf:
                     extracted = json.load(jf)
-                
+
                 img_map = [
                     "p5_img2_IM48.jpg", "p5_img3_IM49.jpg", "p6_img2_IM52.jpg", "p6_img3_IM53.jpg",
                     "p7_img2_IM56.jpg", "p7_img3_IM57.jpg", "p8_img2_IM60.jpg", "p8_img3_IM61.jpg",
@@ -193,7 +309,6 @@ class DefectAggregatorService:
                     img_name = img_map[idx - 1] if idx - 1 < len(img_map) else ""
                     img_path = f"/api/hse/defect_image/2026-09/{img_name}" if img_name else ""
 
-                    # Default: Defect #1 is resolved; others pending
                     is_improved = (idx == 1)
                     improve_d = "2026-10-21" if is_improved else ""
                     note_val = "Đã dọn dẹp và sắp xếp gọn gàng mẫu thí nghiệm đúng nơi quy định" if is_improved else ""
@@ -219,61 +334,62 @@ class DefectAggregatorService:
                         "drive_view_url": "",
                         "source_type": "baseline",
                         "source_file": "extracted_defects.json",
+                        "source_report_id": "hse_report_2026_09",
+                        "source_item_key": f"baseline_202609_{idx}",
                         "report_id": "hse_report_2026_09"
                     }
-                    seen_codes.add(code)
-                    raw_defects.append(defect_obj)
+                    baseline_defects.append(defect_obj)
             except Exception as e:
                 logger.warning(f"Error loading extracted baseline defects: {e}")
 
-        # Source 2: All saved HSE reports in data/hse_reports/*.json
+        # Nguồn 2: Toàn bộ báo cáo đã lưu trong data/hse_reports/*.json
+        inspection_findings: List[Dict[str, Any]] = []
+        improvement_records: List[Tuple[str, Dict[str, Any]]] = []
+
         if HSE_REPORTS_DIR.exists():
-            for report_file in sorted(HSE_REPORTS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            for report_file in sorted(HSE_REPORTS_DIR.glob("*.json")):
                 try:
                     with open(report_file, "r", encoding="utf-8") as rf:
                         rep = json.load(rf)
 
-                    meta = rep.get("metadata", {})
-                    rep_date = (meta.get("date") or "2026-10-13").split("T")[0]
-                    rep_month = rep_date[:7] if len(rep_date) >= 7 else "2026-10"
-                    date_compact = rep_date.replace("-", "")[:6]
-                    rep_id = rep.get("id") or report_file.stem
+                    rep_mode = rep.get("reportType") or rep.get("mode", "inspection")
+                    if rep_mode == "improvement":
+                        improvement_records.append((report_file.name, rep))
+                        continue
 
-                    # Findings items
+                    meta = rep.get("metadata", {})
+                    rep_id = rep.get("id") or report_file.stem
+                    raw_date = meta.get("date") or rep.get("date")
+                    rep_date, rep_month = cls.normalize_date(raw_date, report_file.name)
+
+                    # Bóc tách hạng mục vi phạm từ findings (SSOT khớp 100% cột Phát Hiện)
                     findings = rep.get("findings", [])
                     for f_idx, f in enumerate(findings, 1):
-                        code = f"DEF-{date_compact}-{f_idx:02d}"
-                        # If duplicate code across multiple json files of the same month, disambiguate
-                        if code in seen_codes:
-                            code = f"DEF-{date_compact}-{len(raw_defects) + 1:02d}"
-
-                        dept_full, dept_k, dept_icon = cls.normalize_department(f.get("departmentZh", ""), f.get("departmentVi", ""))
                         zh_issue = cls.clean_text(f.get("issueZh") or f.get("suggestion") or "")
                         vn_issue = cls.clean_text(f.get("issueVi") or "")
-                        if not zh_issue and not vn_issue:
+                        img_b = cls.clean_image_uri(f.get("imageData") or f.get("driveDirectUrl") or f.get("driveViewUrl") or "")
+                        img_a = cls.clean_image_uri(f.get("imageAfterData") or f.get("afterDriveDirectUrl") or f.get("afterDriveViewUrl") or "")
+
+                        if not zh_issue and not vn_issue and not img_b:
                             continue
 
+                        f_id = f.get("id") or f"finding_{f_idx}"
+                        source_item_key = f"{rep_id}_{f_id}"
+
+                        dept_full, dept_k, dept_icon = cls.normalize_department(
+                            f.get("departmentZh", "") or meta.get("departmentZh", ""),
+                            f.get("departmentVi", "") or meta.get("departmentVi", "")
+                        )
                         cat = cls.categorize_hse(f"{zh_issue} {vn_issue}")
                         is_improved = bool(f.get("improved", False))
 
-                        # Image resolution
-                        img_b = f.get("imageData") or ""
-                        if not img_b and f.get("driveDirectUrl"):
-                            img_b = f.get("driveDirectUrl")
-                        elif not img_b and f.get("driveViewUrl"):
-                            img_b = f.get("driveViewUrl")
-
-                        img_a = f.get("imageAfterData") or ""
-                        if not img_a and f.get("afterDriveDirectUrl"):
-                            img_a = f.get("afterDriveDirectUrl")
-                        elif not img_a and f.get("afterDriveViewUrl"):
-                            img_a = f.get("afterDriveViewUrl")
-
-                        defect_obj = {
-                            "id": code,
-                            "code": code,
+                        finding_obj = {
+                            "source_report_id": rep_id,
+                            "source_item_key": source_item_key,
                             "date": rep_date,
                             "month": rep_month,
+                            "f_idx": f_idx,
+                            "finding_id": f_id,
                             "department": dept_full,
                             "dept_key": dept_k,
                             "dept_icon": dept_icon,
@@ -292,61 +408,70 @@ class DefectAggregatorService:
                             "after_drive_view_url": f.get("afterDriveViewUrl") or "",
                             "source_type": "hse_report",
                             "source_file": report_file.name,
-                            "finding_id": f.get("id"),
-                            "report_id": rep_id
+                            "report_id": rep_id,
+                            "mtime": report_file.stat().st_mtime
                         }
-                        seen_codes.add(code)
-                        raw_defects.append(defect_obj)
-
-                    # Failed checklist items
-                    checklist = rep.get("checklist", [])
-                    for c_item in checklist:
-                        if c_item.get("status") == "fail":
-                            row_num = c_item.get("row") or 99
-                            code = f"DEF-{date_compact}-CK{row_num}"
-                            if code in seen_codes:
-                                code = f"DEF-{date_compact}-CK{row_num}_{len(raw_defects)+1}"
-                            
-                            zh_issue = cls.clean_text(c_item.get("issueZh") or "检查不合格，需整改")
-                            vn_issue = cls.clean_text(c_item.get("issueVi") or "Không đạt tiêu chuẩn kiểm tra an toàn")
-                            dept_full, dept_k, dept_icon = cls.normalize_department("", "Sản xuất")
-                            cat = cls.categorize_hse(f"{zh_issue} {vn_issue}")
-                            is_improved = bool(c_item.get("improved", False))
-
-                            defect_obj = {
-                                "id": code,
-                                "code": code,
-                                "date": rep_date,
-                                "month": rep_month,
-                                "department": dept_full,
-                                "dept_key": dept_k,
-                                "dept_icon": dept_icon,
-                                "category": cat,
-                                "zh_issue": zh_issue,
-                                "vn_issue": vn_issue,
-                                "status": "Đã cải thiện / 已改善" if is_improved else "Chờ xử lý / 待处理",
-                                "improved": is_improved,
-                                "improve_date": rep_date if is_improved else "",
-                                "note": "Hạng mục kiểm tra 26 tiêu chuẩn xưởng",
-                                "img_before": "",
-                                "img_after": "",
-                                "drive_direct_url": "",
-                                "drive_view_url": "",
-                                "source_type": "hse_checklist",
-                                "source_file": report_file.name,
-                                "row": row_num,
-                                "report_id": rep_id
-                            }
-                            seen_codes.add(code)
-                            raw_defects.append(defect_obj)
+                        inspection_findings.append(finding_obj)
                 except Exception as e:
                     logger.warning(f"Error parsing report {report_file}: {e}")
 
-        # Apply user overrides from Tracker UI
+        # Hòa giải các báo cáo Phục Tra Cải Thiện vào lỗi tương ứng của báo cáo gốc
+        for imp_filename, imp_rep in improvement_records:
+            imp_meta = imp_rep.get("metadata", {})
+            orig_id = imp_meta.get("originalReportId") or imp_rep.get("originalReportId")
+            imp_raw_date = imp_meta.get("date") or imp_rep.get("date")
+            imp_date, _ = cls.normalize_date(imp_raw_date, imp_filename)
+
+            for imp_f in imp_rep.get("findings", []):
+                if imp_f.get("improved") or imp_f.get("imageAfterData"):
+                    matched_defect = None
+                    if orig_id:
+                        matched_defect = next((
+                            d for d in inspection_findings
+                            if d["source_report_id"] == orig_id and (
+                                d["finding_id"] == imp_f.get("originalFindingId") or
+                                d["finding_id"] == imp_f.get("id")
+                            )
+                        ), None)
+                    if not matched_defect:
+                        v_txt = cls.clean_text(imp_f.get("issueVi") or "")
+                        z_txt = cls.clean_text(imp_f.get("issueZh") or "")
+                        matched_defect = next((
+                            d for d in inspection_findings
+                            if (v_txt and d["vn_issue"] == v_txt) or (z_txt and d["zh_issue"] == z_txt)
+                        ), None)
+
+                    if matched_defect:
+                        matched_defect["improved"] = True
+                        matched_defect["status"] = "Đã cải thiện / 已改善"
+                        if imp_f.get("imageAfterData"):
+                            matched_defect["img_after"] = cls.clean_image_uri(imp_f.get("imageAfterData"))
+                        matched_defect["improve_date"] = imp_date
+                        if imp_f.get("note"):
+                            matched_defect["note"] = imp_f["note"]
+
+        # Đánh mã DEF-YYYYMM-XX tuần tự, chuẩn hóa theo từng tháng
+        by_month: Dict[str, List[Dict[str, Any]]] = {}
+        for d in inspection_findings:
+            m = d["month"]
+            by_month.setdefault(m, []).append(d)
+
+        coded_report_defects: List[Dict[str, Any]] = []
+        for m, d_list in sorted(by_month.items()):
+            d_list.sort(key=lambda x: (x["date"], x["source_report_id"], x["f_idx"]))
+            month_compact = m.replace("-", "")
+            for seq, item in enumerate(d_list, 1):
+                code = f"DEF-{month_compact}-{seq:02d}"
+                item["id"] = code
+                item["code"] = code
+                coded_report_defects.append(item)
+
+        raw_defects = baseline_defects + coded_report_defects
+
+        # Áp dụng ghi đè người dùng (Overrides) theo source_item_key và code
         for d in raw_defects:
-            cid = d["code"]
-            if cid in overrides:
-                ov = overrides[cid]
+            ov = overrides.get(d.get("source_item_key")) or overrides.get(d.get("code"))
+            if ov:
                 if "improved" in ov:
                     d["improved"] = bool(ov["improved"])
                     d["status"] = "Đã cải thiện / 已改善" if d["improved"] else "Chờ xử lý / 待处理"
@@ -355,16 +480,36 @@ class DefectAggregatorService:
                 if ov.get("note"):
                     d["note"] = ov["note"]
                 if ov.get("img_after"):
-                    d["img_after"] = ov["img_after"]
+                    d["img_after"] = cls.clean_image_uri(ov["img_after"])
 
-        # Sort defects by date desc, then code desc
+        # Kiểm tra cờ cleared trong TRACKER_STATE_FILE
+        if not force_reconcile and TRACKER_STATE_FILE.exists():
+            try:
+                with open(TRACKER_STATE_FILE, "r", encoding="utf-8") as sf:
+                    st = json.load(sf)
+                    if st.get("cleared") is True:
+                        if len(raw_defects) > 0:
+                            with open(TRACKER_STATE_FILE, "w", encoding="utf-8") as sf_out:
+                                json.dump({"cleared": False, "auto_recovered_at": datetime.now().isoformat()}, sf_out, indent=2)
+                        else:
+                            return {
+                                "total": 0,
+                                "defects": [],
+                                "available_months": [],
+                                "available_departments": [],
+                                "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
+                            }
+            except Exception:
+                pass
+
+        # Sắp xếp danh sách: Ngày giảm dần, Mã giảm dần
         raw_defects.sort(key=lambda x: (x.get("date", ""), x.get("code", "")), reverse=True)
 
-        # Collect unique filter domains
+        # Thu thập danh mục tháng & bộ phận khả dụng
         available_months = sorted(list({d.get("month") for d in raw_defects if d.get("month")}), reverse=True)
         available_depts = sorted(list({d.get("department") for d in raw_defects if d.get("department")}))
 
-        # Filter in memory
+        # Lọc danh sách theo yêu cầu
         filtered = raw_defects
         if month_filter and month_filter != "all":
             filtered = [d for d in filtered if d.get("month") == month_filter]
@@ -386,7 +531,7 @@ class DefectAggregatorService:
                 or sq in d.get("category", "").lower()
             ]
 
-        # Calculate KPIs
+        # Tính toán KPIs
         total_items = len(filtered)
         improved_items = sum(1 for d in filtered if d.get("improved"))
         pending_items = total_items - improved_items
@@ -413,63 +558,62 @@ class DefectAggregatorService:
 
     @classmethod
     def update_defect(cls, payload: DefectUpdatePayload) -> Dict[str, Any]:
-        """Updates defect status and performs 2-way sync with origin file and GAS."""
+        """Cập nhật trạng thái sự cố và đồng bộ 2 chiều ngược về file báo cáo gốc & Google Apps Script."""
         code = payload.defectId
         now_str = payload.improveDate or datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        # 1. Update persistent overrides cache
-        overrides = cls.load_overrides()
-        item_ov = overrides.get(code, {})
-        item_ov["improved"] = payload.improved
-        item_ov["improve_date"] = now_str if payload.improved else ""
-        if payload.note:
-            item_ov["note"] = payload.note
-        if payload.afterImageData:
-            item_ov["img_after"] = payload.afterImageData
+        # 1. Tra cứu thông tin sự cố hiện tại
+        all_data = cls.aggregate_all_defects(force_reconcile=True)
+        matched = next((d for d in all_data["defects"] if d.get("code") == code or d.get("id") == code or d.get("source_item_key") == code), None)
 
-        overrides[code] = item_ov
+        # 2. Cập nhật persistent overrides cache (lưu cả code lẫn source_item_key)
+        overrides = cls.load_overrides()
+        keys_to_update = [code]
+        if matched and matched.get("source_item_key"):
+            keys_to_update.append(matched["source_item_key"])
+
+        for k in keys_to_update:
+            item_ov = overrides.get(k, {})
+            item_ov["improved"] = payload.improved
+            item_ov["improve_date"] = now_str if payload.improved else ""
+            if payload.note is not None:
+                item_ov["note"] = payload.note
+            if payload.afterImageData:
+                item_ov["img_after"] = cls.clean_image_uri(payload.afterImageData)
+            overrides[k] = item_ov
+
         cls.save_overrides(overrides)
 
-        # 2. Synchronize back into source report JSON if defect originated from one
-        all_data = cls.aggregate_all_defects()
-        matched = next((d for d in all_data["defects"] if d["code"] == code or d["id"] == code), None)
-
+        # 3. Đồng bộ ngược vào file JSON báo cáo gốc nếu sự cố bắt nguồn từ báo cáo
         if matched and matched.get("source_file"):
             source_file_path = HSE_REPORTS_DIR / matched["source_file"]
             if source_file_path.exists():
                 try:
                     with open(source_file_path, "r", encoding="utf-8") as jf:
                         rep_data = json.load(jf)
-                    
+
                     changed = False
                     finding_id = matched.get("finding_id")
-                    if finding_id and "findings" in rep_data:
-                        for f in rep_data["findings"]:
-                            if f.get("id") == finding_id:
+                    if "findings" in rep_data:
+                        for f_idx, f in enumerate(rep_data["findings"], 1):
+                            if f.get("id") == finding_id or f_idx == matched.get("f_idx"):
                                 f["improved"] = payload.improved
                                 f["recheckDate"] = now_str if payload.improved else ""
-                                if payload.note:
+                                if payload.note is not None:
                                     f["note"] = payload.note
                                 if payload.afterImageData:
                                     f["imageAfterData"] = payload.afterImageData
                                 changed = True
                                 break
-                    
-                    if not changed and matched.get("row") and "checklist" in rep_data:
-                        for c in rep_data["checklist"]:
-                            if c.get("row") == matched["row"]:
-                                c["improved"] = payload.improved
-                                changed = True
-                                break
-                    
+
                     if changed:
                         with open(source_file_path, "w", encoding="utf-8") as jf:
                             json.dump(rep_data, jf, ensure_ascii=False, indent=2)
-                        logger.info(f"Updated source report {matched['source_file']} for defect {code}")
+                        logger.info(f"[HSE_TRACKER] Đã đồng bộ ngược trạng thái cải thiện vào {matched['source_file']}")
                 except Exception as sync_err:
-                    logger.warning(f"Failed to reverse-sync defect to origin report: {sync_err}")
+                    logger.warning(f"Lỗi khi đồng bộ ngược vào báo cáo gốc: {sync_err}")
 
-        # 3. Asynchronous push to Google Apps Script Web App
+        # 4. Gửi tín hiệu đẩy lên Google Apps Script Web App
         gas_synced = False
         gas_url = cls.get_gas_url()
         try:
@@ -481,7 +625,13 @@ class DefectAggregatorService:
                 "note": payload.note or "",
                 "timestamp": datetime.now().isoformat()
             }
-            res = requests.post(gas_url, json=gas_payload, timeout=5.0)
+            res = requests.post(
+                gas_url,
+                data=json.dumps(gas_payload, ensure_ascii=False),
+                headers={"Content-Type": "text/plain;charset=utf-8"},
+                allow_redirects=True,
+                timeout=5.0
+            )
             if res.ok:
                 gas_synced = True
         except Exception:
@@ -510,7 +660,6 @@ class DefectAggregatorService:
         except Exception as e:
             logger.error(f"Could not clear overrides file: {e}")
 
-        # Gửi lệnh xóa lên Google Apps Script
         gas_url = cls.get_gas_url()
         try:
             gas_payload = {
@@ -575,7 +724,7 @@ class DefectAggregatorService:
         except Exception as e:
             status_msg = f"Lỗi kết nối GAS: {str(e)}"
 
-        all_defects = cls.aggregate_all_defects()
+        all_defects = cls.aggregate_all_defects(force_reconcile=True)
         return {
             "success": not is_html and remote_count >= 0,
             "message": status_msg,

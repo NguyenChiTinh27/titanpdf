@@ -167,6 +167,11 @@ def app_startup_event():
         MSDSGASSyncService.reconcile_on_startup()
     except Exception as _e:
         logger.warning(f"Lỗi hòa giải khởi động GAS: {_e}")
+    try:
+        from core.hse_defect_tracker import DefectAggregatorService
+        DefectAggregatorService.reconcile_all_reports_to_tracker()
+    except Exception as _e:
+        logger.warning(f"Lỗi hòa giải khởi động HSE Defect Tracker: {_e}")
 
 
 @app.get("/api/health")
