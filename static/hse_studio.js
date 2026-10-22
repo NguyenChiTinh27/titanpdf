@@ -250,7 +250,17 @@
         imageName: f.imageName || "",
         improved: Boolean(f.improved),
         imageAfterData: f.imageAfterData || "",
-        imageAfterName: f.imageAfterName || ""
+        imageAfterName: f.imageAfterName || "",
+        driveFileId: f.driveFileId || "",
+        driveDirectUrl: f.driveDirectUrl || "",
+        driveViewUrl: f.driveViewUrl || "",
+        driveFolderId: f.driveFolderId || "",
+        driveFolderUrl: f.driveFolderUrl || "",
+        driveStatus: f.driveStatus || "",
+        afterDriveFileId: f.afterDriveFileId || "",
+        afterDriveDirectUrl: f.afterDriveDirectUrl || "",
+        afterDriveViewUrl: f.afterDriveViewUrl || "",
+        afterDriveStatus: f.afterDriveStatus || ""
       }))
     };
   }
@@ -303,7 +313,19 @@
       imageName: f.imageName || "",
       improved: Boolean(f.improved),
       imageAfterData: f.imageAfterData || "",
-      imageAfterName: f.imageAfterName || ""
+      imageAfterName: f.imageAfterName || "",
+      driveFileId: f.driveFileId || "",
+      driveDirectUrl: f.driveDirectUrl || "",
+      driveViewUrl: f.driveViewUrl || "",
+      driveFolderId: f.driveFolderId || "",
+      driveFolderUrl: f.driveFolderUrl || "",
+      driveStatus: f.driveStatus || (f.driveFileId ? "synced" : ""),
+      yearMonth: f.yearMonth || "",
+      afterDriveFileId: f.afterDriveFileId || "",
+      afterDriveDirectUrl: f.afterDriveDirectUrl || "",
+      afterDriveViewUrl: f.afterDriveViewUrl || "",
+      afterDriveStatus: f.afterDriveStatus || (f.afterDriveFileId ? "synced" : ""),
+      afterYearMonth: f.afterYearMonth || ""
     }));
 
     updateModeUI();
@@ -375,7 +397,19 @@
       imageName: "",
       improved: false,
       imageAfterData: "",
-      imageAfterName: ""
+      imageAfterName: "",
+      driveFileId: "",
+      driveDirectUrl: "",
+      driveViewUrl: "",
+      driveFolderId: "",
+      driveFolderUrl: "",
+      driveStatus: "",
+      yearMonth: "",
+      afterDriveFileId: "",
+      afterDriveDirectUrl: "",
+      afterDriveViewUrl: "",
+      afterDriveStatus: "",
+      afterYearMonth: ""
     });
     renderFindings();
     renderPreview();
@@ -409,6 +443,7 @@
     }
 
     const isImproveMode = (state.reportMode === "improvement");
+    const currentMonth = (($("#hse-inspection-date")?.value || state.metadata.date || "").substring(0, 7)) || new Date().toISOString().substring(0, 7);
 
     root.innerHTML = state.findings.map((finding, idx) => {
       const isImproved = Boolean(finding.improved);
@@ -501,6 +536,13 @@
             <label class="hse-dropzone ${finding.imageData ? "has-image" : ""}">
               ${finding.imageData ? `
                 <img src="${finding.imageData}" alt="Ảnh vấn đề ${idx + 1}">
+                <div class="hse-drive-sync-badge ${finding.driveStatus === 'synced' ? 'synced' : (finding.driveStatus === 'uploading' ? 'uploading' : '')}" title="Trạng thái lưu trữ Google Drive: ${finding.driveStatus || 'cục bộ'}">
+                  ${finding.driveStatus === 'synced' 
+                    ? `☁️ Đã lưu Drive (${escapeHtml(finding.yearMonth || currentMonth)})` 
+                    : (finding.driveStatus === 'uploading' 
+                        ? `⏳ Đang lưu Drive (${escapeHtml(currentMonth)})...` 
+                        : `☁️ Chưa đồng bộ Drive (${escapeHtml(currentMonth)})`)}
+                </div>
               ` : `
                 <span style="font-size: 24px; margin-bottom: 6px;">📸</span>
                 <strong>Tải ảnh vi phạm lên</strong>
@@ -528,6 +570,13 @@
                     <label class="hse-sub-dropzone ${finding.imageAfterData ? "has-image" : ""}">
                       ${finding.imageAfterData ? `
                         <img src="${finding.imageAfterData}" alt="Ảnh sau cải thiện">
+                        <div class="hse-drive-sync-badge ${finding.afterDriveStatus === 'synced' ? 'synced' : (finding.afterDriveStatus === 'uploading' ? 'uploading' : '')}" title="Trạng thái lưu trữ Google Drive: ${finding.afterDriveStatus || 'cục bộ'}">
+                          ${finding.afterDriveStatus === 'synced' 
+                            ? `☁️ Đã lưu Drive (${escapeHtml(finding.afterYearMonth || currentMonth)})` 
+                            : (finding.afterDriveStatus === 'uploading' 
+                                ? `⏳ Đang lưu Drive (${escapeHtml(currentMonth)})...` 
+                                : `☁️ Chưa đồng bộ Drive (${escapeHtml(currentMonth)})`)}
+                        </div>
                       ` : `
                         <span style="font-size: 18px;">📸</span>
                         <strong style="font-size: 11.5px; color: #166534;">Tải ảnh sau cải thiện (整改后)</strong>
@@ -669,34 +718,107 @@
         });
       });
 
-      // Before image upload
+      // Before image upload with smart client compression (Canvas max 1600px, 0.85) & monthly Google Drive sync
       const beforeInput = card.querySelector("[data-action='image-before']");
       if (beforeInput) {
         beforeInput.addEventListener("change", async (e) => {
           const file = e.target.files[0];
           if (!file) return;
-          if (file.size > 20 * 1024 * 1024) return showToast("Ảnh không vượt quá 20MB.", true);
-          finding.imageData = await fileToDataUrl(file);
-          finding.imageName = file.name;
-          renderFindings();
-          renderPreview();
-          triggerAutoSave();
-          showToast("Đã tải ảnh! Bấm '🤖 ✦ Đọc ảnh & tự soạn' để AI tự động soạn.");
+          if (file.size > 30 * 1024 * 1024) return showToast("Ảnh không vượt quá 30MB.", true);
+
+          try {
+            // 1. Fast local client compression
+            const compressedDataUrl = await compressImageClient(file);
+            finding.imageData = compressedDataUrl;
+            finding.imageName = file.name;
+            finding.driveStatus = "uploading";
+            renderFindings();
+            renderPreview();
+            triggerAutoSave();
+            showToast("📸 Đã nén & tải ảnh! Đang lưu vào thư mục Google Drive...");
+
+            // 2. Auto upload to monthly Google Drive hierarchy
+            const inspDate = ($("#hse-inspection-date")?.value || state.metadata.date || "").trim();
+            const uploadRes = await uploadImageToDrive(compressedDataUrl, {
+              date: inspDate,
+              departmentVi: finding.departmentVi,
+              departmentKey: finding.departmentKey,
+              itemType: "finding",
+              findingIndex: state.findings.indexOf(finding) + 1,
+              photoKind: "before"
+            });
+
+            if (uploadRes && uploadRes.success) {
+              finding.driveFileId = uploadRes.driveFileId;
+              finding.driveDirectUrl = uploadRes.driveDirectUrl;
+              finding.driveViewUrl = uploadRes.driveViewUrl;
+              finding.driveFolderId = uploadRes.driveFolderId;
+              finding.driveFolderUrl = uploadRes.driveFolderUrl;
+              finding.yearMonth = uploadRes.yearMonth;
+              finding.driveStatus = "synced";
+              showToast(`☁️ Đã lưu ảnh vào Google Drive (${uploadRes.yearMonth})!`);
+            } else {
+              finding.driveStatus = "cached";
+            }
+          } catch (err) {
+            console.warn("Drive image auto-upload error:", err);
+            finding.driveStatus = "cached";
+            showToast("Đã lưu ảnh cục bộ (Sẽ tự động đẩy lên Drive khi có mạng)", false);
+          } finally {
+            renderFindings();
+            renderPreview();
+            triggerAutoSave();
+          }
         });
       }
 
-      // After image upload
+      // After image upload with smart client compression & monthly Google Drive sync
       const afterInput = card.querySelector("[data-action='image-after']");
       if (afterInput) {
         afterInput.addEventListener("change", async (e) => {
           const file = e.target.files[0];
           if (!file) return;
-          finding.imageAfterData = await fileToDataUrl(file);
-          finding.imageAfterName = file.name;
-          renderFindings();
-          renderPreview();
-          triggerAutoSave();
-          showToast("Đã tải ảnh sau cải thiện!");
+          if (file.size > 30 * 1024 * 1024) return showToast("Ảnh không vượt quá 30MB.", true);
+
+          try {
+            const compressedDataUrl = await compressImageClient(file);
+            finding.imageAfterData = compressedDataUrl;
+            finding.imageAfterName = file.name;
+            finding.afterDriveStatus = "uploading";
+            renderFindings();
+            renderPreview();
+            triggerAutoSave();
+            showToast("📸 Đã nén & tải ảnh sau cải thiện! Đang lưu vào Google Drive...");
+
+            const inspDate = ($("#hse-inspection-date")?.value || state.metadata.date || "").trim();
+            const uploadRes = await uploadImageToDrive(compressedDataUrl, {
+              date: inspDate,
+              departmentVi: finding.departmentVi,
+              departmentKey: finding.departmentKey,
+              itemType: "finding",
+              findingIndex: state.findings.indexOf(finding) + 1,
+              photoKind: "after"
+            });
+
+            if (uploadRes && uploadRes.success) {
+              finding.afterDriveFileId = uploadRes.driveFileId;
+              finding.afterDriveDirectUrl = uploadRes.driveDirectUrl;
+              finding.afterDriveViewUrl = uploadRes.driveViewUrl;
+              finding.afterYearMonth = uploadRes.yearMonth;
+              finding.afterDriveStatus = "synced";
+              showToast(`☁️ Đã lưu ảnh cải thiện vào Google Drive (${uploadRes.yearMonth})!`);
+            } else {
+              finding.afterDriveStatus = "cached";
+            }
+          } catch (err) {
+            console.warn("Drive after image auto-upload error:", err);
+            finding.afterDriveStatus = "cached";
+            showToast("Đã lưu ảnh cải thiện cục bộ (Sẽ tự động đẩy lên Drive)", false);
+          } finally {
+            renderFindings();
+            renderPreview();
+            triggerAutoSave();
+          }
         });
       }
     });
@@ -709,6 +831,140 @@
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  }
+
+  // ==========================================================================
+  // CLIENT IMAGE COMPRESSION & GOOGLE DRIVE MONTHLY CLOUD SYNC
+  // ==========================================================================
+  function compressImageClient(file, maxWidth = 1600, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type || !file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl);
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadImageToDrive(imageData, meta = {}) {
+    const inspDate = ($("#hse-inspection-date")?.value || state.metadata.date || "").trim();
+    const payload = {
+      imageData: imageData || "",
+      date: meta.date || inspDate || new Date().toISOString().substring(0, 10),
+      departmentVi: meta.departmentVi || "Sản xuất",
+      departmentKey: meta.departmentKey || "san-xuat",
+      itemType: meta.itemType || "finding",
+      row: meta.row || null,
+      findingIndex: meta.findingIndex || 1,
+      photoKind: meta.photoKind || "before",
+      customFilename: meta.customFilename || null
+    };
+
+    const resp = await fetch("/api/hse/drive/upload_image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || `Lỗi tải ảnh lên Google Drive (Mã ${resp.status}).`);
+    }
+    return await resp.json();
+  }
+
+  async function syncPendingImagesToDrive() {
+    let syncedCount = 0;
+    const inspDate = ($("#hse-inspection-date")?.value || state.metadata.date || "").trim();
+
+    for (let idx = 0; idx < state.findings.length; idx++) {
+      const f = state.findings[idx];
+      // Sync Before Photo
+      if (f.imageData && f.driveStatus !== "synced") {
+        try {
+          f.driveStatus = "uploading";
+          renderFindings();
+          const res = await uploadImageToDrive(f.imageData, {
+            date: inspDate,
+            departmentVi: f.departmentVi,
+            departmentKey: f.departmentKey,
+            itemType: "finding",
+            findingIndex: idx + 1,
+            photoKind: "before"
+          });
+          if (res && res.success) {
+            f.driveFileId = res.driveFileId;
+            f.driveDirectUrl = res.driveDirectUrl;
+            f.driveViewUrl = res.driveViewUrl;
+            f.driveFolderId = res.driveFolderId;
+            f.driveFolderUrl = res.driveFolderUrl;
+            f.yearMonth = res.yearMonth;
+            f.driveStatus = "synced";
+            syncedCount++;
+          }
+        } catch (e) {
+          f.driveStatus = "cached";
+          console.warn("Could not sync before photo:", e);
+        }
+      }
+
+      // Sync After Photo
+      if (f.imageAfterData && f.afterDriveStatus !== "synced") {
+        try {
+          f.afterDriveStatus = "uploading";
+          renderFindings();
+          const res = await uploadImageToDrive(f.imageAfterData, {
+            date: inspDate,
+            departmentVi: f.departmentVi,
+            departmentKey: f.departmentKey,
+            itemType: "finding",
+            findingIndex: idx + 1,
+            photoKind: "after"
+          });
+          if (res && res.success) {
+            f.afterDriveFileId = res.driveFileId;
+            f.afterDriveDirectUrl = res.driveDirectUrl;
+            f.afterDriveViewUrl = res.driveViewUrl;
+            f.afterYearMonth = res.yearMonth;
+            f.afterDriveStatus = "synced";
+            syncedCount++;
+          }
+        } catch (e) {
+          f.afterDriveStatus = "cached";
+          console.warn("Could not sync after photo:", e);
+        }
+      }
+    }
+
+    renderFindings();
+    renderPreview();
+    triggerAutoSave();
+    return syncedCount;
   }
 
   // ==========================================================================
@@ -1280,9 +1536,20 @@
 
   async function openExplorerFolder() {
     try {
-      const resp = await fetch("/api/hse/open_folder", { method: "POST" });
+      const monthStr = ($("#hse-inspection-date")?.value || state.metadata.date || "").substring(0, 7) || new Date().toISOString().substring(0, 7);
+      const resp = await fetch("/api/hse/open_folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: monthStr })
+      });
       if (resp.ok) {
-        showToast("Đã mở thư mục lưu trữ trong Windows Explorer.");
+        const res = await resp.json().catch(() => ({}));
+        if (res.webDriveUrl && (window.location.protocol === "http:" || window.location.protocol === "https:")) {
+          window.open(res.webDriveUrl, "_blank");
+          showToast(`📂 Đã mở thư mục tháng ${monthStr} trên Google Drive!`);
+        } else {
+          showToast(`📂 Đã mở thư mục tháng ${monthStr} trong Windows Explorer.`);
+        }
       }
     } catch (e) {
       console.warn("Open folder error:", e);
@@ -1308,6 +1575,11 @@
       }
 
       setLoading(true, "Đang lưu báo cáo và đồng bộ Google Drive...");
+      try {
+        await syncPendingImagesToDrive();
+      } catch (syncErr) {
+        console.warn("Background sync error during save:", syncErr);
+      }
       const payload = makePayload();
       
       const resp = await fetch("/api/hse/reports/save", {
@@ -1671,14 +1943,22 @@
 
   async function openHseGoogleDriveFolder() {
     try {
-      fetch("/api/hse/drive/open", {
+      showToast("⏳ Đang kiểm tra đồng bộ & mở Google Drive...");
+      syncPendingImagesToDrive().catch(() => {});
+      const monthStr = ($("#hse-inspection-date")?.value || state.metadata.date || "").substring(0, 7) || new Date().toISOString().substring(0, 7);
+      const resp = await fetch("/api/hse/open_folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: "G:\\Drive của tôi\\HSE_BaoCao" })
-      }).catch(() => {});
+        body: JSON.stringify({ month: monthStr })
+      }).catch(() => null);
 
-      window.open("https://drive.google.com/drive/u/0/my-drive", "_blank");
-      showToast("☁️ Đã mở Google Drive (G:\\Drive của tôi\\HSE_BaoCao)!");
+      let targetUrl = "https://drive.google.com/drive/u/0/my-drive";
+      if (resp && resp.ok) {
+        const res = await resp.json().catch(() => ({}));
+        if (res.webDriveUrl) targetUrl = res.webDriveUrl;
+      }
+      window.open(targetUrl, "_blank");
+      showToast(`☁️ Đã mở Google Drive cho tháng ${monthStr}!`);
     } catch (err) {
       showToast(`Lỗi mở Drive: ${err.message}`, true);
     }

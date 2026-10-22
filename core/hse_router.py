@@ -18,6 +18,7 @@ import base64
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -88,6 +89,16 @@ class FindingItem(BaseModel):
     date: Optional[str] = Field(default="")
     recheckDate: Optional[str] = Field(default="")
     note: Optional[str] = Field(default="")
+    driveFileId: Optional[str] = Field(default="")
+    driveDirectUrl: Optional[str] = Field(default="")
+    driveViewUrl: Optional[str] = Field(default="")
+    driveFolderId: Optional[str] = Field(default="")
+    driveFolderUrl: Optional[str] = Field(default="")
+    driveStatus: Optional[str] = Field(default="")
+    afterDriveFileId: Optional[str] = Field(default="")
+    afterDriveDirectUrl: Optional[str] = Field(default="")
+    afterDriveViewUrl: Optional[str] = Field(default="")
+    afterDriveStatus: Optional[str] = Field(default="")
 
 
 class GenerateReportRequest(BaseModel):
@@ -160,8 +171,21 @@ class AIConfigModel(BaseModel):
     model: Optional[str] = Field(default="DeepSeek-V4.1-Flash")
 
 
+class UploadImageRequest(BaseModel):
+    imageData: str
+    date: Optional[str] = ""
+    departmentVi: Optional[str] = "Sản xuất"
+    departmentKey: Optional[str] = "san-xuat"
+    itemType: Optional[str] = "finding"
+    row: Optional[int] = None
+    findingIndex: Optional[int] = 1
+    photoKind: Optional[str] = "before"
+    customFilename: Optional[str] = None
+
+
 class OpenFolderRequest(BaseModel):
     path: Optional[str] = Field(default="")
+    month: Optional[str] = Field(default="")
 
 
 class OpenFileRequest(BaseModel):
@@ -189,6 +213,8 @@ def detect_google_drive() -> Optional[Path]:
     if custom_path and Path(custom_path).exists():
         return Path(custom_path)
     candidates = [
+        Path("G:/Drive của tôi/HSE_ZhanChen_Storage"),
+        Path("G:/My Drive/HSE_ZhanChen_Storage"),
         Path("G:/Drive của tôi/HSE_BaoCao"),
         Path("G:/Drive của tôi"),
         Path("G:/My Drive/HSE_BaoCao"),
@@ -201,6 +227,106 @@ def detect_google_drive() -> Optional[Path]:
         if c.exists():
             return c
     return None
+
+
+_monthly_drive_urls: Dict[str, str] = {}
+
+
+class HSEStorageManager:
+    """Manages HSE_ZhanChen_Storage local & Google Drive directory hierarchies."""
+
+    @staticmethod
+    def normalize_department_slug(dept_vi: str = "", dept_key: str = "") -> str:
+        s = f"{dept_vi} {dept_key}".lower()
+        if any(k in s for k in ["sản xuất", "san-xuat", "sanxuat", "xưởng"]):
+            return "SanXuat"
+        if any(k in s for k in ["kỹ thuật", "ky-thuat", "kythuat", "lab", "rd", "r&d"]):
+            return "KyThuat"
+        if any(k in s for k in ["kho", "vận chuyển", "kho-hang", "khovan", "kho hàng"]):
+            return "KhoVan"
+        if any(k in s for k in ["bán hàng", "ban-hang", "kinh doanh"]):
+            return "BanHang"
+        if any(k in s for k in ["bảo trì", "bao-tri", "cơ điện"]):
+            return "BaoTri"
+        if any(k in s for k in ["hành chính", "hanh-chinh", "nhân sự"]):
+            return "HanhChinh"
+        if any(k in s for k in ["qc", "qa", "chất lượng"]):
+            return "QC"
+        clean = re.sub(r'[^a-zA-Z0-9]', '', dept_vi)
+        return clean or "BoPhan"
+
+    @staticmethod
+    def get_storage_root() -> Path:
+        """Returns the base storage root directory: GDrive mounted path or local data dir."""
+        gdrive = detect_google_drive()
+        if gdrive and gdrive.exists():
+            root = gdrive if gdrive.name == "HSE_ZhanChen_Storage" else (gdrive / "HSE_ZhanChen_Storage")
+        else:
+            root = Path(DATA_DIR) / "data" / "HSE_ZhanChen_Storage"
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+
+    @staticmethod
+    def get_or_create_monthly_folder(year_month: str) -> Tuple[Path, Path]:
+        """
+        Creates/returns:
+        (hinh_anh_dir, bao_cao_dir) under HSE_ZhanChen_Storage/{year_month}/
+        """
+        clean_ym = year_month.strip() if year_month else ""
+        if not re.match(r'^\d{4}-\d{2}$', clean_ym):
+            clean_ym = date.today().strftime("%Y-%m")
+
+        root = HSEStorageManager.get_storage_root()
+        month_dir = root / clean_ym
+        img_dir = month_dir / "Hinh_Anh_Hien_Truong"
+        rpt_dir = month_dir / "Bao_Cao_Xuat_File"
+
+        img_dir.mkdir(parents=True, exist_ok=True)
+        rpt_dir.mkdir(parents=True, exist_ok=True)
+
+        # Also ensure local app cache exists if root is on G:
+        local_cache_img = Path(DATA_DIR) / "data" / "HSE_ZhanChen_Storage" / clean_ym / "Hinh_Anh_Hien_Truong"
+        local_cache_rpt = Path(DATA_DIR) / "data" / "HSE_ZhanChen_Storage" / clean_ym / "Bao_Cao_Xuat_File"
+        local_cache_img.mkdir(parents=True, exist_ok=True)
+        local_cache_rpt.mkdir(parents=True, exist_ok=True)
+
+        # Cloud Drive monthly folder sync via GAS
+        try:
+            from core.msds_gas_sync import MSDSGASSyncService
+            if MSDSGASSyncService.is_configured() and clean_ym not in _monthly_drive_urls:
+                res = MSDSGASSyncService.get_or_create_monthly_folder(clean_ym)
+                if res and (res.get("folderUrl") or res.get("folder_url")):
+                    _monthly_drive_urls[clean_ym] = res.get("folderUrl") or res.get("folder_url")
+        except Exception:
+            pass
+
+        return img_dir, rpt_dir
+
+    @staticmethod
+    def build_standard_image_filename(
+        date_str: str,
+        dept_vi: str = "Sản xuất",
+        dept_key: str = "san-xuat",
+        item_type: str = "finding",
+        row: Optional[int] = None,
+        finding_index: int = 1,
+        photo_kind: str = "before"
+    ) -> str:
+        """
+        Generates standard name:
+        [YYYYMMDD]_[BoPhan]_[DongChecklist/Loi]_[Truoc/SauCaiThien].jpg
+        """
+        clean_date = (date_str or date.today().isoformat()).split("T")[0].replace("-", "")[:8]
+        dept_slug = HSEStorageManager.normalize_department_slug(dept_vi, dept_key)
+
+        if item_type == "checklist" and row:
+            item_tag = f"Dong{row}"
+        else:
+            item_tag = f"Loi_{finding_index:02d}"
+
+        kind_tag = "SauCaiThien" if (photo_kind in ["after", "sau"]) else "Truoc"
+
+        return f"{clean_date}_{dept_slug}_{item_tag}_{kind_tag}.jpg"
 
 
 # =============================================================================
@@ -262,6 +388,12 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
     target_path = REPORTS_DIR / filename
 
     actual_path, was_locked = safe_write_bytes(target_path, docx_bytes)
+
+    # Save to monthly HSE_ZhanChen_Storage/{year_month}/Bao_Cao_Xuat_File/
+    year_month = clean_date[:7] if len(clean_date) >= 7 else date.today().strftime("%Y-%m")
+    _, rpt_dir_word = HSEStorageManager.get_or_create_monthly_folder(year_month)
+    std_docx_name = f"Bao_Cao_HSE_{clean_date}{suffix}.docx"
+    safe_write_bytes(rpt_dir_word / std_docx_name, docx_bytes)
 
     # Google Drive auto-backup check
     drive_backup = False
@@ -326,6 +458,12 @@ async def export_excel_endpoint(request: Request):
 
     actual_path, was_locked = safe_write_bytes(target_path, excel_bytes)
     quoted_filename = urllib.parse.quote(filename)
+
+    # Save to monthly HSE_ZhanChen_Storage/{year_month}/Bao_Cao_Xuat_File/
+    year_month = clean_date[:7] if len(clean_date) >= 7 else date.today().strftime("%Y-%m")
+    _, rpt_dir_excel = HSEStorageManager.get_or_create_monthly_folder(year_month)
+    std_excel_name = f"Tong_Hop_Loi_HSE_{month_year_str}.xlsx"
+    safe_write_bytes(rpt_dir_excel / std_excel_name, excel_bytes)
 
     # Google Drive auto-backup check
     drive_backup = False
@@ -558,13 +696,44 @@ def save_report_endpoint(req: SaveReportRequest):
     except Exception as e:
         print(f"[HSE_SAVE_DOCX_ERROR] {e}", flush=True)
 
+    # Save to monthly HSE_ZhanChen_Storage/{year_month}/
+    year_month = clean_date[:7] if len(clean_date) >= 7 else date.today().strftime("%Y-%m")
+    img_dir, rpt_dir = HSEStorageManager.get_or_create_monthly_folder(year_month)
+
+    # 1. Save standard Word report and JSON into Bao_Cao_Xuat_File
+    std_docx_name = f"Bao_Cao_HSE_{clean_date}{suffix}.docx"
+    if docx_bytes:
+        safe_write_bytes(rpt_dir / std_docx_name, docx_bytes)
+    shutil.copy2(json_path, rpt_dir / json_filename)
+
+    # 2. Extract and organize field images into Hinh_Anh_Hien_Truong
+    for f_idx, finding in enumerate(req.findings, 1):
+        for kind, d_field in [("before", "imageData"), ("after", "imageAfterData")]:
+            img_val = getattr(finding, d_field, "") or ""
+            if img_val and ("," in img_val or len(img_val) > 100):
+                try:
+                    b64_part = img_val.split(",", 1)[1] if "," in img_val else img_val
+                    b64_bytes = base64.b64decode(re.sub(r'\s+', '', b64_part))
+                    f_name = HSEStorageManager.build_standard_image_filename(
+                        date_str=clean_date,
+                        dept_vi=finding.departmentVi or "Sản xuất",
+                        dept_key=finding.departmentKey or "san-xuat",
+                        item_type="finding",
+                        finding_index=f_idx,
+                        photo_kind=kind
+                    )
+                    with open(img_dir / f_name, "wb") as img_f:
+                        img_f.write(b64_bytes)
+                except Exception:
+                    pass
+
     # Google Drive Direct Storage Sync
     drive_dir = detect_google_drive()
     drive_saved = False
     drive_report_path = None
     if drive_dir and drive_dir.exists():
         try:
-            target_drive_folder = drive_dir if drive_dir.name == "HSE_BaoCao" else (drive_dir / "HSE_BaoCao")
+            target_drive_folder = drive_dir if drive_dir.name in ("HSE_ZhanChen_Storage", "HSE_BaoCao") else (drive_dir / "HSE_ZhanChen_Storage")
             target_drive_folder.mkdir(parents=True, exist_ok=True)
             # Copy JSON to Drive
             drive_json = target_drive_folder / json_filename
@@ -709,18 +878,131 @@ def delete_report_endpoint(filename: Optional[str] = None, id: Optional[str] = N
     return {"success": True, "message": "Đã xóa bản lưu thành công."}
 
 
+@hse_router.post("/drive/upload_image")
+@hse_router.post("/upload_image")
+def upload_image_endpoint(req: UploadImageRequest):
+    data_url = (req.imageData or "").strip()
+    if not data_url:
+        raise HTTPException(status_code=400, detail="Thiếu dữ liệu ảnh.")
+
+    try:
+        if "," in data_url:
+            _, b64 = data_url.split(",", 1)
+        else:
+            b64 = data_url
+        b64_clean = re.sub(r'\s+', '', b64)
+        img_bytes = base64.b64decode(b64_clean)
+        if len(img_bytes) == 0:
+            raise ValueError("Dữ liệu ảnh rỗng.")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Không thể giải mã ảnh: {e}")
+
+    # Determine date & month
+    raw_date = (req.date or date.today().isoformat()).split("T")[0]
+    year_month = raw_date[:7] if len(raw_date) >= 7 else date.today().strftime("%Y-%m")
+
+    # Generate standardized filename: [YYYYMMDD]_[BoPhan]_[DongChecklist/Loi]_[Truoc/SauCaiThien].jpg
+    filename = req.customFilename or HSEStorageManager.build_standard_image_filename(
+        date_str=raw_date,
+        dept_vi=req.departmentVi or "Sản xuất",
+        dept_key=req.departmentKey or "san-xuat",
+        item_type=req.itemType or "finding",
+        row=req.row,
+        finding_index=req.findingIndex or 1,
+        photo_kind=req.photoKind or "before"
+    )
+
+    # 1. Save to local monthly storage hierarchy: HSE_ZhanChen_Storage/{year_month}/Hinh_Anh_Hien_Truong/
+    img_dir, _ = HSEStorageManager.get_or_create_monthly_folder(year_month)
+    local_file_path = img_dir / filename
+    with open(local_file_path, "wb") as f:
+        f.write(img_bytes)
+
+    # Also save to local app cache folder if root was on G:
+    cache_dir = Path(DATA_DIR) / "data" / "HSE_ZhanChen_Storage" / year_month / "Hinh_Anh_Hien_Truong"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / filename
+    if cache_file != local_file_path:
+        with open(cache_file, "wb") as f:
+            f.write(img_bytes)
+
+    # 2. Upload to Google Drive Cloud via GAS (if configured)
+    drive_file_id = f"local_{year_month}_{filename}"
+    drive_direct_url = f"/api/hse/image/{year_month}/{filename}"
+    drive_view_url = f"https://drive.google.com/drive/u/0/my-drive"
+    drive_folder_id = f"hse_{year_month}"
+    drive_folder_url = f"https://drive.google.com/drive/u/0/my-drive"
+    cloud_synced = False
+
+    try:
+        from core.msds_gas_sync import MSDSGASSyncService
+        if MSDSGASSyncService.is_configured():
+            gas_subfolder = f"HSE_Report_Images/{year_month}"
+            res = MSDSGASSyncService.upload_file_to_drive(
+                file_bytes=img_bytes,
+                filename=filename,
+                mime_type="image/jpeg",
+                subfolder=gas_subfolder
+            )
+            if res and (res.get("fileId") or res.get("file_id") or res.get("success")):
+                drive_file_id = res.get("fileId") or res.get("file_id") or drive_file_id
+                drive_view_url = res.get("viewUrl") or res.get("view_url") or f"https://drive.google.com/file/d/{drive_file_id}/view"
+                drive_direct_url = f"https://drive.google.com/uc?export=view&id={drive_file_id}"
+                drive_folder_url = res.get("folderUrl") or res.get("folder_url") or drive_folder_url
+                drive_folder_id = res.get("folderId") or res.get("folder_id") or drive_folder_id
+                _monthly_drive_urls[year_month] = drive_folder_url
+                cloud_synced = True
+    except Exception as gas_err:
+        print(f"[HSE_IMAGE_GAS_SYNC_WARN] {gas_err}", flush=True)
+
+    return {
+        "success": True,
+        "filename": filename,
+        "yearMonth": year_month,
+        "driveFileId": drive_file_id,
+        "driveDirectUrl": drive_direct_url,
+        "driveViewUrl": drive_view_url,
+        "driveFolderId": drive_folder_id,
+        "driveFolderUrl": drive_folder_url,
+        "localPath": str(local_file_path),
+        "cloudSynced": cloud_synced
+    }
+
+
+@hse_router.get("/image/{year_month}/{filename}")
+def get_hse_image_endpoint(year_month: str, filename: str):
+    root = HSEStorageManager.get_storage_root()
+    p = root / year_month / "Hinh_Anh_Hien_Truong" / filename
+    if not p.exists():
+        p = Path(DATA_DIR) / "data" / "HSE_ZhanChen_Storage" / year_month / "Hinh_Anh_Hien_Truong" / filename
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Ảnh không tồn tại.")
+    return FileResponse(p, media_type="image/jpeg")
+
+
 @hse_router.post("/open_folder")
 @hse_router.post("/drive/open")
 def open_folder_endpoint(req: Optional[OpenFolderRequest] = None):
-    folder_path = (req.path if req and req.path else str(REPORTS_DIR))
-    p = Path(folder_path).resolve()
-    p.mkdir(parents=True, exist_ok=True)
+    month_str = (req.month if req and req.month else "").strip()
+    if not month_str:
+        month_str = date.today().strftime("%Y-%m")
+
+    img_dir, rpt_dir = HSEStorageManager.get_or_create_monthly_folder(month_str)
+    target_dir = rpt_dir.parent  # HSE_ZhanChen_Storage/{month_str}
+
     if hasattr(os, "startfile") and os.name == "nt":
         try:
-            os.startfile(str(p))
+            os.startfile(str(target_dir))
         except Exception:
             pass
-    return {"success": True, "folder": str(folder_path)}
+
+    web_drive_url = _monthly_drive_urls.get(month_str) or "https://drive.google.com/drive/u/0/my-drive"
+    return {
+        "success": True,
+        "month": month_str,
+        "folder": str(target_dir),
+        "webDriveUrl": web_drive_url
+    }
 
 
 @hse_router.post("/open_file")

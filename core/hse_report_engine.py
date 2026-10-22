@@ -669,29 +669,48 @@ def fit_image(
     data_url: Optional[str],
     max_width: float = 3.38,
     max_height: float = 4.25,
+    drive_url: Optional[str] = None
 ) -> tuple[Optional[io.BytesIO], float, float]:
     """
-    Fits base64 image proportionally within max bounding box using Lanczos resampling.
+    Fits base64 or remote Google Drive image proportionally within max bounding box using Lanczos resampling.
     Auto-corrects EXIF orientation and outputs high-quality JPEG (90%).
     Null-safe: Never raises ValueError, returns (None, 0.0, 0.0) if missing or invalid.
     """
-    if not data_url or not isinstance(data_url, str) or not data_url.strip():
+    raw = None
+
+    if data_url and isinstance(data_url, str) and data_url.strip():
+        try:
+            if "," in data_url:
+                _, encoded = data_url.split(",", 1)
+            else:
+                encoded = data_url.strip()
+
+            clean_encoded = re.sub(r"\s+", "", encoded)
+            if clean_encoded:
+                raw = base64.b64decode(clean_encoded)
+                if len(raw) == 0 or len(raw) > 30 * 1024 * 1024:
+                    raw = None
+        except Exception:
+            raw = None
+
+    # Fallback to fetching from Google Drive if base64 is missing
+    if not raw and drive_url and isinstance(drive_url, str) and drive_url.startswith("http"):
+        try:
+            import requests
+            req_url = drive_url
+            if "/file/d/" in req_url:
+                f_id = req_url.split("/file/d/")[1].split("/")[0]
+                req_url = f"https://drive.google.com/uc?export=view&id={f_id}"
+            resp = requests.get(req_url, timeout=7.0)
+            if resp.ok and len(resp.content) > 100:
+                raw = resp.content
+        except Exception as drive_err:
+            logger.warning(f"Failed to fetch image from drive_url {drive_url}: {drive_err}")
+
+    if not raw:
         return None, 0.0, 0.0
 
     try:
-        if "," in data_url:
-            _, encoded = data_url.split(",", 1)
-        else:
-            encoded = data_url.strip()
-
-        clean_encoded = re.sub(r"\s+", "", encoded)
-        if not clean_encoded:
-            return None, 0.0, 0.0
-
-        raw = base64.b64decode(clean_encoded)
-        if len(raw) == 0 or len(raw) > 30 * 1024 * 1024:
-            return None, 0.0, 0.0
-
         img = Image.open(io.BytesIO(raw))
         img = ImageOps.exif_transpose(img)
         if img.mode != "RGB":
@@ -1009,10 +1028,12 @@ def populate_finding_row(
     image_after = str(finding.get("imageAfterData") or "")
     if report_type == "improvement" and is_improved and image_after:
         target_img = image_after
+        target_drive_url = str(finding.get("afterDriveDirectUrl") or finding.get("afterDriveViewUrl") or "")
     else:
         target_img = image_data
+        target_drive_url = str(finding.get("driveDirectUrl") or finding.get("driveViewUrl") or "")
 
-    stream, w_in, h_in = fit_image(target_img, max_width=3.38, max_height=4.25)
+    stream, w_in, h_in = fit_image(target_img, max_width=3.38, max_height=4.25, drive_url=target_drive_url)
     p_img = right.paragraphs[0]
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if stream:

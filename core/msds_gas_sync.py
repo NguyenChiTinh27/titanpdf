@@ -334,6 +334,22 @@ class MSDSGASSyncService:
                 res["download_url"] = res["downloadUrl"]
         return res
 
+    @classmethod
+    def get_or_create_monthly_folder(cls, year_month: str) -> Dict[str, Any]:
+        """Tạo hoặc lấy thư mục tháng YYYY-MM trong HSE_Report_Images trên Google Drive."""
+        if not cls.is_configured():
+            return {
+                "status": "skipped",
+                "success": False,
+                "message": "Chưa cấu hình Google Apps Script Webhook."
+            }
+        payload = {
+            "action": "getOrCreateMonthlyFolder",
+            "yearMonth": year_month
+        }
+        res = cls._send_request(payload, timeout=20.0)
+        return res if isinstance(res, dict) else {"status": "error", "success": False}
+
     # ==========================================================================
     # CƠ CHẾ HÒA GIẢI KHỞI ĐỘNG (STARTUP RECONCILIATION - FIX EPHEMERAL RESET)
     # ==========================================================================

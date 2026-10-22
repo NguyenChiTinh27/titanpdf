@@ -122,6 +122,22 @@ function doPost(e) {
       return jsonResponse(uploadRes);
     }
 
+    // 1b. Tạo hoặc lấy thư mục tháng YYYY-MM trên Google Drive (HSE_Report_Images/YYYY-MM)
+    if (action === "getOrCreateMonthlyFolder") {
+      var yearMonth = payload.yearMonth || payload.month || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM");
+      var rootFolder = getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER);
+      var hseRoot = getOrCreateSubFolder(rootFolder, "HSE_Report_Images");
+      var monthFolder = getOrCreateSubFolder(hseRoot, yearMonth);
+      return jsonResponse({
+        status: "success",
+        success: true,
+        yearMonth: yearMonth,
+        folderId: monthFolder.getId(),
+        folderName: monthFolder.getName(),
+        folderUrl: monthFolder.getUrl()
+      });
+    }
+
     // 2. Ping / Kiểm tra kết nối
     if (action === "ping" || action === "test_connection") {
       var pingRes = handlePing();
@@ -669,11 +685,20 @@ function getOrCreateFolder(folderName) {
 
 function getOrCreateSubFolder(parentFolder, subFolderName) {
   subFolderName = subFolderName || CONFIG.DRIVE_SUB_FOLDER;
-  var subs = parentFolder.getFoldersByName(subFolderName);
-  if (subs.hasNext()) return subs.next();
-  var newSub = parentFolder.createFolder(subFolderName);
-  newSub.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return newSub;
+  var parts = subFolderName.split(/[\/]/).filter(function(p) { return p && p.trim().length > 0; });
+  var current = parentFolder;
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i].trim();
+    var subs = current.getFoldersByName(part);
+    if (subs.hasNext()) {
+      current = subs.next();
+    } else {
+      var newSub = current.createFolder(part);
+      newSub.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      current = newSub;
+    }
+  }
+  return current;
 }
 
 function jsonResponse(data, statusCode) {

@@ -229,6 +229,7 @@ class HSEExcelExporter:
                     "zh_issue": zh_issue,
                     "vn_issue": vn_issue,
                     "img_path": img_path,
+                    "drive_view_url": f.get("driveViewUrl") or f.get("driveDirectUrl") or "",
                     "status": status,
                     "improve_date": improve_date,
                     "note": note
@@ -610,16 +611,22 @@ class HSEExcelExporter:
                         ws_all[f"H{r_num}"] = ""
                     except Exception as img_err:
                         logger.warning(f"Failed to embed defect image: {img_err}")
-                        ws_all[f"H{r_num}"] = "Không có ảnh\n无图片"
+                        ws_all[f"H{r_num}"] = f"🔗 Xem ảnh Drive ({item['month']})" if item.get("drive_view_url") else "Không có ảnh\n无图片"
                 else:
-                    ws_all[f"H{r_num}"] = "Không có ảnh\n无图片"
+                    ws_all[f"H{r_num}"] = f"🔗 Xem ảnh Drive ({item['month']})" if item.get("drive_view_url") else "Không có ảnh\n无图片"
+
+                if item.get("drive_view_url"):
+                    ws_all[f"H{r_num}"].hyperlink = item["drive_view_url"]
 
                 for col_l, _, _ in data_headers:
                     cell = ws_all[f"{col_l}{r_num}"]
                     cell.font = Font(name=self.font_family, size=9.5)
                     cell.border = self.thin_border
-                    if col_l == "H" and ws_all[f"H{r_num}"].value == "Không có ảnh\n无图片":
-                        cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
+                    if col_l == "H":
+                        if item.get("drive_view_url") and not (item["img_path"] and os.path.exists(item["img_path"])):
+                            cell.font = Font(name=self.font_family, size=9, bold=True, color="2563EB", underline="single")
+                        elif ws_all[f"H{r_num}"].value == "Không có ảnh\n无图片":
+                            cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
                     if col_l in ["A", "B", "C", "H", "J"]:
                         cell.alignment = Alignment(horizontal="center", vertical="center")
                     elif col_l in ["D", "E"]:
@@ -749,16 +756,22 @@ class HSEExcelExporter:
                             ws_dept[f"H{r_num}"] = ""
                         except Exception as img_err:
                             logger.warning(f"Failed to embed dept image: {img_err}")
-                            ws_dept[f"H{r_num}"] = "Không có ảnh\n无图片"
+                            ws_dept[f"H{r_num}"] = f"🔗 Xem ảnh Drive ({item['month']})" if item.get("drive_view_url") else "Không có ảnh\n无图片"
                     else:
-                        ws_dept[f"H{r_num}"] = "Không có ảnh\n无图片"
+                        ws_dept[f"H{r_num}"] = f"🔗 Xem ảnh Drive ({item['month']})" if item.get("drive_view_url") else "Không có ảnh\n无图片"
+
+                    if item.get("drive_view_url"):
+                        ws_dept[f"H{r_num}"].hyperlink = item["drive_view_url"]
 
                     for col_l, _, _ in data_headers:
                         cell = ws_dept[f"{col_l}{r_num}"]
                         cell.font = Font(name=self.font_family, size=9.5)
                         cell.border = self.thin_border
-                        if col_l == "H" and ws_dept[f"H{r_num}"].value == "Không có ảnh\n无图片":
-                            cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
+                        if col_l == "H":
+                            if item.get("drive_view_url") and not (item["img_path"] and os.path.exists(item["img_path"])):
+                                cell.font = Font(name=self.font_family, size=9, bold=True, color="2563EB", underline="single")
+                            elif ws_dept[f"H{r_num}"].value == "Không có ảnh\n无图片":
+                                cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
                         if col_l in ["A", "B", "C", "H", "J"]:
                             cell.alignment = Alignment(horizontal="center", vertical="center")
                         elif col_l in ["D", "E"]:

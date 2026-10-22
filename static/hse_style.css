@@ -743,6 +743,41 @@
   cursor: pointer;
 }
 
+/* Google Drive Sync Badge on Dropzones */
+.hse-drive-sync-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #f8fafc;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  z-index: 5;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.hse-drive-sync-badge.synced {
+  background: rgba(22, 101, 52, 0.92);
+  border-color: #4ade80;
+  color: #ffffff;
+}
+
+.hse-drive-sync-badge.uploading {
+  background: rgba(180, 83, 9, 0.92);
+  border-color: #fcd34d;
+  color: #ffffff;
+  animation: pulse 1.5s infinite;
+}
+
 /* Real-Time A4 Preview Canvas */
 .hse-preview-header {
   display: flex;
