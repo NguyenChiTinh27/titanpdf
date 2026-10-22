@@ -567,7 +567,7 @@
   function openGasConfigModal(notice = "") {
     let modal = $("#hse-gas-config-modal");
     if (!modal) return;
-    const currentUrl = localStorage.getItem("hse_gas_web_app_url") || localStorage.getItem("gas_web_app_url") || "https://script.google.com/macros/s/AKfycbws_nxdj41dyvagv-uBNkPhyJWBjRpr727xFICssUNJabTA_VLYqZWszoB9bbAZaPKMbQ/exec";
+    const currentUrl = localStorage.getItem("hse_gas_web_app_url") || localStorage.getItem("gas_web_app_url") || "https://script.google.com/macros/s/AKfycbzc2q-vTj-8xCykJqEiH8a7rkfaLLpkpl6bOUuvJOBv86a5QpeqzT46twZuuyQkePg/exec";
     const inp = $("#hse-gas-url-input");
     if (inp) inp.value = currentUrl;
     const noticeEl = $("#hse-gas-modal-notice");

@@ -48,7 +48,7 @@ EXTRACTED_DEFECTS_JSON = BASE_HSE_DIR / "extracted_defects.json"
 EXTRACTED_IMAGES_DIR = BASE_HSE_DIR / "extracted_images"
 GAS_CONFIG_FILE = DATA_DIR / "msds_gas_config.json"
 
-DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbws_nxdj41dyvagv-uBNkPhyJWBjRpr727xFICssUNJabTA_VLYqZWszoB9bbAZaPKMbQ/exec"
+DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbzc2q-vTj-8xCykJqEiH8a7rkfaLLpkpl6bOUuvJOBv86a5QpeqzT46twZuuyQkePg/exec"
 
 
 class DefectUpdatePayload(BaseModel):
@@ -566,6 +566,8 @@ class DefectAggregatorService:
                             status_msg = f"Đã đồng bộ thành công {remote_count} lỗi từ Google Apps Script!"
                         elif isinstance(data, dict) and data.get("status") == "error":
                             status_msg = f"Lỗi GAS: {data.get('error', 'Lỗi không xác định')}"
+                        elif isinstance(data, dict) and data.get("status") == "ok":
+                            status_msg = f"Đã kết nối thành công với Google Apps Script Web App! Cổng API hoạt động chuẩn xác."
                     except Exception:
                         status_msg = "Google Apps Script không trả về định dạng JSON hợp lệ."
             else:
