@@ -287,7 +287,7 @@
 
             <!-- Status Badge -->
             <div class="hse-photo-status-badge ${isDone ? 'done' : 'pending'}">
-              ${isDone ? '✓ ĐÃ CẢI THIỆN / 已改善' : '• CHỜ XỬ LÝ / 待处理'}
+              ${isDone ? '✓ CẢI THIỆN / 已改善' : '⚠️ CHƯA CẢI THIỆN / 未改善'}
             </div>
 
             <!-- Before/After Toggle Switch if both photos exist -->
@@ -325,7 +325,7 @@
           <div class="hse-defect-footer" style="display:flex; justify-content:space-between; align-items:center;">
             <label class="hse-checkbox-label ${isDone ? 'done' : 'pending'}">
               <input type="checkbox" data-action="quick-toggle" data-id="${escapeHtml(d.id)}" ${isDone ? 'checked' : ''}>
-              <span>${isDone ? `✓ Đã cải thiện (${escapeHtml(d.improve_date || 'Xong')})` : '✕ Chờ xử lý'}</span>
+              <span>${isDone ? `✓ Cải thiện / 已改善 (${escapeHtml(d.improve_date || 'Xong')})` : '⚠️ Chưa cải thiện / 未改善'}</span>
             </label>
 
             <div style="display:inline-flex; gap:6px; align-items:center;">
@@ -369,7 +369,7 @@
           </td>
           <td style="text-align:center; white-space:nowrap;">
             <span class="hse-photo-status-badge ${isDone ? 'done' : 'pending'}" style="position:static; box-shadow:none;">
-              ${isDone ? '✓ ĐÃ CẢI THIỆN' : '• CHỜ XỬ LÝ'}
+              ${isDone ? '✓ CẢI THIỆN / 已改善' : '⚠️ CHƯA CẢI THIỆN / 未改善'}
             </span>
           </td>
           <td style="font-size:12px; color:#64748b; white-space:nowrap;">
@@ -378,10 +378,10 @@
           <td style="text-align:right; white-space:nowrap;">
             <div style="display:inline-flex; gap:6px; align-items:center;">
               <button type="button" class="hse-btn-detail" data-action="quick-toggle-btn" data-id="${escapeHtml(d.id)}" data-improved="${isDone}">
-                ${isDone ? 'Hủy hoàn thành' : '✓ Hoàn thành'}
+                ${isDone ? '⚠️ Chưa cải thiện / 未改善' : '✓ Cải thiện / 已改善'}
               </button>
               <button type="button" class="hse-btn-detail" data-action="open-detail" data-id="${escapeHtml(d.id)}">
-                Chi Tiết
+                Chi Tiết / 详情
               </button>
               <button type="button" class="hse-btn-delete-defect" data-action="delete-defect" data-id="${escapeHtml(d.id)}" title="Xóa vĩnh viễn sự cố này" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.15s;">
                 🗑️
@@ -397,14 +397,14 @@
         <table class="hse-defects-table">
           <thead>
             <tr>
-              <th>Mã sự cố</th>
-              <th>Tháng</th>
-              <th>Bộ phận</th>
-              <th style="text-align:center;">Ảnh</th>
-              <th>Mô tả chi tiết song ngữ (中/越)</th>
-              <th style="text-align:center;">Trạng thái</th>
-              <th>Ngày cải thiện</th>
-              <th style="text-align:right;">Thao tác</th>
+              <th>Mã sự cố / 隐患编号</th>
+              <th>Tháng / 月份</th>
+              <th>Bộ phận / 责任部门</th>
+              <th style="text-align:center;">Ảnh / 现场图片</th>
+              <th>Mô tả chi tiết song ngữ / 详细描述 (中/越)</th>
+              <th style="text-align:center;">Trạng thái / 改善状态</th>
+              <th>Ngày cải thiện / 改善日期</th>
+              <th style="text-align:right;">Thao tác / 操作</th>
             </tr>
           </thead>
           <tbody>
@@ -441,12 +441,12 @@
       const target = state.allDefects.find(d => d.id === defectId || d.code === defectId);
       if (target) {
         target.improved = isImproved;
-        target.status = isImproved ? "Đã cải thiện / 已改善" : "Chờ xử lý / 待处理";
+        target.status = isImproved ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善";
         target.improve_date = isImproved ? nowStr : "";
       }
 
       applyFilters();
-      showToast(isImproved ? `✓ Đã cập nhật: ĐÃ CẢI THIỆN (${defectId})!` : `Đã chuyển sang CHỜ XỬ LÝ (${defectId})`);
+      showToast(isImproved ? `✓ Đã cập nhật: CẢI THIỆN / 已改善 (${defectId})!` : `⚠️ Đã chuyển sang: CHƯA CẢI THIỆN / 未改善 (${defectId})`);
     } catch (e) {
       showToast(e.message, true);
     }
@@ -505,12 +505,15 @@
     updateModalAfterPhotoDisplay(state.pendingAfterImage);
 
     // Form inputs
+    const isImproved = Boolean(d.improved);
+    const sel = $("#modal-status-select");
+    if (sel) sel.value = isImproved ? "improved" : "pending";
     const chk = $("#modal-status-chk");
-    if (chk) chk.checked = Boolean(d.improved);
+    if (chk) chk.checked = isImproved;
 
     const dateInp = $("#modal-improve-date");
     if (dateInp) {
-      dateInp.value = d.improve_date || (d.improved ? new Date().toISOString().substring(0, 10) : "");
+      dateInp.value = d.improve_date || (isImproved ? new Date().toISOString().substring(0, 10) : "");
     }
 
     const noteInp = $("#modal-note-inp");
@@ -553,8 +556,8 @@
     try {
       setLoading(true, "Đang lưu thay đổi & đồng bộ...");
       const d = state.currentDetailDefect;
-      const chk = $("#modal-status-chk");
-      const isImp = chk ? chk.checked : d.improved;
+      const sel = $("#modal-status-select");
+      const isImp = sel ? sel.value === "improved" : Boolean($("#modal-status-chk")?.checked);
       const dateInp = $("#modal-improve-date");
       const noteInp = $("#modal-note-inp");
 
@@ -576,7 +579,7 @@
 
       // Update in local state
       d.improved = isImp;
-      d.status = isImp ? "Đã cải thiện / 已改善" : "Chờ xử lý / 待处理";
+      d.status = isImp ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善";
       d.improve_date = payload.improveDate;
       d.note = payload.note;
       if (payload.afterImageData) d.img_after = payload.afterImageData;
@@ -600,8 +603,36 @@
     if (!allMonths) {
       url += `&month=${encodeURIComponent(state.selectedMonth)}&department=${encodeURIComponent(state.selectedDept)}&status=${encodeURIComponent(state.selectedStatus)}&search=${encodeURIComponent(state.searchQuery)}`;
     }
-    showToast(`📊 Đang tạo file Excel Tổng Thể: ${allMonths ? 'Tất cả các tháng' : 'Theo bộ lọc'}...`);
+    showToast(`📊 Đang tạo file Excel Tổng Thể (kèm ảnh vào cell): ${allMonths ? 'Tất cả các tháng' : 'Theo bộ lọc'}...`);
     window.location.href = url;
+  }
+
+  function handleImportMasterExcel(file) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    setLoading(true, "Đang đồng bộ dữ liệu từ Master Excel...");
+    fetch("/api/hse/defects/import_master_excel", {
+      method: "POST",
+      body: formData
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) {
+        showToast("✅ " + (res.message || "Đã đồng bộ thành công!"));
+        loadDefects(false);
+      } else {
+        showToast("❌ " + (res.detail || res.message || "Lỗi đồng bộ"), true);
+      }
+    })
+    .catch(err => {
+      showToast("❌ Lỗi: " + err.message, true);
+    })
+    .finally(() => {
+      setLoading(false);
+      const inp = $("#hse-tracker-import-file-input");
+      if (inp) inp.value = "";
+    });
   }
 
   async function syncGasNow() {
@@ -938,6 +969,12 @@
     $("#hse-btn-clear-all-defects")?.addEventListener("click", clearAllDefects);
     $("#hse-btn-excel-all")?.addEventListener("click", () => exportMasterExcel(true));
     $("#hse-btn-excel-filter")?.addEventListener("click", () => exportMasterExcel(false));
+    $("#hse-btn-import-excel")?.addEventListener("click", () => $("#hse-tracker-import-file-input")?.click());
+    $("#hse-tracker-import-file-input")?.addEventListener("change", (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleImportMasterExcel(e.target.files[0]);
+      }
+    });
 
     // Global delegation for dynamic card/table clicks
     document.addEventListener("click", (e) => {
@@ -1073,9 +1110,30 @@
       }
     });
 
+    // Status selection via dropdown or checkbox
+    $("#modal-status-select")?.addEventListener("change", (e) => {
+      const isImp = e.target.value === "improved";
+      const chk = $("#modal-status-chk");
+      if (chk) chk.checked = isImp;
+      const dateInp = $("#modal-improve-date");
+      if (isImp && dateInp && !dateInp.value.trim()) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        const hh = String(now.getHours()).padStart(2, "0");
+        const min = String(now.getMinutes()).padStart(2, "0");
+        dateInp.value = `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+      } else if (!isImp && dateInp) {
+        dateInp.value = "";
+      }
+    });
+
     // Auto-fill completion date when checkbox is checked
     $("#modal-status-chk")?.addEventListener("change", (e) => {
       const chk = e.target;
+      const sel = $("#modal-status-select");
+      if (sel) sel.value = chk.checked ? "improved" : "pending";
       const dateInp = $("#modal-improve-date");
       if (chk && chk.checked && dateInp && !dateInp.value.trim()) {
         const now = new Date();
@@ -1085,6 +1143,8 @@
         const hh = String(now.getHours()).padStart(2, "0");
         const min = String(now.getMinutes()).padStart(2, "0");
         dateInp.value = `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+      } else if (chk && !chk.checked && dateInp) {
+        dateInp.value = "";
       }
     });
 

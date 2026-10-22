@@ -1306,6 +1306,40 @@ async def export_master_excel_endpoint(
     )
 
 
+@hse_router.post("/defects/import_master_excel")
+async def import_master_excel_endpoint(file: UploadFile = File(...)):
+    """Nhập tệp Excel tổng hợp lỗi HSE (Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx) lên web."""
+    from core.hse_defect_tracker import DefectAggregatorService
+    try:
+        content = await file.read()
+        res = DefectAggregatorService.import_master_excel(content)
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi nhập file Master Excel: {str(e)}")
+
+
+@hse_router.post("/defects/sync_local_desktop_master")
+def sync_local_desktop_master_endpoint():
+    """Tự động đồng bộ từ file Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx ở Desktop nếu tồn tại."""
+    from core.hse_defect_tracker import DefectAggregatorService
+    import os
+    desktop_paths = [
+        Path(os.path.expanduser("~")) / "OneDrive" / "Desktop" / "Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx",
+        Path(os.path.expanduser("~")) / "Desktop" / "Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx",
+        Path(r"C:\Users\ntc27\OneDrive\Desktop\Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx")
+    ]
+    target_path = next((p for p in desktop_paths if p.exists()), None)
+    if not target_path:
+        return {"success": False, "message": "Không tìm thấy file Master Excel trên Desktop."}
+    try:
+        with open(target_path, "rb") as f:
+            data = f.read()
+        res = DefectAggregatorService.import_master_excel(data)
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi đồng bộ Master Excel Desktop: {str(e)}")
+
+
 @hse_router.get("/defect_image/{year_month}/{filename}")
 def get_defect_image_endpoint(year_month: str, filename: str):
     # 1. Check extracted images baseline

@@ -492,7 +492,7 @@
             <span class="hse-finding-badge">Trang ảnh ${Math.floor(idx / 2) + 1} · Vị trí ${(idx % 2) + 1}/2</span>
             ${isImproveMode ? `
               <span class="hse-status-tag ${isImproved ? "pass" : "fail"}">
-                ${isImproved ? "✓ Đã cải thiện (符合)" : "✕ Chưa cải thiện (不符合)"}
+                ${isImproved ? "✓ Cải thiện / 已改善" : "⚠️ Chưa cải thiện / 未改善"}
               </span>
             ` : ""}
           </div>
@@ -596,7 +596,7 @@
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 12.5px;">
                   <input type="checkbox" data-action="toggle-improved" ${isImproved ? "checked" : ""}>
                   <span style="color: ${isImproved ? "#15803d" : "#b91c1c"};">
-                    ${isImproved ? "✓ ĐÃ CẢI THIỆN (Đã khắc phục)" : "✕ Chưa cải thiện (Khối đỏ)"}
+                    ${isImproved ? "✓ CẢI THIỆN / 已改善" : "⚠️ CHƯA CẢI THIỆN / 未改善"}
                   </span>
                 </label>
 
@@ -740,7 +740,7 @@
           renderFindings();
           renderPreview();
           triggerAutoSave();
-          showToast(finding.improved ? "Đã đánh dấu: ĐÃ CẢI THIỆN" : "Đã chuyển sang: CHƯA CẢI THIỆN");
+          showToast(finding.improved ? "✓ Đã đánh dấu: CẢI THIỆN / 已改善" : "⚠️ Đã chuyển sang: CHƯA CẢI THIỆN / 未改善");
         });
       }
 
@@ -1083,7 +1083,7 @@
                   <div style="grid-column: 1 / -1; margin-bottom: 4px;">
                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #166534;">
                       <input type="checkbox" data-action="toggle-check-improved" ${data.improved ? "checked" : ""}>
-                      <span>${data.improved ? "✓ Đã phục tra cải thiện (Khối xanh)" : "✕ Chưa cải thiện (Khối đỏ)"}</span>
+                      <span>${data.improved ? "✓ Cải thiện / 已改善 (Khối xanh)" : "⚠️ Chưa cải thiện / 未改善 (Khối đỏ)"}</span>
                     </label>
                   </div>
                 ` : ""}
@@ -1304,7 +1304,7 @@
                   </div>
                   ${isImprove ? `
                     <div style="font-size: 8.5px; font-weight: bold; margin-top: 4px; color: ${finding.improved ? "#15803d" : "#b91c1c"};">
-                      复查：${escapeHtml(dateVal)}-${finding.improved ? "已整改" : "未整改"}<br>
+                      复查：${escapeHtml(dateVal)}-${finding.improved ? "已改善" : "未改善"}<br>
                       Kiểm tra：${escapeHtml(dateVal)}-${finding.improved ? "Đã cải thiện" : "Chưa cải thiện"}
                     </div>
                   ` : ""}
@@ -1545,7 +1545,7 @@
         vn_issue: vi,
         imageData: f.imageData || "",
         drive_view_url: f.driveViewUrl || f.driveDirectUrl || "",
-        status: isImproved ? "Đã cải thiện / 已改善" : "Chờ xử lý / 待处理",
+        status: isImproved ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善",
         improved: isImproved,
         improve_date: isImproved ? (f.recheckDate || cleanDateStr) : "",
         note: (f.note || f.suggestion || "").trim()
@@ -1578,7 +1578,7 @@
           vn_issue: vi,
           imageData: "",
           drive_view_url: "",
-          status: isImproved ? "Đã cải thiện / 已改善" : "Chờ xử lý / 待处理",
+          status: isImproved ? "Cải thiện / 已改善" : "Chưa cải thiện / 未改善",
           improved: isImproved,
           improve_date: isImproved ? cleanDateStr : "",
           note: "Hạng mục kiểm tra 26 tiêu chuẩn xưởng ZhanChen"

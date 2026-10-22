@@ -1,1 +1,172 @@
-{}
+{
+  "DEF-202609-01": {
+    "improved": true,
+    "improve_date": "2026-10-21",
+    "note": "Đã vệ sinh bàn pha chế mẫu kỹ thuật, sắp xếp lại ly màu, dung môi, ống hút và dao cạo gọn gàng."
+  },
+  "hse_20260930_inspection_finding_1": {
+    "improved": true,
+    "improve_date": "2026-10-21",
+    "note": "Đã vệ sinh bàn pha chế mẫu kỹ thuật, sắp xếp lại ly màu, dung môi, ống hút và dao cạo gọn gàng."
+  },
+  "DEF-202609-17": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Lau sạch bụi hóa chất trên bàn thao tác và cân điện tử; sắp xếp giẻ lau và cốc mẫu dung môi ngăn nắp sau khi thử nghiệm."
+  },
+  "hse_20260930_inspection_finding_17": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Lau sạch bụi hóa chất trên bàn thao tác và cân điện tử; sắp xếp giẻ lau và cốc mẫu dung môi ngăn nắp sau khi thử nghiệm."
+  },
+  "DEF-202609-16": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Vệ sinh sạch sẽ gầm máy sấy UV và lau bụi công nghiệp bám trên đường ống ruột gà luồn dây cáp điện."
+  },
+  "hse_20260930_inspection_finding_16": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Vệ sinh sạch sẽ gầm máy sấy UV và lau bụi công nghiệp bám trên đường ống ruột gà luồn dây cáp điện."
+  },
+  "DEF-202609-15": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Buộc túm kín miệng tất cả các bao hóa chất bột đã mở dở; sắp xếp ngay ngắn trên pallet đúng quy định bảo quản."
+  },
+  "hse_20260930_inspection_finding_15": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Buộc túm kín miệng tất cả các bao hóa chất bột đã mở dở; sắp xếp ngay ngắn trên pallet đúng quy định bảo quản."
+  },
+  "DEF-202609-14": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Đậy nắp che chắn chống văng bắn cho thùng chứa hóa chất dưới máy khuấy phân tán; tránh bay hơi dung môi."
+  },
+  "hse_20260930_inspection_finding_14": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Đậy nắp che chắn chống văng bắn cho thùng chứa hóa chất dưới máy khuấy phân tán; tránh bay hơi dung môi."
+  },
+  "DEF-202609-13": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom pallet gỗ rỗng về khu vực tập kết pallet quy định; giữ lối đi chính trong kho luôn thông thoáng."
+  },
+  "hse_20260930_inspection_finding_13": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom pallet gỗ rỗng về khu vực tập kết pallet quy định; giữ lối đi chính trong kho luôn thông thoáng."
+  },
+  "DEF-202609-12": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Đóng và chốt then an toàn lan can sàn thao tác trên cao ngay sau khi hoàn tất bốc dỡ nguyên liệu."
+  },
+  "hse_20260930_inspection_finding_12": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Đóng và chốt then an toàn lan can sàn thao tác trên cao ngay sau khi hoàn tất bốc dỡ nguyên liệu."
+  },
+  "DEF-202609-11": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di dời ngay pallet nhựa ra vị trí khác; tuyệt đối không để vật cản che chắn nút ấn chuông báo cháy khẩn cấp."
+  },
+  "hse_20260930_inspection_finding_11": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di dời ngay pallet nhựa ra vị trí khác; tuyệt đối không để vật cản che chắn nút ấn chuông báo cháy khẩn cấp."
+  },
+  "DEF-202609-10": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom toàn bộ nắp ren kim loại sau khi mở phuy; gom vào khay/hộp chuyên dụng đặt tại khu vực thao tác."
+  },
+  "hse_20260930_inspection_finding_10": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom toàn bộ nắp ren kim loại sau khi mở phuy; gom vào khay/hộp chuyên dụng đặt tại khu vực thao tác."
+  },
+  "DEF-202609-09": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di chuyển các thùng hóa chất và bao nguyên liệu, trả lại lối tiếp cận thông thoáng tối thiểu 1 mét trước bình chữa cháy."
+  },
+  "hse_20260930_inspection_finding_9": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di chuyển các thùng hóa chất và bao nguyên liệu, trả lại lối tiếp cận thông thoáng tối thiểu 1 mét trước bình chữa cháy."
+  },
+  "DEF-202609-08": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Lau khô hoàn toàn vũng nước đọng; kê pallet cao cho các bao hóa chất bột và không để nước tràn vào kho nguyên liệu."
+  },
+  "hse_20260930_inspection_finding_8": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Lau khô hoàn toàn vũng nước đọng; kê pallet cao cho các bao hóa chất bột và không để nước tràn vào kho nguyên liệu."
+  },
+  "DEF-202609-07": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Chùi rửa sạch sẽ bụi bám trên thân bình và kệ đỡ bình chữa cháy; kiểm tra định kỳ tình trạng hoạt động của bình."
+  },
+  "hse_20260930_inspection_finding_7": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Chùi rửa sạch sẽ bụi bám trên thân bình và kệ đỡ bình chữa cháy; kiểm tra định kỳ tình trạng hoạt động của bình."
+  },
+  "DEF-202609-06": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom và đổ rác ngay; trang bị nắp đậy kín cho thùng rác và thực hiện đổ rác hằng ngày không để tràn miệng."
+  },
+  "hse_20260930_inspection_finding_6": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom và đổ rác ngay; trang bị nắp đậy kín cho thùng rác và thực hiện đổ rác hằng ngày không để tràn miệng."
+  },
+  "DEF-202609-05": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Lau chùi sạch bụi bẩn trên nắp các thùng phuy hóa chất; duy trì vệ sinh định kỳ bề mặt bao bì chứa hóa chất."
+  },
+  "hse_20260930_inspection_finding_5": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Lau chùi sạch bụi bẩn trên nắp các thùng phuy hóa chất; duy trì vệ sinh định kỳ bề mặt bao bì chứa hóa chất."
+  },
+  "DEF-202609-04": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di dời tấm ván gỗ/ván lót vào kho vật tư hoặc đặt nằm phẳng an toàn trên pallet, không dựng nghiêng sát lối đi."
+  },
+  "hse_20260930_inspection_finding_4": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di dời tấm ván gỗ/ván lót vào kho vật tư hoặc đặt nằm phẳng an toàn trên pallet, không dựng nghiêng sát lối đi."
+  },
+  "DEF-202609-03": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom toàn bộ bao bì nilon phế liệu, phân loại rác thải tái chế và đưa về kho/thùng chứa phế liệu quy định."
+  },
+  "hse_20260930_inspection_finding_3": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Thu gom toàn bộ bao bì nilon phế liệu, phân loại rác thải tái chế và đưa về kho/thùng chứa phế liệu quy định."
+  },
+  "DEF-202609-02": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di dời ngay toàn bộ các kiện lon thiết ra khỏi hành lang và chân cầu thang thoát hiểm; tập kết đúng khu vực quy định."
+  },
+  "hse_20260930_inspection_finding_2": {
+    "improved": false,
+    "improve_date": "",
+    "note": "Di dời ngay toàn bộ các kiện lon thiết ra khỏi hành lang và chân cầu thang thoát hiểm; tập kết đúng khu vực quy định."
+  }
+}

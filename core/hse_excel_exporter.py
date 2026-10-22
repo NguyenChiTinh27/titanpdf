@@ -189,7 +189,7 @@ class HSEExcelExporter:
             vn_issue = clean_vn(f.get("issueVi") or f.get("suggestion") or "")
             category = categorize_hse(zh_issue + " " + vn_issue)
             improved = bool(f.get("improved", False))
-            status = "Đã cải thiện / 已改善" if improved else "Chờ xử lý / 待处理"
+            status = "Cải thiện / 已改善" if improved else "Chưa cải thiện / 未改善"
             improve_date = f.get("recheckDate", "") if improved else ""
             note = clean_vn(f.get("note") or f.get("suggestion") or "")
 
@@ -252,7 +252,7 @@ class HSEExcelExporter:
             dept = normalize_department("", "Sản xuất", "san-xuat")
             category = categorize_hse(zh_issue + " " + vn_issue)
             improved = bool(c.get("improved", False))
-            status = "Đã cải thiện / 已改善" if improved else "Chờ xử lý / 待处理"
+            status = "Cải thiện / 已改善" if improved else "Chưa cải thiện / 未改善"
 
             processed_defects.append({
                 "idx": len(processed_defects) + 1,
@@ -294,7 +294,7 @@ class HSEExcelExporter:
                 zh_issue = clean_zh(d.get("zh_issue", ""))
                 vn_issue = clean_vn(d.get("vn_issue", ""))
                 category = categorize_hse(zh_issue + " " + vn_issue)
-                status = "Đã cải thiện / 已改善" if idx == 1 else "Chờ xử lý / 待处理"
+                status = "Cải thiện / 已改善" if idx == 1 else "Chưa cải thiện / 未改善"
                 improve_date = "2026-10-21" if idx == 1 else ""
                 note = "Đã dọn dẹp và sắp xếp gọn gàng mẫu thí nghiệm" if idx == 1 else ""
 
@@ -382,8 +382,10 @@ class HSEExcelExporter:
             # KPI Cards (Rows 5-7)
             kpis = [
                 ("B", "C", "TỔNG SỐ LỖI GHI NHẬN / 总隐患数量", f"=COUNTA('📋 Tổng Hợp Lỗi'!A5:A{last_row})", "1E40AF", "DBEAFE", "1E40AF", "0"),
-                ("E", "F", "ĐÃ CẢI THIỆN HOÀN TẤT / 已改善完成", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Đã cải thiện*")', "065F46", "D1FAE5", "065F46", "0"),
-                ("H", "I", "ĐANG CHỜ XỬ LÝ / 待处理隐患", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Chờ xử lý*")', "92400E", "FEF3C7", "92400E", "0"),
+                ("E", "F", "CẢI THIỆN / 已改善
+已改善完成", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Cải thiện*")', "065F46", "D1FAE5", "065F46", "0"),
+                ("H", "I", "CHƯA CẢI THIỆN / 未改善
+待处理/未改善", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Chưa cải thiện*")', "92400E", "FEF3C7", "92400E", "0"),
                 ("K", "L", "TỶ LỆ HOÀN THÀNH / 整改完成率", "=IF(B6>0, E6/B6, 0)", "5B21B6", "EDE9FE", "5B21B6", "0.0%")
             ]
             ws_dash.row_dimensions[5].height = 26
@@ -424,8 +426,8 @@ class HSEExcelExporter:
             t1_cols = [
                 ("B", "Bộ phận / 部门"),
                 ("C", "Tổng lỗi / 总数"),
-                ("D", "Đã cải thiện / 已改善"),
-                ("E", "Chờ xử lý / 待处理"),
+                ("D", "Cải thiện / 已改善"),
+                ("E", "Chưa cải thiện / 未改善"),
                 ("F", "Tỷ lệ hoàn thành / 完成率")
             ]
             ws_dash.row_dimensions[10].height = 28
@@ -447,8 +449,8 @@ class HSEExcelExporter:
                 ws_dash[f"B{r_idx}"] = d_name
                 ws_dash[f"B{r_idx}"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
                 ws_dash[f"C{r_idx}"] = f"=COUNTIF('📋 Tổng Hợp Lỗi'!$D$5:$D${last_row}, B{r_idx})"
-                ws_dash[f"D{r_idx}"] = f'=COUNTIFS(\'📋 Tổng Hợp Lỗi\'!$D$5:$D${last_row}, B{r_idx}, \'📋 Tổng Hợp Lỗi\'!$I$5:$I${last_row}, "*Đã cải thiện*")'
-                ws_dash[f"E{r_idx}"] = f'=COUNTIFS(\'📋 Tổng Hợp Lỗi\'!$D$5:$D${last_row}, B{r_idx}, \'📋 Tổng Hợp Lỗi\'!$I$5:$I${last_row}, "*Chờ xử lý*")'
+                ws_dash[f"D{r_idx}"] = f'=COUNTIFS(\'📋 Tổng Hợp Lỗi\'!$D$5:$D${last_row}, B{r_idx}, \'📋 Tổng Hợp Lỗi\'!$I$5:$I${last_row}, "*Cải thiện*")'
+                ws_dash[f"E{r_idx}"] = f'=COUNTIFS(\'📋 Tổng Hợp Lỗi\'!$D$5:$D${last_row}, B{r_idx}, \'📋 Tổng Hợp Lỗi\'!$I$5:$I${last_row}, "*Chưa cải thiện*")'
                 ws_dash[f"F{r_idx}"] = f"=IF(C{r_idx}>0, D{r_idx}/C{r_idx}, 0)"
                 ws_dash[f"F{r_idx}"].number_format = "0.0%"
 
@@ -583,7 +585,7 @@ class HSEExcelExporter:
             # Data Validation for Status Column
             dv_status = DataValidation(
                 type="list",
-                formula1='"Chờ xử lý / 待处理,Đang xử lý / 处理中,Đã cải thiện / 已改善"',
+                formula1='"Cải thiện / 已改善,Chưa cải thiện / 未改善"',
                 allow_blank=True
             )
             dv_status.error = "Vui lòng chọn trạng thái hợp lệ từ danh sách!"
@@ -676,10 +678,10 @@ class HSEExcelExporter:
                         cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                     elif col_l == "I":
                         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                        if "Đã cải thiện" in item["status"]:
+                        if "Cải thiện" in item["status"] and "Chưa" not in item["status"]:
                             cell.fill = fill_done
                             cell.font = font_done
-                        elif "Chờ xử lý" in item["status"]:
+                        elif "Chưa cải thiện" in item["status"] or "Chờ xử lý" in item["status"]:
                             cell.fill = fill_pending
                             cell.font = font_pending
                         else:
@@ -736,7 +738,7 @@ class HSEExcelExporter:
 
                 dv_dept = DataValidation(
                     type="list",
-                    formula1='"Chờ xử lý / 待处理,Đang xử lý / 处理中,Đã cải thiện / 已改善"',
+                    formula1='"Cải thiện / 已改善,Chưa cải thiện / 未改善"',
                     allow_blank=True
                 )
                 ws_dept.add_data_validation(dv_dept)
@@ -821,10 +823,10 @@ class HSEExcelExporter:
                             cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                         elif col_l == "I":
                             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                            if "Đã cải thiện" in item["status"]:
+                            if "Cải thiện" in item["status"] and "Chưa" not in item["status"]:
                                 cell.fill = fill_done
                                 cell.font = font_done
-                            elif "Chờ xử lý" in item["status"]:
+                            elif "Chưa cải thiện" in item["status"] or "Chờ xử lý" in item["status"]:
                                 cell.fill = fill_pending
                                 cell.font = font_pending
                             else:

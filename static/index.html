@@ -4825,14 +4825,14 @@
             <div class="hse-tracker-kpi-card green">
                 <div class="hse-kpi-icon-circle">✓</div>
                 <div class="hse-kpi-info">
-                    <span class="hse-kpi-label">Đã Cải Thiện / 已改善</span>
+                    <span class="hse-kpi-label">Cải Thiện / 已改善</span>
                     <span class="hse-kpi-val" id="hse-kpi-val-improved">0</span>
                 </div>
             </div>
             <div class="hse-tracker-kpi-card orange">
                 <div class="hse-kpi-icon-circle">⚠️</div>
                 <div class="hse-kpi-info">
-                    <span class="hse-kpi-label">Còn Tồn Đọng / 待改善</span>
+                    <span class="hse-kpi-label">Chưa Cải Thiện / 未改善</span>
                     <span class="hse-kpi-val" id="hse-kpi-val-pending">0</span>
                 </div>
             </div>
@@ -4862,9 +4862,9 @@
             <div class="hse-filter-group">
                 <label for="hse-tracker-status-select">⚡ TRẠNG THÁI / 状态</label>
                 <select id="hse-tracker-status-select">
-                    <option value="all">⚡ Tất cả trạng thái / 全部</option>
-                    <option value="pending">⚠️ Chờ xử lý / 待处理</option>
-                    <option value="improved">✓ Đã cải thiện / 已改善</option>
+                    <option value="all">⚡ Tất cả trạng thái / 全部状态</option>
+                    <option value="pending">⚠️ Chưa cải thiện / 未改善</option>
+                    <option value="improved">✓ Cải thiện / 已改善</option>
                 </select>
             </div>
             <div class="hse-filter-group">
@@ -4878,19 +4878,23 @@
             <div class="hse-toolbar-left">
                 <span class="hse-defects-counter" id="hse-defects-counter-label">Hiển thị 0 sự cố / 共有 0 条缺陷记录</span>
                 <div class="hse-view-switch">
-                    <button type="button" class="hse-view-btn active" id="hse-view-cards-btn" title="Chế độ xem dạng lưới thẻ trực quan">🔲 Lưới Thẻ / 卡片</button>
-                    <button type="button" class="hse-view-btn" id="hse-view-table-btn" title="Chế độ xem dạng bảng danh sách">📋 Bảng / 列表</button>
+                    <button type="button" class="hse-view-btn active" id="hse-view-cards-btn" title="Chế độ xem dạng lưới thẻ trực quan">🔲 Lưới Thẻ / 卡片视图</button>
+                    <button type="button" class="hse-view-btn" id="hse-view-table-btn" title="Chế độ xem dạng bảng danh sách">📋 Bảng / 列表视图</button>
                 </div>
             </div>
             <div class="hse-toolbar-right">
-                <button type="button" class="hse-btn-action excel-all" id="hse-btn-excel-all" title="Xuất toàn bộ dữ liệu qua tất cả các tháng ra file Excel chuyên nghiệp kèm Dashboard và các Sheet bộ phận">
-                    📊 Xuất Excel Tổng Thể (Tất cả các tháng)
+                <button type="button" class="hse-btn-action excel-all" id="hse-btn-excel-all" title="Xuất toàn bộ dữ liệu qua tất cả các tháng ra file Excel chuẩn kèm chèn ảnh trực tiếp vào ô">
+                    📊 Xuất Master Excel (Kèm Ảnh Vào Ô) / 导出汇总表
                 </button>
                 <button type="button" class="hse-btn-action excel-filter" id="hse-btn-excel-filter" title="Xuất các sự cố đang hiển thị theo bộ lọc ra file Excel">
-                    📥 Xuất Excel Theo Bộ Lọc
+                    📥 Xuất Theo Bộ Lọc / 导出筛选
                 </button>
+                <button type="button" class="hse-btn-action import-excel" id="hse-btn-import-excel" title="Cập nhật hoặc đồng bộ hóa dữ liệu từ file Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx lên web" style="background:#f0fdf4; border:1px solid #86efac; color:#15803d; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                    📂 Nhập Master Excel / 导入Excel
+                </button>
+                <input type="file" id="hse-tracker-import-file-input" accept=".xlsx,.xls" style="display:none;" />
                 <button type="button" class="hse-btn-action delete-all admin-only-ctrl" id="hse-btn-clear-all-defects" title="Xóa sạch toàn bộ sự cố HSE (yêu cầu mật khẩu quản trị: 270120)" style="background:#fee2e2; border:1px solid #fca5a5; color:#dc2626; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-                    <span>🗑️ Xóa Tất Cả Lỗi HSE</span>
+                    <span>🗑️ Xóa Tất Cả Lỗi HSE / 清空隐患</span>
                 </button>
             </div>
         </section>
@@ -5023,22 +5027,23 @@
                     <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 6px;">MÔ TẢ CHI TIẾT (TIẾNG TRUNG · 详细描述):</div>
                     <div id="modal-defect-zh" style="font-size: 13.5px; font-weight: 600; color: #0f172a; line-height: 1.5; margin-bottom: 12px;"></div>
 
-                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 6px;">MÔ TẢ VẤN ĐỀ (TIẾNG VIỆT):</div>
+                    <div style="font-size: 11.5px; font-weight: 700; color: #64748b; margin-bottom: 6px;">MÔ TẢ VẤN ĐỀ (TIẾNG VIỆT · 越南语描述):</div>
                     <div id="modal-defect-vn" style="font-size: 13px; font-style: italic; color: #334155; line-height: 1.5;"></div>
                 </div>
 
                 <!-- Status & Notes Form -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                     <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">Trạng Thái Cải Thiện *</label>
-                        <label style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700;">
-                            <input type="checkbox" id="modal-status-chk" style="width: 18px; height: 18px;">
-                            <span style="color: #16a34a;">✓ ĐÃ CẢI THIỆN / 已改善</span>
-                        </label>
+                        <label for="modal-status-select" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">Trạng Thái Cải Thiện / 改善状态 *</label>
+                        <select id="modal-status-select" style="width: 100%; height: 42px; padding: 6px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 13.5px; font-weight: 700; background: #ffffff;">
+                            <option value="pending" style="color: #ea580c; font-weight: 700;">⚠️ Chưa cải thiện / 未改善</option>
+                            <option value="improved" style="color: #16a34a; font-weight: 700;">✓ Cải thiện / 已改善</option>
+                        </select>
+                        <input type="checkbox" id="modal-status-chk" style="display: none;">
                     </div>
                     <div>
                         <label for="modal-improve-date" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">Ngày Hoàn Thành (改善日期)</label>
-                        <input type="text" id="modal-improve-date" style="width: 100%; height: 40px; padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;" placeholder="YYYY-MM-DD hoặc YYYY-MM-DD HH:mm">
+                        <input type="text" id="modal-improve-date" style="width: 100%; height: 42px; padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;" placeholder="YYYY-MM-DD hoặc YYYY-MM-DD HH:mm">
                     </div>
                 </div>
 
@@ -5050,11 +5055,11 @@
 
             <footer class="hse-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
                 <button type="button" id="modal-delete-defect-btn" class="hse-btn-delete-defect" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:8px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="Xóa vĩnh viễn sự cố này khỏi Tracker và Google Sheet">
-                    🗑️ Xóa Sự Cố Này
+                    🗑️ Xóa Sự Cố Này / 删除此隐患
                 </button>
                 <div style="display: flex; gap: 8px;">
-                    <button type="button" class="hse-modal-btn-cancel" id="modal-cancel-btn">Đóng</button>
-                    <button type="button" class="hse-modal-btn-save" id="modal-save-btn">💾 Lưu & Cập Nhật</button>
+                    <button type="button" class="hse-modal-btn-cancel" id="modal-cancel-btn">Đóng / 关闭</button>
+                    <button type="button" class="hse-modal-btn-save" id="modal-save-btn">💾 Lưu & Cập Nhật / 保存更新</button>
                 </div>
             </footer>
         </div>

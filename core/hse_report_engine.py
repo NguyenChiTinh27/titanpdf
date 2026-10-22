@@ -966,10 +966,10 @@ def apply_checklist(
                     p4.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     set_paragraph_layout(p4, space_before_pt=0, space_after_pt=0, line_spacing=1.0)
                     if is_improved:
-                        recheck_block = f"复查:\n{recheck_date}\n已整改\nKiểm tra:\n{recheck_date}\nĐã cải thiện"
+                        recheck_block = f"复查:\n{recheck_date}\n已改善\nKiểm tra:\n{recheck_date}\nCải thiện"
                         color = RGBColor(19, 138, 91)
                     else:
-                        recheck_block = f"复查:\n{recheck_date}\n未整改\nKiểm tra:\n{recheck_date}\nChưa cải thiện"
+                        recheck_block = f"复查:\n{recheck_date}\n未改善\nKiểm tra:\n{recheck_date}\nChưa cải thiện"
                         color = RGBColor(200, 0, 0)
                     add_run(p4, recheck_block, size=9.0, bold=False, font="Times New Roman", color=color)
 

@@ -19,6 +19,8 @@ import re
 import sys
 import tempfile
 import urllib.parse
+import uuid
+import zipfile
 from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -30,6 +32,8 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.chart import BarChart, DoughnutChart, Reference
 from openpyxl.worksheet.datavalidation import DataValidation
 from pydantic import BaseModel, Field
+
+from core.cell_image_packager import package_cell_images
 
 logger = logging.getLogger("titanpdf.hse_defect_tracker")
 
@@ -538,7 +542,7 @@ class DefectAggregatorService:
                         "category": cat,
                         "zh_issue": zh_issue,
                         "vn_issue": vn_issue,
-                        "status": "Đã cải thiện / 已改善" if is_improved else "Chờ xử lý / 待处理",
+                        "status": "Cải thiện / 已改善" if is_improved else "Chưa cải thiện / 未改善",
                         "improved": is_improved,
                         "improve_date": improve_d,
                         "note": note_val,
@@ -619,7 +623,7 @@ class DefectAggregatorService:
                             "category": cat,
                             "zh_issue": zh_issue,
                             "vn_issue": vn_issue,
-                            "status": "Đã cải thiện / 已改善" if is_improved else "Chờ xử lý / 待处理",
+                            "status": "Cải thiện / 已改善" if is_improved else "Chưa cải thiện / 未改善",
                             "improved": is_improved,
                             "improve_date": f.get("recheckDate") or (rep_date if is_improved else ""),
                             "note": f.get("note") or f.get("suggestion") or "",
@@ -668,7 +672,7 @@ class DefectAggregatorService:
 
                     if matched_defect:
                         matched_defect["improved"] = True
-                        matched_defect["status"] = "Đã cải thiện / 已改善"
+                        matched_defect["status"] = "Cải thiện / 已改善"
                         if imp_f.get("imageAfterData"):
                             matched_defect["img_after"] = cls.clean_image_uri(imp_f.get("imageAfterData"))
                         matched_defect["improve_date"] = imp_date
@@ -715,7 +719,7 @@ class DefectAggregatorService:
             if ov:
                 if "improved" in ov:
                     d["improved"] = bool(ov["improved"])
-                    d["status"] = "Đã cải thiện / 已改善" if d["improved"] else "Chờ xử lý / 待处理"
+                    d["status"] = "Cải thiện / 已改善" if d["improved"] else "Chưa cải thiện / 未改善"
                 if ov.get("improve_date"):
                     d["improve_date"] = ov["improve_date"]
                 if ov.get("note"):
@@ -943,6 +947,145 @@ class DefectAggregatorService:
             "kpis": all_defects["kpis"]
         }
 
+    @classmethod
+    def import_master_excel(cls, file_bytes: bytes) -> Dict[str, Any]:
+        """
+        Nhập và đồng bộ dữ liệu từ tệp Master_Theo_Doi_Loi_HSE_Toan_Cong_Ty_All_Months.xlsx lên hệ thống:
+        - Bóc tách trạng thái (Cải thiện / Chưa cải thiện), ngày hoàn thành, ghi chú đối sách.
+        - Tự động bóc tách ảnh từ cellimages.xml nếu có.
+        - Cập nhật persistent overrides và đồng bộ hóa hai chiều.
+        """
+        import openpyxl
+        buf = io.BytesIO(file_bytes)
+        wb = openpyxl.load_workbook(buf, data_only=True)
+
+        target_sheet = None
+        for sname in wb.sheetnames:
+            if any(k in sname.lower() for k in ["tổng hợp", "tong hop", "tat ca", "all", "lỗi"]):
+                target_sheet = wb[sname]
+                break
+        if not target_sheet:
+            target_sheet = wb.active
+
+        # Trích xuất ảnh nhúng từ cellimages.xml nếu có
+        cell_images_map = {}
+        try:
+            buf.seek(0)
+            with zipfile.ZipFile(buf, 'r') as z:
+                if 'xl/cellimages.xml' in z.namelist() and 'xl/_rels/cellimages.xml.rels' in z.namelist():
+                    rels_xml = z.read('xl/_rels/cellimages.xml.rels').decode('utf-8')
+                    rid_to_media = dict(re.findall(r'Id="([^"]+)"[^>]*Target="([^"]+)"', rels_xml))
+                    cell_xml = z.read('xl/cellimages.xml').decode('utf-8')
+                    uuid_to_rid = dict(re.findall(r'name="([^"]+)"[^>]*>.*?r:embed="([^"]+)"', cell_xml, re.DOTALL))
+                    
+                    sheet_filenames = [n for n in z.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
+                    for s_fn in sheet_filenames:
+                        sheet_xml = z.read(s_fn).decode('utf-8')
+                        for cell_coord, formula in re.findall(r'<c\s+r="([A-Z0-9]+)"[^>]*>.*?<f>_xlfn\.DISPIMG\(&quot;([^&]+)&quot;,1\)</f>', sheet_xml):
+                            rid = uuid_to_rid.get(formula)
+                            if rid:
+                                target_media = rid_to_media.get(rid)
+                                if target_media:
+                                    if not target_media.startswith('xl/'):
+                                        target_media = 'xl/' + target_media.lstrip('/')
+                                    if target_media in z.namelist():
+                                        media_bytes = z.read(target_media)
+                                        b64 = base64.b64encode(media_bytes).decode('utf-8')
+                                        ext = "png" if target_media.endswith(".png") else "jpeg"
+                                        cell_images_map[cell_coord] = f"data:image/{ext};base64,{b64}"
+        except Exception as ex:
+            logger.warning(f"Could not extract cell images during import: {ex}")
+
+        all_defects = cls.aggregate_all_defects(force_reconcile=True)["defects"]
+        updated_count = 0
+
+        for r in range(5, target_sheet.max_row + 1):
+            date_val = str(target_sheet.cell(r, 1).value or "").strip()
+            dept_val = str(target_sheet.cell(r, 2).value or "").strip()
+            zh_val = str(target_sheet.cell(r, 3).value or "").strip()
+            vn_val = str(target_sheet.cell(r, 4).value or "").strip()
+            status_val = str(target_sheet.cell(r, 6).value or "").strip()
+            improve_date_val = str(target_sheet.cell(r, 7).value or "").strip()
+            note_val = str(target_sheet.cell(r, 8).value or "").strip() if target_sheet.max_column >= 8 else ""
+
+            if not vn_val and not zh_val and not date_val:
+                continue
+
+            is_improved = False
+            s_lower = status_val.lower()
+            if any(k in s_lower for k in ["cải thiện", "đã cải thiện", "hoàn thành", "已改善", "完成"]):
+                if not any(k in s_lower for k in ["chưa", "chờ", "未", "待"]):
+                    is_improved = True
+            if improve_date_val and improve_date_val.lower() not in ["none", "---", "", "null"]:
+                is_improved = True
+
+            matched = None
+            for d in all_defects:
+                d_vn = (d.get("vn_issue") or "").strip()
+                d_zh = (d.get("zh_issue") or "").strip()
+                if (vn_val and (vn_val in d_vn or d_vn in vn_val)) or (zh_val and (zh_val in d_zh or d_zh in zh_val)):
+                    matched = d
+                    break
+            
+            if not matched and (r - 5) < len(all_defects):
+                matched = all_defects[r - 5]
+
+            if matched:
+                code = matched.get("code") or matched.get("id")
+                after_img = cell_images_map.get(f"E{r}")
+                now_str = improve_date_val if is_improved else ""
+                
+                overrides = cls.load_overrides()
+                keys_to_update = [code]
+                if matched.get("source_item_key"):
+                    keys_to_update.append(matched["source_item_key"])
+                
+                for k in keys_to_update:
+                    item_ov = overrides.get(k, {})
+                    item_ov["improved"] = is_improved
+                    item_ov["improve_date"] = now_str
+                    if note_val:
+                        item_ov["note"] = note_val
+                    if after_img:
+                        item_ov["img_after"] = cls.clean_image_uri(after_img)
+                    overrides[k] = item_ov
+                cls.save_overrides(overrides)
+
+                if matched.get("source_file"):
+                    source_file_path = HSE_REPORTS_DIR / matched["source_file"]
+                    if source_file_path.exists():
+                        try:
+                            with open(source_file_path, "r", encoding="utf-8") as jf:
+                                rep_data = json.load(jf)
+                            changed = False
+                            finding_id = matched.get("finding_id")
+                            if "findings" in rep_data:
+                                for f_idx, f in enumerate(rep_data["findings"], 1):
+                                    if f.get("id") == finding_id or f_idx == matched.get("f_idx"):
+                                        f["improved"] = is_improved
+                                        f["improve_date"] = now_str
+                                        if note_val:
+                                            f["note"] = note_val
+                                        changed = True
+                                        break
+                            if changed:
+                                with open(source_file_path, "w", encoding="utf-8") as jf:
+                                    json.dump(rep_data, jf, ensure_ascii=False, indent=2)
+                        except Exception as e:
+                            logger.warning(f"Error syncing to source report file: {e}")
+
+                updated_count += 1
+
+        # Reconcile once at the end
+        cls.aggregate_all_defects(force_reconcile=True)
+
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "total_rows": max(0, target_sheet.max_row - 4),
+            "message": f"Đã đồng bộ thành công {updated_count} sự cố từ file Master Excel lên hệ thống!"
+        }
+
 
 # =============================================================================
 # Master Multi-Month Excel Exporter
@@ -951,7 +1094,7 @@ class DefectAggregatorService:
 class MasterHSEExcelExporter:
     """Generates the enterprise multi-month master defect tracking spreadsheet."""
 
-    def __init__(self, font_family: str = "Segoe UI"):
+    def __init__(self, font_family: str = "Arial"):
         self.font_family = font_family
         self.thin_border = Border(
             left=Side(style="thin", color="CBD5E1"),
@@ -965,12 +1108,14 @@ class MasterHSEExcelExporter:
             top=Side(style="medium", color="1E3A8A"),
             bottom=Side(style="medium", color="1E3A8A")
         )
+        self.images_by_cell: Dict[str, Dict[str, Any]] = {}
 
     def export_master_workbook(self, defects: Optional[List[Dict[str, Any]]] = None) -> openpyxl.Workbook:
         if defects is None:
             data = DefectAggregatorService.aggregate_all_defects()
             defects = data["defects"]
 
+        self.images_by_cell = {}
         wb = openpyxl.Workbook()
 
         total_items = len(defects)
@@ -978,20 +1123,165 @@ class MasterHSEExcelExporter:
         pending_items = total_items - improved_items
         rate_val = (improved_items / total_items) if total_items > 0 else 0.0
 
-        # Discover months & departments
         months = sorted(list({d.get("month") for d in defects if d.get("month")}), reverse=True)
         departments = sorted(list({d.get("department") for d in defects if d.get("department")}))
-        categories = sorted(list({d.get("category") for d in defects if d.get("category")}))
 
         # =====================================================================
-        # SHEET 1: 📊 DASHBOARD TỔNG THỂ
+        # SHEET 1: 📋 Tổng Hợp Tất Cả Lỗi (ACTIVE FORM MATCHING DESKTOP MASTER)
         # =====================================================================
-        ws_dash = wb.active
-        ws_dash.title = "📊 DASHBOARD TỔNG THỂ"
+        ws_all = wb.active
+        ws_all.title = "📋 Tổng Hợp Tất Cả Lỗi"
+        ws_all.sheet_properties.tabColor = "10B981"
+        ws_all.views.sheetView[0].showGridLines = True
+
+        # Sheet 1 Banners
+        ws_all.merge_cells("A1:H1")
+        h1 = ws_all["A1"]
+        h1.value = "BẢNG TỔNG HỢP LỖI HSE TOÀN CÔNG TY - 全公司HSE隐患跟踪汇总表"
+        h1.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        h1.font = Font(name=self.font_family, size=14, bold=True, color="FFFFFF")
+        h1.alignment = Alignment(horizontal="center", vertical="center")
+        ws_all.row_dimensions[1].height = 36.0
+
+        ws_all.merge_cells("A2:H2")
+        h2 = ws_all["A2"]
+        h2.value = "CÔNG TY TNHH VISION NEW MATERIALS VIỆT NAM / 威逊新材料（越南）有限公司"
+        h2.fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+        h2.font = Font(name=self.font_family, size=10, italic=True, color="FFFFFF")
+        h2.alignment = Alignment(horizontal="center", vertical="center")
+        ws_all.row_dimensions[2].height = 22.0
+        ws_all.row_dimensions[3].height = 10.0
+
+        # Exact 7-8 Column Headers (Col A..G + H Note)
+        headers = [
+            ("A", "Ngày ghi nhận\n记录日期", 14),
+            ("B", "Bộ phận\n部门", 24),
+            ("C", "Mô tả chi tiết (Tiếng Trung)\n详细描述 (中文)", 48),
+            ("D", "Mô tả chi tiết (Tiếng Việt)\n详细描述 (越南语)", 48),
+            ("E", "Xem ảnh\n图片预览", 20),
+            ("F", "Trạng thái\n状态", 18),
+            ("G", "Ngày cải thiện\n改善日期", 16),
+            ("H", "Ghi chú & Đối sách\n备注与改善对策", 28)
+        ]
+
+        ws_all.row_dimensions[4].height = 36.0
+        for col_l, col_name, width in headers:
+            c = ws_all[f"{col_l}4"]
+            c.value = col_name
+            if col_l == "E":
+                c.fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
+            else:
+                c.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+            c.font = Font(name=self.font_family, size=10, bold=True, color="FFFFFF")
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border = self.header_border
+            ws_all.column_dimensions[col_l].width = width
+
+        fill_done = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+        font_done = Font(name=self.font_family, size=9.5, bold=True, color="065F46")
+        fill_pending = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
+        font_pending = Font(name=self.font_family, size=9.5, bold=True, color="9A3412")
+
+        for idx, item in enumerate(defects, 1):
+            r = 4 + idx
+            ws_all.row_dimensions[r].height = 75.0
+
+            ws_all[f"A{r}"] = item.get("date") or "2026-09-30"
+            ws_all[f"B{r}"] = item.get("department") or ""
+
+            zh = item.get("zh_issue") or ""
+            zh = re.sub(r'^(?:问题|隐患|Vấn đề)[:：\s]*', '', zh).strip()
+            vn = item.get("vn_issue") or ""
+            vn = re.sub(r'^(?:Vấn đề|Lỗi|Sự cố)[:：\s]*', '', vn).strip()
+
+            ws_all[f"C{r}"] = zh
+            ws_all[f"D{r}"] = vn
+
+            is_improved = bool(item.get("improved")) or bool(item.get("improve_date"))
+            status_text = "Cải thiện / 已改善" if is_improved else "Chưa cải thiện / 未改善"
+            ws_all[f"F{r}"] = status_text
+            ws_all[f"G{r}"] = item.get("improve_date") or ""
+            ws_all[f"H{r}"] = item.get("note") or ""
+
+            # Embedded image in Col E
+            img_b = item.get("img_before") or ""
+            if img_b and img_b.startswith("data:image"):
+                try:
+                    header, b64 = img_b.split(",", 1)
+                    ext = "png" if "png" in header.lower() else "jpeg"
+                    raw_bytes = base64.b64decode(b64)
+                    img_uuid = f"ID_{uuid.uuid4().hex.upper()}"
+                    self.images_by_cell[f"E{r}"] = {
+                        "id": img_uuid,
+                        "bytes": raw_bytes,
+                        "ext": ext
+                    }
+                    ws_all[f"E{r}"] = f'=DISPIMG("{img_uuid}",1)'
+                except Exception as ex:
+                    logger.warning(f"Error decoding img_before for defect {item.get('code')}: {ex}")
+                    ws_all[f"E{r}"] = "Không có ảnh\n无图片"
+            elif img_b and os.path.exists(img_b):
+                try:
+                    with open(img_b, "rb") as f_img:
+                        raw_bytes = f_img.read()
+                    ext = "png" if img_b.lower().endswith(".png") else "jpeg"
+                    img_uuid = f"ID_{uuid.uuid4().hex.upper()}"
+                    self.images_by_cell[f"E{r}"] = {
+                        "id": img_uuid,
+                        "bytes": raw_bytes,
+                        "ext": ext
+                    }
+                    ws_all[f"E{r}"] = f'=DISPIMG("{img_uuid}",1)'
+                except Exception:
+                    ws_all[f"E{r}"] = "Không có ảnh\n无图片"
+            else:
+                ws_all[f"E{r}"] = "Không có ảnh\n无图片"
+
+            for col_l, _, _ in headers:
+                cell = ws_all[f"{col_l}{r}"]
+                cell.font = Font(name=self.font_family, size=9.5)
+                cell.border = self.thin_border
+                if col_l in ["A", "G"]:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                elif col_l == "B":
+                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                elif col_l in ["C", "D", "H"]:
+                    cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                elif col_l == "F":
+                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    if is_improved:
+                        cell.fill = fill_done
+                        cell.font = font_done
+                    else:
+                        cell.fill = fill_pending
+                        cell.font = font_pending
+                elif col_l == "E":
+                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        # Data Validation on Col F (Trạng thái)
+        # Thiết lập vùng tham chiếu cố định tại Z1:Z2 để dropdown hiển thị chuẩn 100% trên mọi phiên bản Excel/WPS
+        ws_all["Z1"] = "Cải thiện / 已改善"
+        ws_all["Z2"] = "Chưa cải thiện / 未改善"
+        ws_all.column_dimensions["Z"].hidden = True
+
+        dv = DataValidation(type="list", formula1="=$Z$1:$Z$2", allow_blank=True)
+        dv.error = 'Vui lòng chọn từ danh sách: Cải thiện / 已改善 hoặc Chưa cải thiện / 未改善\n请从下拉列表选择：Cải thiện / 已改善 或 Chưa cải thiện / 未改善'
+        dv.errorTitle = 'Lựa chọn không hợp lệ / 无效选择'
+        dv.prompt = 'Chọn trạng thái / 选择状态: Cải thiện / 已改善 hoặc Chưa cải thiện / 未改善'
+        dv.promptTitle = 'Trạng thái xử lý / 改善状态'
+        ws_all.add_data_validation(dv)
+        dv.add(f"F5:F{4 + total_items + 100}")
+
+        ws_all.freeze_panes = "A5"
+        ws_all.auto_filter.ref = f"A4:H{4 + total_items}"
+
+        # =====================================================================
+        # SHEET 2: 📊 DASHBOARD TỔNG THỂ (KPI & TRENDS)
+        # =====================================================================
+        ws_dash = wb.create_sheet(title="📊 DASHBOARD TỔNG THỂ")
         ws_dash.sheet_properties.tabColor = "1E40AF"
         ws_dash.views.sheetView[0].showGridLines = False
 
-        # Top Banner
         ws_dash.merge_cells("B2:M2")
         b2 = ws_dash["B2"]
         b2.value = "HỆ THỐNG THEO DÕI & KHẮC PHỤC LỖI HSE TOÀN CÔNG TY (MASTER DEFECT TRACKER)"
@@ -1000,7 +1290,6 @@ class MasterHSEExcelExporter:
         b2.alignment = Alignment(horizontal="center", vertical="center")
         ws_dash.row_dimensions[2].height = 42
 
-        # Sub Banner
         ws_dash.merge_cells("B3:M3")
         b3 = ws_dash["B3"]
         b3.value = f"Tổng hợp dữ liệu toàn diện qua tất cả các tháng ({len(months)} tháng) — Cập nhật ngày {datetime.now().strftime('%d/%m/%Y %H:%M')}"
@@ -1010,11 +1299,10 @@ class MasterHSEExcelExporter:
         ws_dash.row_dimensions[3].height = 24
         ws_dash.row_dimensions[4].height = 12
 
-        # 4 KPI Cards
         kpi_cards = [
             ("B", "D", "TỔNG SỐ LỖI PHÁT HIỆN\n总缺陷数", total_items, "2563EB", "EFF6FF", "1E40AF", "0"),
-            ("E", "G", "ĐÃ KHẮC PHỤC CẢI THIỆN\n已改善完成", improved_items, "16A34A", "F0FDF4", "15803D", "0"),
-            ("H", "J", "CÒN TỒN ĐỌNG CHỜ XỬ LÝ\n待处理隐患", pending_items, "EA580C", "FFF7ED", "C2410C", "0"),
+            ("E", "G", "CẢI THIỆN / 已改善\n已改善完成", improved_items, "16A34A", "F0FDF4", "15803D", "0"),
+            ("H", "J", "CHƯA CẢI THIỆN / 未改善\n待处理/未改善", pending_items, "EA580C", "FFF7ED", "C2410C", "0"),
             ("K", "M", "TỶ LỆ HOÀN THÀNH\n综合改善率", rate_val, "7C3AED", "FAF5FF", "6D28D9", "0.0%")
         ]
 
@@ -1048,7 +1336,7 @@ class MasterHSEExcelExporter:
         h_m.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         ws_dash.row_dimensions[8].height = 26
 
-        m_cols = [("B", "Tháng\n月份"), ("C", "Tổng lỗi\n总数"), ("D", "Đã xử lý\n已改善"), ("E", "Tồn đọng\n待处理"), ("F", "Tỷ lệ %\n改善率")]
+        m_cols = [("B", "Tháng\n月份"), ("C", "Tổng lỗi\n总数"), ("D", "Cải thiện\n已改善"), ("E", "Chưa cải thiện\n未改善"), ("F", "Tỷ lệ %\n改善率")]
         ws_dash.row_dimensions[9].height = 26
         for col_l, name in m_cols:
             c = ws_dash[f"{col_l}9"]
@@ -1088,7 +1376,7 @@ class MasterHSEExcelExporter:
         h_d.font = Font(name=self.font_family, size=11, bold=True, color="FFFFFF")
         h_d.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
-        d_cols = [("H", "Bộ phận\n部门"), ("I", "Tổng lỗi\n总数"), ("J", "Đã xử lý\n已改善"), ("K", "Tồn đọng\n待处理"), ("L", "Tỷ lệ %\n改善率")]
+        d_cols = [("H", "Bộ phận\n部门"), ("I", "Tổng lỗi\n总数"), ("J", "Cải thiện\n已改善"), ("K", "Chưa cải thiện\n未改善"), ("L", "Tỷ lệ %\n改善率")]
         for col_l, name in d_cols:
             c = ws_dash[f"{col_l}9"]
             c.value = name
@@ -1119,260 +1407,12 @@ class MasterHSEExcelExporter:
                 cell.border = self.thin_border
             d_row += 1
 
-        # Chart: Progress by Department
-        chart_row = max(m_row, d_row) + 2
-        try:
-            chart = BarChart()
-            chart.type = "col"
-            chart.grouping = "stacked"
-            chart.overlap = 100
-            chart.title = "TIẾN ĐỘ KHẮC PHỤC LỖI TOÀN CÔNG TY (按部门改善进度对比)"
-            chart.style = 10
-            c_data = Reference(ws_dash, min_col=10, min_row=9, max_col=11, max_row=d_row - 1)
-            c_cats = Reference(ws_dash, min_col=8, min_row=10, max_row=d_row - 1)
-            chart.add_data(c_data, titles_from_data=True)
-            chart.set_categories(c_cats)
-            chart.height = 14
-            chart.width = 22
-            chart.x_axis.title = "Bộ phận / 部门"
-            chart.y_axis.title = "Số lượng lỗi / 隐患数"
-            ws_dash.add_chart(chart, f"B{chart_row}")
-        except Exception as e:
-            logger.warning(f"Could not add master dashboard chart: {e}")
-
-        # Column widths for Sheet 1
         dash_widths = {
             "A": 3, "B": 24, "C": 12, "D": 12, "E": 12, "F": 12, "G": 4,
             "H": 28, "I": 10, "J": 10, "K": 10, "L": 10, "M": 3
         }
         for cl, w in dash_widths.items():
             ws_dash.column_dimensions[cl].width = w
-
-        # =====================================================================
-        # SHEET 2: 📋 Tổng Hợp Tất Cả Lỗi
-        # =====================================================================
-        ws_all = wb.create_sheet(title="📋 Tổng Hợp Tất Cả Lỗi")
-        ws_all.sheet_properties.tabColor = "10B981"
-
-        data_headers = [
-            ("A", "Mã lỗi\n编号", 16),
-            ("B", "Ngày ghi nhận\n记录日期", 14),
-            ("C", "Tháng\n月份", 12),
-            ("D", "Bộ phận\n部门", 24),
-            ("E", "Nhóm lỗi HSE\n隐患类别", 28),
-            ("F", "Mô tả chi tiết (Tiếng Trung)\n详细描述 (中文)", 48),
-            ("G", "Mô tả chi tiết (Tiếng Việt)\n详细描述 (越南语)", 48),
-            ("H", "Hình ảnh hiện trường\n现场图片", 24),
-            ("I", "Trạng thái\n状态", 20),
-            ("J", "Ngày cải thiện\n改善日期", 16),
-            ("K", "Ghi chú & Đối sách\n备注与改善对策", 28)
-        ]
-
-        # Sheet 2 Banners
-        ws_all.merge_cells("A1:K1")
-        h1 = ws_all["A1"]
-        h1.value = "DANH SÁCH TỔNG HỢP THEO DÕI SỰ CỐ & TIẾN ĐỘ KHẮC PHỤC HSE TOÀN CÔNG TY"
-        h1.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        h1.font = Font(name=self.font_family, size=14, bold=True, color="FFFFFF")
-        h1.alignment = Alignment(horizontal="center", vertical="center")
-        ws_all.row_dimensions[1].height = 36
-
-        ws_all.merge_cells("A2:K2")
-        h2 = ws_all["A2"]
-        h2.value = f"Tổng số {len(defects)} sự cố ghi nhận qua các đợt kiểm tra — Trạng thái đồng bộ thời gian thực"
-        h2.fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
-        h2.font = Font(name=self.font_family, size=10, italic=True, color="FFFFFF")
-        h2.alignment = Alignment(horizontal="center", vertical="center")
-        ws_all.row_dimensions[2].height = 22
-        ws_all.row_dimensions[3].height = 10
-
-        # Data Headers Row 4
-        ws_all.row_dimensions[4].height = 36
-        for col_l, col_name, width in data_headers:
-            c = ws_all[f"{col_l}4"]
-            c.value = col_name
-            if col_l == "H":
-                c.fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
-                c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-            else:
-                c.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-                c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            c.border = self.header_border
-            ws_all.column_dimensions[col_l].width = width
-
-        # Status fills
-        fill_done = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
-        font_done = Font(name=self.font_family, size=9.5, bold=True, color="065F46")
-        fill_pending = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
-        font_pending = Font(name=self.font_family, size=9.5, bold=True, color="9A3412")
-
-        # Fill Data Rows
-        ws_all.auto_filter.ref = f"A4:K{4 + len(defects)}"
-        for idx, item in enumerate(defects, 1):
-            r_num = 4 + idx
-            ws_all.row_dimensions[r_num].height = 85
-
-            ws_all[f"A{r_num}"] = item.get("code")
-            ws_all[f"B{r_num}"] = item.get("date")
-            ws_all[f"C{r_num}"] = item.get("month")
-            ws_all[f"D{r_num}"] = item.get("department")
-            ws_all[f"E{r_num}"] = item.get("category")
-            ws_all[f"F{r_num}"] = item.get("zh_issue")
-            ws_all[f"G{r_num}"] = item.get("vn_issue")
-            ws_all[f"I{r_num}"] = item.get("status")
-            ws_all[f"J{r_num}"] = item.get("improve_date")
-            ws_all[f"K{r_num}"] = item.get("note")
-
-            # Column H: Photo link or embedded image (Zero #REF!)
-            month_tag = item.get("month") or "HSE"
-            drive_url = item.get("drive_view_url") or item.get("drive_direct_url") or ""
-            img_b = item.get("img_before") or ""
-
-            if drive_url:
-                ws_all[f"H{r_num}"] = f"🔗 Xem ảnh Drive ({month_tag})"
-                ws_all[f"H{r_num}"].hyperlink = drive_url
-            elif img_b and img_b.startswith("http"):
-                ws_all[f"H{r_num}"] = f"🔗 Mở ảnh ({month_tag})"
-                ws_all[f"H{r_num}"].hyperlink = img_b
-            elif img_b and (img_b.startswith("data:image") or os.path.exists(img_b)):
-                ws_all[f"H{r_num}"] = f"📸 Có ảnh ({month_tag})"
-            else:
-                ws_all[f"H{r_num}"] = "Không có ảnh\n无图片"
-
-            for col_l, _, _ in data_headers:
-                cell = ws_all[f"{col_l}{r_num}"]
-                cell.font = Font(name=self.font_family, size=9.5)
-                cell.border = self.thin_border
-
-                if col_l == "H":
-                    if "Xem ảnh" in str(ws_all[f"H{r_num}"].value) or "Mở ảnh" in str(ws_all[f"H{r_num}"].value):
-                        cell.font = Font(name=self.font_family, size=9, bold=True, color="2563EB", underline="single")
-                    else:
-                        cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                elif col_l in ["A", "B", "C", "J"]:
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                elif col_l in ["D", "E"]:
-                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                elif col_l in ["F", "G", "K"]:
-                    cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                elif col_l == "I":
-                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                    if item.get("improved"):
-                        cell.fill = fill_done
-                        cell.font = font_done
-                    else:
-                        cell.fill = fill_pending
-                        cell.font = font_pending
-
-        ws_all.freeze_panes = "A5"
-        ws_all.auto_filter.ref = f"A4:K{4 + total_items}"
-
-        # =====================================================================
-        # SHEETS 3+: TÁCH RIÊNG TỪNG BỘ PHẬN (MULTI-SHEET PER DEPARTMENT)
-        # =====================================================================
-        for d_idx, d_name in enumerate(departments, 1):
-            d_items = [d for d in defects if d.get("department") == d_name]
-            if not d_items:
-                continue
-
-            # Clean sheet title (max 31 chars, forbidden characters removed)
-            safe_title = re.sub(r'[\\/*?:\[\]]', '', d_name)
-            safe_title = re.sub(r'\s+', ' ', safe_title).strip()[:30]
-            if not safe_title:
-                safe_title = f"BoPhan_{d_idx}"
-
-            ws_dept = wb.create_sheet(title=safe_title)
-            ws_dept.sheet_properties.tabColor = "3B82F6"
-
-            ws_dept.merge_cells("A1:K1")
-            d_h1 = ws_dept["A1"]
-            d_h1.value = f"SỔ THEO DÕI SỰ CỐ AN TOÀN — {d_name.upper()}"
-            d_h1.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-            d_h1.font = Font(name=self.font_family, size=13, bold=True, color="FFFFFF")
-            d_h1.alignment = Alignment(horizontal="center", vertical="center")
-            ws_dept.row_dimensions[1].height = 36
-
-            ws_dept.merge_cells("A2:K2")
-            d_h2 = ws_dept["A2"]
-            d_imp_cnt = sum(1 for x in d_items if x.get("improved"))
-            d_h2.value = f"Trích xuất riêng cho bộ phận (Tổng số: {len(d_items)} lỗi · Đã cải thiện: {d_imp_cnt} · Tồn đọng: {len(d_items)-d_imp_cnt})"
-            d_h2.fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
-            d_h2.font = Font(name=self.font_family, size=10, italic=True, color="FFFFFF")
-            d_h2.alignment = Alignment(horizontal="center", vertical="center")
-            ws_dept.row_dimensions[2].height = 22
-            ws_dept.row_dimensions[3].height = 10
-
-            # Headers
-            ws_dept.row_dimensions[4].height = 36
-            for col_l, col_name, width in data_headers:
-                c = ws_dept[f"{col_l}4"]
-                c.value = col_name
-                c.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-                c.font = Font(name=self.font_family, size=9.5, bold=True, color="FFFFFF")
-                c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                c.border = self.header_border
-                ws_dept.column_dimensions[col_l].width = width
-
-            for i_sub, item in enumerate(d_items, 1):
-                r_num = 4 + i_sub
-                ws_dept.row_dimensions[r_num].height = 70
-
-                ws_dept[f"A{r_num}"] = item.get("code")
-                ws_dept[f"B{r_num}"] = item.get("date")
-                ws_dept[f"C{r_num}"] = item.get("month")
-                ws_dept[f"D{r_num}"] = item.get("department")
-                ws_dept[f"E{r_num}"] = item.get("category")
-                ws_dept[f"F{r_num}"] = item.get("zh_issue")
-                ws_dept[f"G{r_num}"] = item.get("vn_issue")
-                ws_dept[f"I{r_num}"] = item.get("status")
-                ws_dept[f"J{r_num}"] = item.get("improve_date")
-                ws_dept[f"K{r_num}"] = item.get("note")
-
-                month_tag = item.get("month") or "HSE"
-                drive_url = item.get("drive_view_url") or item.get("drive_direct_url") or ""
-                img_b = item.get("img_before") or ""
-
-                if drive_url:
-                    ws_dept[f"H{r_num}"] = f"🔗 Xem ảnh Drive ({month_tag})"
-                    ws_dept[f"H{r_num}"].hyperlink = drive_url
-                elif img_b and img_b.startswith("http"):
-                    ws_dept[f"H{r_num}"] = f"🔗 Mở ảnh ({month_tag})"
-                    ws_dept[f"H{r_num}"].hyperlink = img_b
-                elif img_b and (img_b.startswith("data:image") or os.path.exists(img_b)):
-                    ws_dept[f"H{r_num}"] = f"📸 Có ảnh ({month_tag})"
-                else:
-                    ws_dept[f"H{r_num}"] = "Không có ảnh\n无图片"
-
-                for col_l, _, _ in data_headers:
-                    cell = ws_dept[f"{col_l}{r_num}"]
-                    cell.font = Font(name=self.font_family, size=9.5)
-                    cell.border = self.thin_border
-
-                    if col_l == "H":
-                        if "Xem ảnh" in str(ws_dept[f"H{r_num}"].value) or "Mở ảnh" in str(ws_dept[f"H{r_num}"].value):
-                            cell.font = Font(name=self.font_family, size=9, bold=True, color="2563EB", underline="single")
-                        else:
-                            cell.font = Font(name=self.font_family, size=8.5, italic=True, color="94A3B8")
-                        cell.alignment = Alignment(horizontal="center", vertical="center")
-                    elif col_l in ["A", "B", "C", "J"]:
-                        cell.alignment = Alignment(horizontal="center", vertical="center")
-                    elif col_l in ["D", "E"]:
-                        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                    elif col_l in ["F", "G", "K"]:
-                        cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                    elif col_l == "I":
-                        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                        if item.get("improved"):
-                            cell.fill = fill_done
-                            cell.font = font_done
-                        else:
-                            cell.fill = fill_pending
-                            cell.font = font_pending
-
-            ws_dept.freeze_panes = "A5"
-            ws_dept.auto_filter.ref = f"A4:K{4 + len(d_items)}"
 
         return wb
 
@@ -1381,4 +1421,11 @@ class MasterHSEExcelExporter:
         out = io.BytesIO()
         wb.save(out)
         out.seek(0)
+        if self.images_by_cell:
+            try:
+                return package_cell_images(out, self.images_by_cell)
+            except Exception as e:
+                logger.warning(f"Error packaging cell images: {e}")
+                out.seek(0)
+                return out.getvalue()
         return out.getvalue()
