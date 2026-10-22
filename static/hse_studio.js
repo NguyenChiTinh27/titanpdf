@@ -1856,7 +1856,7 @@
       { col: "E", name: "Nhóm lỗi HSE\n隐患类别", width: 24 },
       { col: "F", name: "Mô tả chi tiết (Tiếng Trung)\n详细描述 (中文)", width: 42 },
       { col: "G", name: "Mô tả chi tiết (Tiếng Việt)\n详细描述 (越南语)", width: 42 },
-      { col: "H", name: "Xem ảnh\n图片预览", width: 18 },
+      { col: "H", name: "Hình ảnh hiện trường\n现场图片", width: 24 },
       { col: "I", name: "Trạng thái\n状态", width: 18 },
       { col: "J", name: "Ngày cải thiện\n改善日期", width: 14 },
       { col: "K", name: "Ghi chú & Đối sách\n备注与改善对策", width: 26 }
@@ -1865,17 +1865,23 @@
     dataHeaders.forEach(h => {
       const c = wsAll.getCell(`${h.col}4`);
       c.value = h.name.replace(/\\n/g, '\n');
-      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-      c.font = { name: fontFam, size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+      if (h.col === "H") {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+      } else {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      }
+      c.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
       c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       c.border = headerBorder;
       wsAll.getColumn(h.col).width = h.width;
     });
+    wsAll.getColumn(8).width = 24;
     wsAll.getRow(4).height = 36;
 
     defectsList.forEach((item, idx) => {
       const rNum = 5 + idx;
-      wsAll.getRow(rNum).height = 68;
+      const rowIndex = rNum - 1; // 0-based row index in ExcelJS (Row 5 => 4)
+      wsAll.getRow(rNum).height = 85;
 
       wsAll.getCell(`A${rNum}`).value = item.code;
       wsAll.getCell(`B${rNum}`).value = item.date;
@@ -1893,25 +1899,24 @@
         wsAll.getCell(`H${rNum}`).hyperlink = item.drive_view_url;
       }
 
-      // Safe image embedding
-      if (item.imageData && item.imageData.startsWith("data:image/")) {
+      // FIT VÀO Ô & KHÔNG NHẢY KHI LỌC (twoCell)
+      if (item.imageData && (item.imageData.startsWith("data:image/") || item.imageData.length > 100)) {
         try {
           const ext = item.imageData.includes("png") ? "png" : "jpeg";
-          const cleanB64 = item.imageData.split(",")[1];
-          if (cleanB64 && cleanB64.length < 5000000) {
-            const imgId = workbook.addImage({
-              base64: item.imageData,
-              extension: ext
-            });
-            wsAll.addImage(imgId, {
-              tl: { col: 7.12, row: rNum - 1 + 0.1 },
-              ext: { width: 110, height: 75 },
-              editAs: 'oneCell'
-            });
-            wsAll.getCell(`H${rNum}`).value = "";
-          }
+          const imageId = workbook.addImage({
+            base64: item.imageData,
+            extension: ext
+          });
+
+          // Chừa lề (padding) nhỏ trong ô bằng offset hoặc lùi nhẹ toạ độ để không đè mất đường viền (border) của ô
+          wsAll.addImage(imageId, {
+            tl: { col: 7.06, row: rowIndex + 0.06 }, // Cách lề trái & trên ~6% ô
+            br: { col: 7.94, row: rowIndex + 0.94 }, // Cách lề phải & dưới ~6% ô
+            editAs: 'twoCell'                        // KHÓA CỨNG VÀO Ô KHI LỌC / KÉO DÒNG
+          });
+          wsAll.getCell(`H${rNum}`).value = "";
         } catch (e) {
-          // Ignore image encoding error
+          console.warn(`Lỗi chèn ảnh dòng ${rNum}:`, e);
         }
       }
 
@@ -1938,6 +1943,9 @@
         }
       });
     });
+
+    const lastRowAll = Math.max(5, 4 + defectsList.length);
+    wsAll.autoFilter = 'A4:K' + lastRowAll;
 
     // =========================================================================
     // SHEETS 3+: DEPARTMENT SHEETS (SANITIZED TITLE, MAX 31 CHARS, NO /)
@@ -1981,17 +1989,23 @@
       dataHeaders.forEach(h => {
         const c = wsDept.getCell(`${h.col}4`);
         c.value = h.name.replace(/\\n/g, '\n');
-        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-        c.font = { name: fontFam, size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+        if (h.col === "H") {
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+        } else {
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+        }
+        c.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
         c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         c.border = headerBorder;
         wsDept.getColumn(h.col).width = h.width;
       });
+      wsDept.getColumn(8).width = 24;
       wsDept.getRow(4).height = 36;
 
       deptItems.forEach((item, idx) => {
         const rNum = 5 + idx;
-        wsDept.getRow(rNum).height = 68;
+        const rowIndex = rNum - 1;
+        wsDept.getRow(rNum).height = 85;
 
         wsDept.getCell(`A${rNum}`).value = item.code;
         wsDept.getCell(`B${rNum}`).value = item.date;
@@ -2007,6 +2021,25 @@
 
         if (item.drive_view_url) {
           wsDept.getCell(`H${rNum}`).hyperlink = item.drive_view_url;
+        }
+
+        // FIT VÀO Ô & KHÔNG NHẢY KHI LỌC (twoCell)
+        if (item.imageData && (item.imageData.startsWith("data:image/") || item.imageData.length > 100)) {
+          try {
+            const ext = item.imageData.includes("png") ? "png" : "jpeg";
+            const imageId = workbook.addImage({
+              base64: item.imageData,
+              extension: ext
+            });
+            wsDept.addImage(imageId, {
+              tl: { col: 7.06, row: rowIndex + 0.06 },
+              br: { col: 7.94, row: rowIndex + 0.94 },
+              editAs: 'twoCell'
+            });
+            wsDept.getCell(`H${rNum}`).value = "";
+          } catch (e) {
+            console.warn(`Lỗi chèn ảnh dept dòng ${rNum}:`, e);
+          }
         }
 
         dataHeaders.forEach(h => {
@@ -2032,6 +2065,8 @@
           }
         });
       });
+      const lastRowDept = Math.max(5, 4 + deptItems.length);
+      wsDept.autoFilter = 'A4:K' + lastRowDept;
     });
 
     const buffer = await workbook.xlsx.writeBuffer();

@@ -336,7 +336,7 @@ class HSEExcelExporter:
                 ("E", "Nhóm lỗi HSE\n隐患类别", 26),
                 ("F", "Mô tả chi tiết (Tiếng Trung)\n详细描述 (中文)", 46),
                 ("G", "Mô tả chi tiết (Tiếng Việt)\n详细描述 (越南语)", 46),
-                ("H", "Xem ảnh\n图片预览", 18),
+                ("H", "Hình ảnh hiện trường\n现场图片", 24),
                 ("I", "Trạng thái\n状态", 20),
                 ("J", "Ngày cải thiện\n改善日期", 15),
                 ("K", "Ghi chú & Đối sách\n备注与改善对策", 26)
@@ -614,16 +614,21 @@ class HSEExcelExporter:
             for col_l, col_name, width in data_headers:
                 c = ws_all[f"{col_l}4"]
                 c.value = col_name
-                c.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-                c.font = Font(name=self.font_family, size=9.5, bold=True, color="FFFFFF")
+                if col_l == "H":
+                    c.fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
+                    c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+                else:
+                    c.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+                    c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
                 c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 c.border = self.header_border
                 ws_all.column_dimensions[col_l].width = width
 
             # Data Rows
+            ws_all.auto_filter.ref = f"A4:K{last_row}"
             for idx, item in enumerate(processed_defects, 1):
                 r_num = 4 + idx
-                ws_all.row_dimensions[r_num].height = 70
+                ws_all.row_dimensions[r_num].height = 85
 
                 ws_all[f"A{r_num}"] = item["code"]
                 ws_all[f"B{r_num}"] = item["date"]
