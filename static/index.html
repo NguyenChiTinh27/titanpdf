@@ -1240,12 +1240,8 @@
                                 Mô hình Trí Tuệ Nhân Tạo (AI Model):
                             </label>
                             <select id="global-deepseek-model-select" class="select-box" onchange="handleAiModelChange()" style="width:100%; font-size:13px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;">
-                                <option value="gemini-2.5-flash" selected>⚡ gemini-2.5-flash (Google: Multimodal Vision + Siêu tốc, hỗ trợ đọc ảnh hiện trường EHS)</option>
-                                <option value="gemini-1.5-pro">🧠 gemini-1.5-pro (Google: Phân tích sâu, hiểu tài liệu lớn)</option>
-                                <option value="gpt-4o-mini">🤖 gpt-4o-mini (OpenAI: Multimodal Vision, Nhanh &amp; Tiết kiệm token)</option>
-                                <option value="gpt-4o">🚀 gpt-4o (OpenAI: Multimodal Vision cao cấp, thông minh toàn diện)</option>
-                                <option value="deepseek-chat">💬 deepseek-chat (DeepSeek V3: Dịch thuật &amp; Phân tích văn bản)</option>
-                                <option value="deepseek-reasoner">🧠 deepseek-reasoner (DeepSeek R1: Suy luận logic chuyên sâu)</option>
+                                <option value="deepseek-chat" selected>⚡ DeepSeek-V4.1-Flash (Tốc độ cao - Viết &amp; Dịch HSE)</option>
+                                <option value="deepseek-reasoner">🧠 DeepSeek-V4.1-Reasoner (Suy luận chuyên sâu)</option>
                                 <option value="custom">✍️ Nhập mã Model tùy chỉnh...</option>
                             </select>
                             <div id="global-ai-custom-model-box" class="hidden" style="margin-top:8px;">
@@ -2017,6 +2013,10 @@
             if (panel) panel.classList.add("active");
             if (tabName === "tools") {
                 updateSecToolsCounter();
+            } else if (tabName === "ai") {
+                if (window.GlobalDeepSeek && typeof window.GlobalDeepSeek.loadSettings === "function") {
+                    window.GlobalDeepSeek.loadSettings();
+                }
             }
         }
         window.switchSecTab = switchSecTab;

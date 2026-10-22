@@ -1712,19 +1712,24 @@ def test_deepseek_settings(
     if not key_to_test:
         raise HTTPException(status_code=400, detail="Chưa có API Key để kiểm tra.")
     
-    target_model = (model or "").strip() or "DeepSeek-V4.1-Flash"
+    target_prov = (provider or "").strip().lower() or "deepseek"
+    target_model = AITextEngine.normalize_model_name(model, target_prov)
     target_base = (base_url or "").strip() or None
     try:
         res = AITextEngine.chat_completion(
             messages=[{"role": "user", "content": "ping"}],
             api_key=key_to_test,
+            provider=target_prov,
             model=target_model,
             base_url=target_base,
-            max_tokens=5
+            max_tokens=10
         )
-        return {"success": True, "message": f"Kết nối AI thành công! Phản hồi từ mô hình {target_model}.", "model": target_model}
+        prov_name = "DeepSeek AI" if target_prov == "deepseek" else (target_prov.capitalize() + " AI")
+        return {"success": True, "message": f"Kết nối {prov_name} thành công! Phản hồi từ mô hình {target_model}.", "model": target_model}
     except Exception as e:
-        return {"success": False, "message": f"Kết nối thất bại: {str(e)}"}
+        err_msg = str(e)
+        err_msg = re.sub(r"^(?:❌\s*)?(?:Kết nối thất bại\s*[:：]\s*)+", "", err_msg).strip()
+        return {"success": False, "message": err_msg}
 
 
 @app.post("/api/process/ocr")

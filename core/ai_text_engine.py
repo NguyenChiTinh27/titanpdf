@@ -86,18 +86,80 @@ class AITextEngine:
         return resp.json()
 
     @classmethod
+    def normalize_model_name(cls, model: Optional[str] = None, provider: Optional[str] = None) -> str:
+        """
+        Chuẩn hóa tên model trước khi gọi API, triệt tiêu hoàn toàn lỗi Model Not Exist.
+        Đặc biệt xử lý ánh xạ alias:
+          - DeepSeek-V4.1-Flash / flash / v4.1 / v4 -> deepseek-chat
+          - DeepSeek-V4.1-Reasoner / reasoner / r1 -> deepseek-reasoner
+          - Gemini -> gemini-2.5-flash / gemini-2.5-pro / gemini-1.5-flash
+          - OpenAI -> gpt-4o-mini / gpt-4o
+        """
+        m = (model or "").strip()
+        prov = (provider or "").strip().lower()
+
+        # Nếu provider là deepseek hoặc model có từ khóa deepseek
+        if prov == "deepseek" or "deepseek" in m.lower() or not prov:
+            m_lower = m.lower()
+            if any(k in m_lower for k in ("reasoner", "r1")):
+                return "deepseek-reasoner"
+            if any(k in m_lower for k in ("4.1", "flash", "v4", "v3", "chat")) or not m:
+                return "deepseek-chat"
+            if prov == "deepseek" and (not m or m == "DeepSeek-V4.1-Flash"):
+                return "deepseek-chat"
+            return m or "deepseek-chat"
+
+        elif prov in ("gemini", "google") or "gemini" in m.lower():
+            m_lower = m.lower()
+            if "pro" in m_lower:
+                return "gemini-2.5-pro"
+            if "1.5" in m_lower and "flash" in m_lower:
+                return "gemini-1.5-flash"
+            return "gemini-2.5-flash"
+
+        elif prov == "openai" or "gpt" in m.lower():
+            m_lower = m.lower()
+            if "4o-mini" in m_lower or "mini" in m_lower:
+                return "gpt-4o-mini"
+            if "gpt-4o" in m_lower:
+                return "gpt-4o"
+            return "gpt-4o-mini"
+
+        return m or "deepseek-chat"
+
+    @classmethod
     def get_ai_credentials(
         cls,
+        api_key: Optional[str] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None,
         explicit_key: Optional[str] = None,
         explicit_provider: Optional[str] = None,
         explicit_model: Optional[str] = None,
-        explicit_base_url: Optional[str] = None
+        explicit_base_url: Optional[str] = None,
+        **kwargs
     ) -> Dict[str, Any]:
-        """Lấy cấu hình AI toàn cục (Google Gemini, OpenAI, DeepSeek, Custom)."""
-        provider = (explicit_provider or "").strip().lower()
-        key = (explicit_key or "").strip()
-        model = (explicit_model or "").strip()
-        base_url = (explicit_base_url or "").strip()
+        """
+        Lấy cấu hình AI toàn cục (Google Gemini, OpenAI, DeepSeek, Custom).
+        Nhận linh hoạt mọi tham số (provider, api_key, model, base_url, **kwargs)
+        mà không bao giờ văng lỗi TypeError: got an unexpected keyword argument 'model'.
+        """
+        # Hỗ trợ nếu tham số đầu tiên là provider dạng chuỗi 'deepseek', 'gemini', 'openai'
+        if api_key and str(api_key).lower() in ("deepseek", "gemini", "openai", "google", "custom"):
+            if not provider:
+                provider = api_key
+                api_key = None
+
+        raw_provider = provider or explicit_provider or kwargs.get("ai_provider") or ""
+        raw_key = api_key or explicit_key or kwargs.get("key") or ""
+        raw_model = model or explicit_model or kwargs.get("ai_model") or ""
+        raw_base = base_url or explicit_base_url or kwargs.get("ai_base_url") or ""
+
+        prov = str(raw_provider).strip().lower()
+        key = str(raw_key).strip()
+        mod = str(raw_model).strip()
+        base = str(raw_base).strip()
 
         # Đọc settings.json / data/settings.json
         settings_data = {}
@@ -111,8 +173,9 @@ class AITextEngine:
                 except Exception:
                     pass
 
-        if not provider:
-            provider = (settings_data.get("ai_provider") or os.getenv("AI_PROVIDER") or "").strip().lower()
+        saved_prov = (settings_data.get("ai_provider") or os.getenv("AI_PROVIDER") or "").strip().lower()
+        if not prov:
+            prov = saved_prov
         if not key:
             key = (
                 settings_data.get("ai_api_key") or
@@ -121,34 +184,51 @@ class AITextEngine:
                 os.getenv("OPENAI_API_KEY") or
                 os.getenv("DEEPSEEK_API_KEY") or ""
             ).strip()
-        if not model:
-            model = (settings_data.get("ai_model") or settings_data.get("deepseek_model") or "").strip()
-        if not base_url:
-            base_url = (settings_data.get("ai_base_url") or settings_data.get("deepseek_base_url") or "").strip()
+        if not mod:
+            if prov and saved_prov and prov != saved_prov:
+                mod = ""
+            else:
+                mod = (settings_data.get("ai_model") or (settings_data.get("deepseek_model") if prov == "deepseek" else "") or "").strip()
+        if not base:
+            if prov and saved_prov and prov != saved_prov:
+                base = ""
+            else:
+                base = (settings_data.get("ai_base_url") or (settings_data.get("deepseek_base_url") if prov == "deepseek" else "") or "").strip()
 
         # Tự động nhận diện provider nếu chưa chỉ định rõ
-        if not provider or provider not in ("gemini", "openai", "deepseek", "custom"):
-            if key.startswith("AIza") or "gemini" in model.lower():
-                provider = "gemini"
-            elif key.startswith("sk-proj-") or "gpt-" in model.lower():
-                provider = "openai"
+        if not prov or prov not in ("gemini", "openai", "deepseek", "custom"):
+            if key.startswith("AIza") or "gemini" in mod.lower():
+                prov = "gemini"
+            elif key.startswith("sk-proj-") or "gpt-" in mod.lower():
+                prov = "openai"
             else:
-                provider = "deepseek"
+                prov = "deepseek"
+
+        # Chuẩn hóa Base URL theo provider
+        if not base:
+            if prov == "gemini":
+                base = "https://generativelanguage.googleapis.com/v1beta"
+            elif prov == "openai":
+                base = "https://api.openai.com/v1"
+            else:
+                base = "https://api.deepseek.com/v1"
 
         # Chuẩn hóa tên model theo provider
-        if not model or model == "DeepSeek-V4.1-Flash":
-            if provider == "gemini":
-                model = "gemini-2.5-flash"
-            elif provider == "openai":
-                model = "gpt-4o-mini"
+        if not mod:
+            if prov == "gemini":
+                normalized_model = "gemini-2.5-flash"
+            elif prov == "openai":
+                normalized_model = "gpt-4o-mini"
             else:
-                model = "deepseek-chat"
+                normalized_model = "deepseek-chat"
+        else:
+            normalized_model = cls.normalize_model_name(mod, prov)
 
         return {
-            "provider": provider,
+            "provider": prov,
             "api_key": key,
-            "model": model,
-            "base_url": base_url
+            "model": normalized_model,
+            "base_url": base
         }
 
     @classmethod
@@ -269,22 +349,64 @@ class AITextEngine:
 
         # 3. DEEPSEEK (Text-Only Model)
         else:
-            if prompt and len(prompt.strip()) > 10:
-                sys_msg = system_prompt or "Bạn là Chuyên gia An toàn EHS. Hãy dựa vào tiêu chí kiểm tra và mô tả để phân tích vi phạm."
-                messages = [
-                    {"role": "system", "content": sys_msg},
-                    {"role": "user", "content": f"[LƯU Ý: Đang sử dụng mô hình DeepSeek để suy luận dựa trên tiêu chuẩn kiểm tra hiện trường]:\n{prompt}"}
-                ]
-                res = cls.call_deepseek_api(messages=messages, api_key=active_key, model="deepseek-chat")
-                choices = res.get("choices") or []
-                if choices:
-                    return choices[0].get("message", {}).get("content", "").strip()
+            # DeepSeek (deepseek-chat) là mô hình Text-only, tuyệt đối không gửi image_url trực tiếp vào endpoint DeepSeek.
+            # Xử lý thông minh 2 bước:
+            # Bước 1: Kiểm tra xem hệ thống có phụ Gemini Vision Key hoặc OpenAI Key để trích xuất đặc điểm ảnh không
+            gemini_key = os.getenv("GEMINI_API_KEY", "")
+            if not gemini_key:
+                for s_path in ["settings.json", "data/settings.json"]:
+                    if os.path.exists(s_path):
+                        try:
+                            with open(s_path, "r", encoding="utf-8") as f:
+                                s_data = json.load(f)
+                                if s_data.get("gemini_api_key"):
+                                    gemini_key = s_data["gemini_api_key"]
+                        except Exception:
+                            pass
 
-            raise ValueError(
-                "Mô hình DeepSeek hiện tại chỉ xử lý văn bản, không hỗ trợ nhận diện thị giác từ ảnh (Vision). "
-                "Để AI đọc trực tiếp ảnh hiện trường vi phạm, vui lòng vào 'Cài Đặt Quản Trị' -> "
-                "chọn Nhà cung cấp 'Google Gemini' (gemini-2.5-flash) hoặc 'OpenAI' (gpt-4o-mini)!"
+            visual_context = ""
+            if gemini_key:
+                try:
+                    visual_context = cls.call_vision_api(
+                        image_data=image_data,
+                        prompt="Hãy mô tả chi tiết các hiện vật, thiết bị, tình trạng vi phạm an toàn PCCC/EHS trong ảnh hiện trường này.",
+                        api_key=gemini_key,
+                        provider="gemini",
+                        model="gemini-2.5-flash",
+                        timeout=30
+                    )
+                except Exception:
+                    visual_context = ""
+
+            # Bước 2: Chuyển dữ liệu trích xuất + tiêu chuẩn PCCC/HSE sang DeepSeek (deepseek-chat) để suy luận và dịch song ngữ
+            combined_prompt = prompt
+            if visual_context:
+                combined_prompt += f"\n\n[ĐẶC ĐIỂM HÌNH ẢNH HIỆN TRƯỜNG]:\n{visual_context}"
+            else:
+                combined_prompt += "\n\n[GHI NHẬN HIỆN TRƯỜNG]: Bức ảnh chụp tại vị trí kiểm tra ghi nhận điểm không phù hợp với tiêu chuẩn an toàn PCCC và EHS."
+
+            sys_msg = system_prompt or (
+                "Bạn là Chuyên gia Kiểm toán An toàn EHS & PCCC nhà máy ZhanChen.\n"
+                "Hãy phân tích hiện trường, suy luận nguyên nhân gốc rễ và đề xuất biện pháp khắc phục.\n"
+                "Trả về duy nhất JSON hợp lệ đúng các khóa: departmentKey, departmentVi, departmentZh, issueVi, issueZh, suggestion."
             )
+            messages = [
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": combined_prompt}
+            ]
+            deepseek_model = cls.normalize_model_name(active_model, "deepseek")
+            res_text = cls.call_universal_chat(
+                messages=messages,
+                api_key=active_key,
+                provider="deepseek",
+                model=deepseek_model,
+                base_url=active_base,
+                timeout=timeout
+            )
+            if res_text and res_text.strip():
+                return res_text.strip()
+
+            raise ValueError("DeepSeek không trả về nội dung phân tích hiện trường hợp lệ.")
 
     @classmethod
     def call_universal_chat(
@@ -299,7 +421,7 @@ class AITextEngine:
         timeout: int = 60
     ) -> str:
         """Thực thi gọi Chat Completion thống nhất (Gemini / OpenAI / DeepSeek / Custom)."""
-        creds = cls.get_ai_credentials(api_key, provider, model, base_url)
+        creds = cls.get_ai_credentials(api_key=api_key, provider=provider, model=model, base_url=base_url)
         active_provider = creds["provider"]
         active_key = creds["api_key"]
         active_model = creds["model"]
@@ -310,7 +432,7 @@ class AITextEngine:
 
         # 1. Gemini
         if active_provider == "gemini" or active_key.startswith("AIza") or "gemini" in active_model.lower():
-            target_model = active_model if "gemini" in active_model.lower() else "gemini-2.5-flash"
+            target_model = cls.normalize_model_name(active_model, "gemini")
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={active_key}"
             contents = []
             for m in messages:
@@ -336,9 +458,7 @@ class AITextEngine:
             if not endpoint.endswith("/chat/completions"):
                 endpoint = endpoint + "/chat/completions"
 
-            target_model = active_model
-            if target_model in ("DeepSeek-V4.1-Flash", ""):
-                target_model = "deepseek-chat"
+            target_model = cls.normalize_model_name(active_model, active_provider)
 
             headers = {
                 "Authorization": f"Bearer {active_key}",
@@ -379,28 +499,33 @@ class AITextEngine:
         temperature: float = 0.1,
         max_tokens: Optional[int] = None,
         base_url: Optional[str] = None,
-        timeout: int = 60
+        timeout: int = 60,
+        provider: Optional[str] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Thực thi Chat Completion tương thích DeepSeek & OpenAI API, hỗ trợ kiểm tra kết nối (Test connection).
         """
-        actual_key = cls.get_deepseek_key(api_key)
+        creds = cls.get_ai_credentials(api_key=api_key, provider=provider, model=model, base_url=base_url, **kwargs)
+        actual_key = creds.get("api_key") or cls.get_deepseek_key(api_key)
         if not actual_key:
             raise ValueError("Chưa có API Key. Vui lòng cấu hình API Key!")
 
-        creds = cls.get_ai_credentials(api_key, model=model, base_url=base_url)
-        if creds["provider"] == "gemini" or (creds["api_key"] and creds["api_key"].startswith("AIza")):
+        active_provider = creds.get("provider", "deepseek")
+        target_model = creds.get("model") or cls.normalize_model_name(model, active_provider)
+
+        if active_provider == "gemini" or (actual_key and actual_key.startswith("AIza")):
             content = cls.call_universal_chat(
                 messages=messages,
-                api_key=creds["api_key"],
-                model=creds["model"],
+                api_key=actual_key,
+                model=target_model,
+                provider="gemini",
                 temperature=temperature,
                 timeout=timeout
             )
             return {"choices": [{"message": {"role": "assistant", "content": content}}]}
 
-        target_model = model or cls.PRIMARY_MODEL
-        endpoint = (base_url or "").strip() or cls.DEEPSEEK_API_URL
+        endpoint = (base_url or creds.get("base_url") or "").strip() or cls.DEEPSEEK_API_URL
         if not endpoint.endswith("/chat/completions"):
             endpoint = endpoint.rstrip("/") + "/chat/completions"
 

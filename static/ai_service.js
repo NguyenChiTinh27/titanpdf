@@ -290,7 +290,9 @@
             });
             const data = await res.json();
             if (!res.ok || !data.success) {
-                throw new Error(data.message || data.detail || "Kết nối thất bại. Vui lòng kiểm tra lại Key hoặc Base URL!");
+                let msg = data.message || data.detail || "Vui lòng kiểm tra lại Key hoặc Base URL!";
+                msg = msg.replace(/^(?:❌\s*)?(?:Kết nối thất bại\s*[:：]\s*)+/gi, "").trim();
+                throw new Error(msg);
             }
             return data;
         }

@@ -400,9 +400,9 @@ def analyze_image_ai(
     creds = AITextEngine.get_ai_credentials()
     if not creds.get("api_key"):
         raise ValueError(
-            "Hệ thống chưa được cấu hình API Key cho Vision AI. "
+            "Hệ thống chưa được cấu hình API Key. "
             "Vui lòng vào 'Cài Đặt Quản Trị' -> 'Cấu Hình API Key & Trí Tuệ Nhân Tạo' "
-            "để nhập API Key Google Gemini (gemini-2.5-flash) hoặc OpenAI (gpt-4o-mini)!"
+            "để nhập API Key (DeepSeek AI, Google Gemini hoặc OpenAI)!"
         )
 
     system_prompt = (

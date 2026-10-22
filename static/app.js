@@ -5896,9 +5896,6 @@ window.GlobalDeepSeek = {
 
             const providerSelect = document.getElementById("global-ai-provider-select");
             const keyInput = document.getElementById("global-deepseek-key-input");
-            const modelSelect = document.getElementById("global-deepseek-model-select");
-            const customModelBox = document.getElementById("global-ai-custom-model-box");
-            const customModelInput = document.getElementById("global-ai-custom-model-input");
             const baseUrlInput = document.getElementById("global-ai-base-url-input");
 
             if (providerSelect && cfg.provider) {
@@ -5910,17 +5907,9 @@ window.GlobalDeepSeek = {
             if (baseUrlInput) {
                 baseUrlInput.value = cfg.baseUrl || "";
             }
-            if (modelSelect) {
-                const knownModels = ["DeepSeek-V4.1-Flash", "deepseek-chat", "deepseek-reasoner", "gpt-4o-mini", "gpt-4o"];
-                if (knownModels.includes(cfg.model)) {
-                    modelSelect.value = cfg.model;
-                    if (customModelBox) customModelBox.classList.add("hidden");
-                } else if (cfg.model) {
-                    modelSelect.value = "custom";
-                    if (customModelBox) customModelBox.classList.remove("hidden");
-                    if (customModelInput) customModelInput.value = cfg.model;
-                }
-            }
+
+            // Tự động nạp danh sách Model tương ứng với Provider và chọn Model đã lưu
+            window.handleAiProviderChange(cfg.model);
 
             window.LuvAIService.refreshAllBadges();
         }
@@ -5934,11 +5923,11 @@ window.GlobalDeepSeek = {
         const customModelInput = document.getElementById("global-ai-custom-model-input");
         const baseUrlInput = document.getElementById("global-ai-base-url-input");
 
-        const provider = providerSelect ? providerSelect.value : "deepseek";
+        const provider = (providerSelect ? providerSelect.value : "deepseek").toLowerCase();
         const apiKey = (keyInput ? keyInput.value : "").trim();
-        let model = modelSelect ? modelSelect.value : "DeepSeek-V4.1-Flash";
+        let model = modelSelect ? modelSelect.value : "deepseek-chat";
         if (model === "custom" && customModelInput) {
-            model = customModelInput.value.trim() || "DeepSeek-V4.1-Flash";
+            model = customModelInput.value.trim() || (provider === "deepseek" ? "deepseek-chat" : "gemini-2.5-flash");
         }
         const baseUrl = (baseUrlInput ? baseUrlInput.value : "").trim();
 
@@ -5963,7 +5952,8 @@ window.GlobalDeepSeek = {
                 feedback.style.background = "#ecfdf5";
                 feedback.style.color = "#065f46";
                 feedback.style.border = "1px solid #a7f3d0";
-                feedback.innerHTML = `✅ <b>Thành công:</b> Đã lưu cấu hình AI toàn cục (${provider.toUpperCase()} · ${model})! Tất cả các tab (MSDS, HSE, OCR, Dịch thuật, Tóm tắt) đã được chia sẻ tự động.`;
+                const provName = provider === "deepseek" ? "DeepSeek AI" : (provider.toUpperCase() + " AI");
+                feedback.innerHTML = `✅ <b>Thành công:</b> Đã lưu cấu hình AI toàn cục (${provName} · ${model})! Tất cả các tab (MSDS, HSE, OCR, Dịch thuật, Tóm tắt) đã được chia sẻ tự động.`;
             }
 
             if (typeof showToast === "function") {
@@ -5975,7 +5965,8 @@ window.GlobalDeepSeek = {
                 feedback.style.background = "#fef2f2";
                 feedback.style.color = "#991b1b";
                 feedback.style.border = "1px solid #fecaca";
-                feedback.textContent = "Lỗi lưu cấu hình: " + err.message;
+                let errText = (err.message || "").replace(/^(?:❌\s*)?(?:Kết nối thất bại\s*[:：]\s*)+/gi, "").trim();
+                feedback.textContent = "Lỗi lưu cấu hình: " + (errText || err.message);
             }
         }
     },
@@ -5988,11 +5979,11 @@ window.GlobalDeepSeek = {
         const customModelInput = document.getElementById("global-ai-custom-model-input");
         const baseUrlInput = document.getElementById("global-ai-base-url-input");
 
-        const provider = providerSelect ? providerSelect.value : "deepseek";
+        const provider = (providerSelect ? providerSelect.value : "deepseek").toLowerCase();
         const apiKey = (keyInput ? keyInput.value : "").trim() || (window.LuvAIService ? window.LuvAIService.getRawApiKey() : "");
-        let model = modelSelect ? modelSelect.value : "DeepSeek-V4.1-Flash";
+        let model = modelSelect ? modelSelect.value : "deepseek-chat";
         if (model === "custom" && customModelInput) {
-            model = customModelInput.value.trim() || "DeepSeek-V4.1-Flash";
+            model = customModelInput.value.trim() || (provider === "deepseek" ? "deepseek-chat" : "gemini-2.5-flash");
         }
         const baseUrl = (baseUrlInput ? baseUrlInput.value : "").trim();
 
@@ -6012,7 +6003,8 @@ window.GlobalDeepSeek = {
             feedback.style.background = "#eff6ff";
             feedback.style.color = "#1d4ed8";
             feedback.style.border = "1px solid #bfdbfe";
-            feedback.textContent = `⏳ Đang kiểm tra kết nối tới dịch vụ AI (${provider.toUpperCase()} · ${model})...`;
+            const provName = provider === "deepseek" ? "DeepSeek AI" : (provider.toUpperCase() + " AI");
+            feedback.textContent = `⏳ Đang kiểm tra kết nối tới dịch vụ AI (${provName} · ${model})...`;
         }
 
         try {
@@ -6023,8 +6015,13 @@ window.GlobalDeepSeek = {
                 const formData = new FormData();
                 formData.append("api_key", apiKey);
                 formData.append("model", model);
+                formData.append("provider", provider);
+                formData.append("base_url", baseUrl);
                 const resp = await fetch("/api/settings/deepseek/test", { method: "POST", body: formData });
                 res = await resp.json();
+                if (!resp.ok || !res.success) {
+                    throw new Error(res.message || "Không thể xác thực khóa.");
+                }
             }
 
             if (feedback) {
@@ -6032,7 +6029,8 @@ window.GlobalDeepSeek = {
                 feedback.style.background = "#ecfdf5";
                 feedback.style.color = "#065f46";
                 feedback.style.border = "1px solid #a7f3d0";
-                feedback.innerHTML = `✅ <b>Kết nối thành công:</b> AI phản hồi tốt (${res.model || model}). Khóa API và endpoint hoàn toàn hợp lệ!`;
+                const provName = provider === "deepseek" ? "DeepSeek AI" : (provider.toUpperCase() + " AI");
+                feedback.innerHTML = `✅ <b>Kết nối ${provName} thành công:</b> AI phản hồi tốt (${res.model || model}). Khóa API và endpoint hoàn toàn hợp lệ!`;
             }
         } catch (e) {
             if (feedback) {
@@ -6040,7 +6038,8 @@ window.GlobalDeepSeek = {
                 feedback.style.background = "#fef2f2";
                 feedback.style.color = "#991b1b";
                 feedback.style.border = "1px solid #fecaca";
-                feedback.innerHTML = `❌ <b>Kết nối thất bại:</b> ${e.message || "Không thể xác thực khóa."}`;
+                let errText = (e.message || "Không thể xác thực khóa.").replace(/^(?:❌\s*)?(?:Kết nối thất bại\s*[:：]\s*)+/gi, "").trim();
+                feedback.innerHTML = `❌ <b>Kết nối thất bại:</b> ${errText}`;
             }
         }
     },
@@ -6063,20 +6062,84 @@ window.saveGlobalDeepSeekSettings = () => window.GlobalDeepSeek.saveSettings();
 window.testGlobalDeepSeekConnection = () => window.GlobalDeepSeek.testConnection();
 window.toggleGlobalDeepSeekKeyVisibility = () => window.GlobalDeepSeek.toggleVisibility();
 
-window.handleAiProviderChange = function () {
-    const prov = document.getElementById("global-ai-provider-select")?.value;
+window.handleAiProviderChange = function (selectedModel = null) {
+    const provSelect = document.getElementById("global-ai-provider-select");
+    const prov = (provSelect ? provSelect.value : "deepseek").toLowerCase();
     const baseInput = document.getElementById("global-ai-base-url-input");
     const linkEl = document.getElementById("global-ai-provider-link");
     const modelSelect = document.getElementById("global-deepseek-model-select");
+    const customBox = document.getElementById("global-ai-custom-model-box");
+    const customInput = document.getElementById("global-ai-custom-model-input");
 
+    if (!modelSelect) return;
+
+    // Danh sách model chuẩn theo từng provider
+    const modelsByProvider = {
+        deepseek: [
+            { value: "deepseek-chat", label: "⚡ DeepSeek-V4.1-Flash (Tốc độ cao - Viết & Dịch HSE)", default: true },
+            { value: "deepseek-reasoner", label: "🧠 DeepSeek-V4.1-Reasoner (Suy luận chuyên sâu)" },
+            { value: "custom", label: "✍️ Nhập mã Model tùy chỉnh..." }
+        ],
+        gemini: [
+            { value: "gemini-2.5-flash", label: "⚡ gemini-2.5-flash (Google: Multimodal Vision + Siêu tốc, hỗ trợ đọc ảnh hiện trường EHS)", default: true },
+            { value: "gemini-2.5-pro", label: "🧠 gemini-2.5-pro (Google: Phân tích sâu, hiểu tài liệu lớn)" },
+            { value: "gemini-1.5-flash", label: "⚡ gemini-1.5-flash (Google: Tiết kiệm quota & ổn định)" },
+            { value: "custom", label: "✍️ Nhập mã Model tùy chỉnh..." }
+        ],
+        openai: [
+            { value: "gpt-4o-mini", label: "🤖 gpt-4o-mini (OpenAI: Multimodal Vision, Nhanh & Tiết kiệm token)", default: true },
+            { value: "gpt-4o", label: "🚀 gpt-4o (OpenAI: Multimodal Vision cao cấp, thông minh toàn diện)" },
+            { value: "custom", label: "✍️ Nhập mã Model tùy chỉnh..." }
+        ],
+        custom: [
+            { value: "custom", label: "✍️ Nhập mã Model tùy chỉnh...", default: true }
+        ]
+    };
+
+    const targetList = modelsByProvider[prov] || modelsByProvider.deepseek;
+
+    // Xóa và nạp lại options
+    modelSelect.innerHTML = "";
+    targetList.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m.value;
+        opt.textContent = m.label;
+        modelSelect.appendChild(opt);
+    });
+
+    // Chuẩn hóa model cần chọn
+    let modelToSelect = selectedModel || "";
+    if (modelToSelect === "DeepSeek-V4.1-Flash") modelToSelect = "deepseek-chat";
+    if (modelToSelect === "DeepSeek-V4.1-Reasoner") modelToSelect = "deepseek-reasoner";
+
+    const hasOption = targetList.some(m => m.value === modelToSelect);
+    if (hasOption) {
+        modelSelect.value = modelToSelect;
+        if (customBox) customBox.classList.add("hidden");
+    } else if (modelToSelect && modelToSelect !== "custom") {
+        modelSelect.value = "custom";
+        if (customBox) customBox.classList.remove("hidden");
+        if (customInput) customInput.value = modelToSelect;
+    } else {
+        const defaultItem = targetList.find(m => m.default) || targetList[0];
+        modelSelect.value = defaultItem ? defaultItem.value : targetList[0].value;
+        if (customBox) {
+            if (modelSelect.value === "custom") {
+                customBox.classList.remove("hidden");
+            } else {
+                customBox.classList.add("hidden");
+            }
+        }
+    }
+
+    // Cập nhật Base URL & Link hướng dẫn tương ứng
     if (prov === "gemini") {
-        if (baseInput) {
+        if (baseInput && (!baseInput.value || baseInput.value.includes("deepseek.com") || baseInput.value.includes("openai.com"))) {
             baseInput.value = "https://generativelanguage.googleapis.com/v1beta";
         }
         if (linkEl) {
             linkEl.innerHTML = 'Nhận API key miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#0284c7; text-decoration:underline;">aistudio.google.com</a> (Hỗ trợ Multimodal Vision đọc ảnh hiện trường EHS).';
         }
-        if (modelSelect) modelSelect.value = "gemini-2.5-flash";
     } else if (prov === "deepseek") {
         if (baseInput && (!baseInput.value || baseInput.value.includes("openai.com") || baseInput.value.includes("googleapis.com"))) {
             baseInput.value = "https://api.deepseek.com/v1";
@@ -6084,7 +6147,6 @@ window.handleAiProviderChange = function () {
         if (linkEl) {
             linkEl.innerHTML = 'Nhận API key tại <a href="https://platform.deepseek.com" target="_blank" style="color:#0284c7; text-decoration:underline;">platform.deepseek.com</a>.';
         }
-        if (modelSelect) modelSelect.value = "deepseek-chat";
     } else if (prov === "openai") {
         if (baseInput && (!baseInput.value || baseInput.value.includes("deepseek.com") || baseInput.value.includes("googleapis.com"))) {
             baseInput.value = "https://api.openai.com/v1";
@@ -6092,13 +6154,11 @@ window.handleAiProviderChange = function () {
         if (linkEl) {
             linkEl.innerHTML = 'Nhận API key tại <a href="https://platform.openai.com/api-keys" target="_blank" style="color:#0284c7; text-decoration:underline;">platform.openai.com</a> (Hỗ trợ GPT-4o Multimodal Vision).';
         }
-        if (modelSelect) modelSelect.value = "gpt-4o-mini";
     } else {
         if (linkEl) {
             linkEl.textContent = "Hỗ trợ chuẩn OpenAI API tương thích (Cloudflare AI Gateway, LiteLLM, vLLM, Azure...).";
         }
     }
-    window.handleAiModelChange();
 };
 
 window.handleAiModelChange = function () {

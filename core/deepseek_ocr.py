@@ -88,12 +88,15 @@ class DeepSeekOCR:
                     except Exception:
                         data = {}
                 data["deepseek_api_key"] = clean_key
+                data["ai_api_key"] = clean_key
                 if model and model.strip():
                     data["deepseek_model"] = model.strip()
+                    data["ai_model"] = model.strip()
                 if provider and provider.strip():
                     data["ai_provider"] = provider.strip()
                 if base_url and base_url.strip():
                     data["deepseek_base_url"] = base_url.strip()
+                    data["ai_base_url"] = base_url.strip()
                 os.makedirs(os.path.dirname(s_file), exist_ok=True)
                 with open(s_file, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
