@@ -701,11 +701,12 @@ def fit_image(
             if "/file/d/" in req_url:
                 f_id = req_url.split("/file/d/")[1].split("/")[0]
                 req_url = f"https://drive.google.com/uc?export=view&id={f_id}"
-            resp = requests.get(req_url, timeout=7.0)
+            resp = requests.get(req_url, timeout=2.0)
             if resp.ok and len(resp.content) > 100:
                 raw = resp.content
         except Exception as drive_err:
             logger.warning(f"Failed to fetch image from drive_url {drive_url}: {drive_err}")
+            raw = None
 
     if not raw:
         return None, 0.0, 0.0

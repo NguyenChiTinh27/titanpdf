@@ -238,7 +238,7 @@
         improved: Boolean(item.improved)
       })),
       findings: state.findings.map(f => ({
-        id: f.id,
+        id: String(f.id || ""),
         departmentKey: f.departmentKey || "san-xuat",
         departmentVi: f.departmentVi || "Sản xuất",
         departmentZh: f.departmentZh || "生产部",
@@ -1312,9 +1312,12 @@
     const wordBtns = [$("#hse-export-word-btn"), $("#hse-preview-export-btn")].filter(Boolean);
     wordBtns.forEach(b => {
       b.disabled = true;
-      b.dataset.origText = b.innerHTML;
+      if (!b.dataset.origText) b.dataset.origText = b.innerHTML;
       b.innerHTML = `<span>⏳</span> Đang tạo Word...`;
     });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
 
     try {
       const dateVal = ($("#hse-inspection-date")?.value || "").trim() || state.metadata.date || new Date().toISOString().substring(0, 10);
@@ -1341,8 +1344,11 @@
       const resp = await fetch("/api/hse/generate_docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -1387,8 +1393,13 @@
         showToast("✓ Đã xuất file Word (.docx) thành công!");
       }
     } catch (err) {
-      showToast(err.message || "Lỗi khi xuất file Word.", true);
+      clearTimeout(timeoutId);
+      console.error("Lỗi xuất Word:", err);
+      const isTimeout = err.name === "AbortError" || (err.message && err.message.includes("aborted"));
+      const msg = isTimeout ? "Quá thời gian chờ tạo file Word (>35s). Vui lòng thử lại." : (err.message || "Lỗi khi xuất file Word.");
+      showToast("❌ " + msg, true);
     } finally {
+      clearTimeout(timeoutId);
       wordBtns.forEach(b => {
         b.disabled = false;
         if (b.dataset.origText) b.innerHTML = b.dataset.origText;
@@ -1397,23 +1408,660 @@
     }
   }
 
+  // ==========================================================================
+  // EXCEL EXPORT (HIGH-SPEED CLIENT EXCELJS + LIGHTWEIGHT BACKEND STREAM FALLBACK)
+  // ==========================================================================
+  async function ensureExcelJS() {
+    if (window.ExcelJS) return window.ExcelJS;
+    return new Promise((resolve, reject) => {
+      // 1. Try local libs first
+      const scriptLocal = document.createElement("script");
+      scriptLocal.src = "libs/exceljs.min.js";
+      scriptLocal.onload = () => {
+        if (window.ExcelJS) resolve(window.ExcelJS);
+        else tryCdn();
+      };
+      scriptLocal.onerror = () => tryCdn();
+      document.head.appendChild(scriptLocal);
+
+      function tryCdn() {
+        const scriptCdn = document.createElement("script");
+        scriptCdn.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+        scriptCdn.onload = () => {
+          if (window.ExcelJS) resolve(window.ExcelJS);
+          else reject(new Error("ExcelJS không khả dụng từ CDN"));
+        };
+        scriptCdn.onerror = () => reject(new Error("Không thể tải thư viện ExcelJS từ CDN"));
+        document.head.appendChild(scriptCdn);
+      }
+    });
+  }
+
+  function cleanSheetTitleClient(title, maxLen = 31) {
+    if (!title) return "BoPhan";
+    let s = String(title).replace(/[\/\\?*:\[\]]/g, " ").trim();
+    s = s.replace(/\s+/g, " ");
+    return s.substring(0, maxLen).trim() || "BoPhan";
+  }
+
+  function getCleanDeptSheetName(rawName) {
+    if (!rawName) return "BoPhan";
+    if (rawName.includes("/")) {
+      const p = rawName.split("/").map(s => s.trim());
+      const zh = p[0] || "";
+      const vi = p[1] || "";
+      if (vi && zh) return cleanSheetTitleClient(vi + " (" + zh + ")", 31);
+      return cleanSheetTitleClient(vi || zh, 31);
+    }
+    return cleanSheetTitleClient(rawName, 31);
+  }
+
+  function categorizeHseClient(text = "") {
+    const t = String(text).toLowerCase();
+    if (t.includes("chữa cháy") || t.includes("bình") || t.includes("pccc") || t.includes("thoát hiểm") || t.includes("消火") || t.includes("灭火") || t.includes("通道")) return "PCCC & Lối thoát hiểm (消防与疏散通道)";
+    if (t.includes("hóa chất") || t.includes("dung môi") || t.includes("sơn") || t.includes("mùi") || t.includes("chemical") || t.includes("化学品") || t.includes("溶剂") || t.includes("油漆")) return "An toàn Hóa chất & Môi trường (化学品安全与环境)";
+    if (t.includes("điện") || t.includes("dây") || t.includes("ổ cắm") || t.includes("tủ điện") || t.includes("electric") || t.includes("电气") || t.includes("电线") || t.includes("配电")) return "An toàn Điện & Thiết bị (电气与设备安全)";
+    if (t.includes("bảo hộ") || t.includes("khẩu trang") || t.includes("găng tay") || t.includes("kính") || t.includes("ủng") || t.includes("ppe") || t.includes("劳保") || t.includes("手套") || t.includes("口罩")) return "Trang bị Bảo hộ Lao động - PPE (个人防护装备)";
+    if (t.includes("5s") || t.includes("gọn") || t.includes("bừa") || t.includes("rác") || t.includes("vệ sinh") || t.includes("sàn") || t.includes("trơn") || t.includes("卫生") || t.includes("整理") || t.includes("地面")) return "Vệ sinh Công nghiệp & 5S (现场5S与工业卫生)";
+    if (t.includes("máy") || t.includes("che chắn") || t.includes("cơ khí") || t.includes("băng tải") || t.includes("kẹt") || t.includes("机械") || t.includes("防护罩")) return "An toàn Vận hành Máy móc (机械运行安全)";
+    return "An toàn Chung Hiện trường (现场综合安全)";
+  }
+
+  async function generateExcelWithExcelJS() {
+    const ExcelJS = await ensureExcelJS();
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "LUV-PDF HSE Studio ZhanChen";
+    workbook.created = new Date();
+
+    const rawDate = ($("#hse-inspection-date")?.value || "").trim() || state.metadata.date || new Date().toISOString().substring(0, 10);
+    const cleanDateStr = rawDate.split("T")[0];
+    const parts = cleanDateStr.split("-");
+    const monthYear = (parts.length >= 2) ? `${parts[1]}_${parts[0]}` : "09_2026";
+    const reportMonth = cleanDateStr.substring(0, 7) || "2026-10";
+
+    // 1. Gather all defects
+    const defectsList = [];
+    (state.findings || []).forEach((f, idx) => {
+      if (!f.issueVi && !f.issueZh && !f.aiHint) return;
+      const zh = (f.issueZh || f.aiHint || "").trim();
+      const vi = (f.issueVi || f.suggestion || "").trim();
+      const deptVi = f.departmentVi || "Sản xuất";
+      const deptZh = f.departmentZh || "生产部";
+      const deptFull = `${deptZh} / ${deptVi}`;
+      const isImproved = Boolean(f.improved);
+      const code = `HSE-${reportMonth.replace('-', '').substring(2)}-${String(idx + 1).padStart(2, '0')}`;
+      defectsList.push({
+        idx: idx + 1,
+        code,
+        date: cleanDateStr,
+        month: reportMonth,
+        department: deptFull,
+        deptZh,
+        deptVi,
+        category: categorizeHseClient(`${zh} ${vi}`),
+        zh_issue: zh,
+        vn_issue: vi,
+        imageData: f.imageData || "",
+        drive_view_url: f.driveViewUrl || f.driveDirectUrl || "",
+        status: isImproved ? "Đã cải thiện / 已改善" : "Chờ xử lý / 待处理",
+        improved: isImproved,
+        improve_date: isImproved ? (f.recheckDate || cleanDateStr) : "",
+        note: (f.note || f.suggestion || "").trim()
+      });
+    });
+
+    // 2. Failed checklist items
+    const checklist = [...state.checklist.values()];
+    const seenIssues = new Set(defectsList.map(d => d.vn_issue.toLowerCase()));
+    checklist.forEach(c => {
+      if (c.status === "fail") {
+        const vi = (c.issueVi || "Chưa đạt tiêu chuẩn an toàn EHS (Cần khắc phục)").trim();
+        const zh = (c.issueZh || "未达到EHS安全标准 (需整改)").trim();
+        if (seenIssues.has(vi.toLowerCase())) return;
+        seenIssues.add(vi.toLowerCase());
+
+        const rNum = c.row || (defectsList.length + 1);
+        const code = `HSE-${reportMonth.replace('-', '').substring(2)}-CK${String(rNum).padStart(2, '0')}`;
+        const isImproved = Boolean(c.improved);
+        defectsList.push({
+          idx: defectsList.length + 1,
+          code,
+          date: cleanDateStr,
+          month: reportMonth,
+          department: "生产部 / Sản xuất",
+          deptZh: "生产部",
+          deptVi: "Sản xuất",
+          category: categorizeHseClient(`${zh} ${vi}`),
+          zh_issue: zh,
+          vn_issue: vi,
+          imageData: "",
+          drive_view_url: "",
+          status: isImproved ? "Đã cải thiện / 已改善" : "Chờ xử lý / 待处理",
+          improved: isImproved,
+          improve_date: isImproved ? cleanDateStr : "",
+          note: "Hạng mục kiểm tra 26 tiêu chuẩn xưởng ZhanChen"
+        });
+      }
+    });
+
+    const totalDefects = defectsList.length;
+    const improvedDefects = defectsList.filter(d => d.improved).length;
+    const pendingDefects = totalDefects - improvedDefects;
+    const completionRate = totalDefects > 0 ? ((improvedDefects / totalDefects) * 100).toFixed(1) : "0.0";
+
+    // Department breakdown
+    const deptMap = {};
+    defectsList.forEach(d => {
+      const k = d.department;
+      if (!deptMap[k]) {
+        deptMap[k] = { name: k, deptZh: d.deptZh, deptVi: d.deptVi, total: 0, improved: 0, pending: 0 };
+      }
+      deptMap[k].total++;
+      if (d.improved) deptMap[k].improved++;
+      else deptMap[k].pending++;
+    });
+    const deptStats = Object.values(deptMap);
+
+    // Category breakdown
+    const catMap = {};
+    defectsList.forEach(d => {
+      const k = d.category;
+      catMap[k] = (catMap[k] || 0) + 1;
+    });
+    const catStats = Object.entries(catMap).map(([name, count]) => ({
+      name,
+      count,
+      rate: totalDefects > 0 ? ((count / totalDefects) * 100).toFixed(1) : "0.0"
+    })).sort((a, b) => b.count - a.count);
+
+    const fontFam = "Times New Roman";
+    const borderThin = {
+      top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+    };
+    const headerBorder = {
+      top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      bottom: { style: 'medium', color: { argb: 'FF475569' } },
+      right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+    };
+
+    // =========================================================================
+    // SHEET 1: 📊 DASHBOARD (Blue Navy #1E40AF, showGridLines = false)
+    // =========================================================================
+    const wsDash = workbook.addWorksheet("📊 DASHBOARD", {
+      views: [{ showGridLines: false }],
+      properties: { tabColor: { argb: 'FF1E40AF' } }
+    });
+
+    // Top Banners
+    wsDash.mergeCells("B2:M2");
+    const b2 = wsDash.getCell("B2");
+    b2.value = "BÁO CÁO QUẢN TRỊ & PHÂN TÍCH LỖI AN TOÀN HSE (EHS EXECUTIVE DASHBOARD)";
+    b2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B365D' } };
+    b2.font = { name: fontFam, size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+    b2.alignment = { horizontal: 'center', vertical: 'middle' };
+    wsDash.getRow(2).height = 40;
+
+    wsDash.mergeCells("B3:M3");
+    const b3 = wsDash.getCell("B3");
+    b3.value = `CÔNG TY TNHH VISION NEW MATERIALS VIỆT NAM  |  Kỳ báo cáo: Tháng ${reportMonth} (HSE安全隐患汇总看板)`;
+    b3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    b3.font = { name: fontFam, size: 10.5, bold: true, color: { argb: 'FFE0E7FF' } };
+    b3.alignment = { horizontal: 'center', vertical: 'middle' };
+    wsDash.getRow(3).height = 26;
+    wsDash.getRow(4).height = 12;
+
+    // 4 KPI Cards
+    const kpiDefs = [
+      { startCol: "B", endCol: "D", title: "📊 TỔNG SỐ LỖI GHI NHẬN", val: totalDefects, sub: "Tổng hạng mục không đạt", bg: "FF1E40AF", fg: "FFFFFFFF" },
+      { startCol: "E", endCol: "G", title: "✅ ĐÃ CẢI THIỆN XONG", val: improvedDefects, sub: "Đã khắc phục hoàn tất", bg: "FF10B981", fg: "FFFFFFFF" },
+      { startCol: "H", endCol: "J", title: "⏳ CHỜ XỬ LÝ / KHẮC PHỤC", val: pendingDefects, sub: "Đang theo dõi đôn đốc", bg: "FFF59E0B", fg: "FFFFFFFF" },
+      { startCol: "K", endCol: "M", title: "📈 TỶ LỆ HOÀN THÀNH", val: `${completionRate}%`, sub: "Mục tiêu: >= 95%", bg: "FF8B5CF6", fg: "FFFFFFFF" }
+    ];
+
+    kpiDefs.forEach(k => {
+      wsDash.mergeCells(`${k.startCol}5:${k.endCol}5`);
+      const cTitle = wsDash.getCell(`${k.startCol}5`);
+      cTitle.value = k.title;
+      cTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.bg } };
+      cTitle.font = { name: fontFam, size: 9.5, bold: true, color: { argb: k.fg } };
+      cTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      wsDash.mergeCells(`${k.startCol}6:${k.endCol}6`);
+      const cVal = wsDash.getCell(`${k.startCol}6`);
+      cVal.value = k.val;
+      cVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.bg } };
+      cVal.font = { name: fontFam, size: 24, bold: true, color: { argb: k.fg } };
+      cVal.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      wsDash.mergeCells(`${k.startCol}7:${k.endCol}7`);
+      const cSub = wsDash.getCell(`${k.startCol}7`);
+      cSub.value = k.sub;
+      cSub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.bg } };
+      cSub.font = { name: fontFam, size: 8.5, italic: true, color: { argb: 'FFF1F5F9' } };
+      cSub.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    wsDash.getRow(5).height = 20;
+    wsDash.getRow(6).height = 36;
+    wsDash.getRow(7).height = 18;
+    wsDash.getRow(8).height = 16;
+
+    // Department Table (B9:G...)
+    wsDash.mergeCells("B9:G9");
+    const dHead = wsDash.getCell("B9");
+    dHead.value = "1. PHÂN TÍCH TIẾN ĐỘ KHẮC PHỤC THEO BỘ PHẬN (DEPARTMENT STATUS BREAKDOWN)";
+    dHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    dHead.font = { name: fontFam, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    dHead.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    wsDash.getRow(9).height = 24;
+
+    const deptHeaders = [
+      { col: "B", name: "STT", width: 6 },
+      { col: "C", name: "Bộ phận / 部门", width: 25 },
+      { col: "D", name: "Tổng số lỗi\n隐患总数", width: 14 },
+      { col: "E", name: "Đã cải thiện\n已改善", width: 14 },
+      { col: "F", name: "Chờ xử lý\n待整改", width: 14 },
+      { col: "G", name: "Tỷ lệ hoàn thành\n完成率", width: 16 }
+    ];
+
+    deptHeaders.forEach(h => {
+      const c = wsDash.getCell(`${h.col}10`);
+      c.value = h.name.replace(/\\n/g, '\n');
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+      c.font = { name: fontFam, size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.border = headerBorder;
+      wsDash.getColumn(h.col).width = h.width;
+    });
+    wsDash.getRow(10).height = 28;
+
+    let curDeptRow = 11;
+    deptStats.forEach((ds, idx) => {
+      const r = curDeptRow;
+      wsDash.getRow(r).height = 20;
+      const bgRow = (idx % 2 === 0) ? 'FFFFFFFF' : 'FFF8FAFC';
+      const rateVal = ds.total > 0 ? ((ds.improved / ds.total) * 100).toFixed(1) : "0.0";
+
+      const cells = [
+        { col: "B", val: idx + 1, align: 'center' },
+        { col: "C", val: ds.name, align: 'left' },
+        { col: "D", val: ds.total, align: 'center' },
+        { col: "E", val: ds.improved, align: 'center' },
+        { col: "F", val: ds.pending, align: 'center' },
+        { col: "G", val: `${rateVal}%`, align: 'center' }
+      ];
+      cells.forEach(item => {
+        const c = wsDash.getCell(`${item.col}${r}`);
+        c.value = item.val;
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgRow } };
+        c.font = { name: fontFam, size: 9.5 };
+        c.alignment = { horizontal: item.align, vertical: 'middle' };
+        c.border = borderThin;
+      });
+      curDeptRow++;
+    });
+
+    // Total Dept Row
+    const totDeptRow = curDeptRow;
+    wsDash.getRow(totDeptRow).height = 22;
+    const totDeptCells = [
+      { col: "B", val: "" },
+      { col: "C", val: "TỔNG CỘNG / 合计" },
+      { col: "D", val: totalDefects },
+      { col: "E", val: improvedDefects },
+      { col: "F", val: pendingDefects },
+      { col: "G", val: `${completionRate}%` }
+    ];
+    totDeptCells.forEach(item => {
+      const c = wsDash.getCell(`${item.col}${totDeptRow}`);
+      c.value = item.val;
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      c.font = { name: fontFam, size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+      c.border = headerBorder;
+    });
+
+    // HSE Category Table (I9:M...)
+    wsDash.mergeCells("I9:M9");
+    const cHead = wsDash.getCell("I9");
+    cHead.value = "2. PHÂN LOẠI THEO NHÓM LỖI HSE (SAFETY CATEGORY DISTRIBUTION)";
+    cHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D9488' } };
+    cHead.font = { name: fontFam, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cHead.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+    const catHeaders = [
+      { col: "I", name: "STT", width: 6 },
+      { col: "J", name: "Nhóm lỗi HSE / 隐患类别", width: 34 },
+      { col: "K", name: "Số lượng\n数量", width: 12 },
+      { col: "L", name: "Tỷ lệ %\n占比", width: 12 },
+      { col: "M", name: "Ghi chú", width: 14 }
+    ];
+
+    catHeaders.forEach(h => {
+      const c = wsDash.getCell(`${h.col}10`);
+      c.value = h.name.replace(/\\n/g, '\n');
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+      c.font = { name: fontFam, size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.border = headerBorder;
+      wsDash.getColumn(h.col).width = h.width;
+    });
+
+    let curCatRow = 11;
+    catStats.forEach((cs, idx) => {
+      const r = curCatRow;
+      wsDash.getRow(r).height = 20;
+      const bgRow = (idx % 2 === 0) ? 'FFFFFFFF' : 'FFF8FAFC';
+      const cells = [
+        { col: "I", val: idx + 1, align: 'center' },
+        { col: "J", val: cs.name, align: 'left' },
+        { col: "K", val: cs.count, align: 'center' },
+        { col: "L", val: `${cs.rate}%`, align: 'center' },
+        { col: "M", val: cs.count >= 3 ? "Ưu tiên xử lý" : "Theo dõi", align: 'center' }
+      ];
+      cells.forEach(item => {
+        const c = wsDash.getCell(`${item.col}${r}`);
+        c.value = item.val;
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgRow } };
+        c.font = { name: fontFam, size: 9.5 };
+        c.alignment = { horizontal: item.align, vertical: 'middle' };
+        c.border = borderThin;
+      });
+      curCatRow++;
+    });
+
+    // Total Cat Row
+    const totCatRow = curCatRow;
+    wsDash.getRow(totCatRow).height = 22;
+    const totCatCells = [
+      { col: "I", val: "" },
+      { col: "J", val: "TỔNG CỘNG / 合计" },
+      { col: "K", val: totalDefects },
+      { col: "L", val: "100.0%" },
+      { col: "M", val: "" }
+    ];
+    totCatCells.forEach(item => {
+      const c = wsDash.getCell(`${item.col}${totCatRow}`);
+      c.value = item.val;
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      c.font = { name: fontFam, size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+      c.border = headerBorder;
+    });
+
+    wsDash.getColumn("A").width = 3;
+    wsDash.getColumn("H").width = 3;
+
+    // =========================================================================
+    // SHEET 2: 📋 Tổng Hợp Lỗi (11 Columns, ZERO #REF!)
+    // =========================================================================
+    const wsAll = workbook.addWorksheet("📋 Tổng Hợp Lỗi", {
+      properties: { tabColor: { argb: 'FF10B981' } }
+    });
+
+    wsAll.mergeCells("A1:K1");
+    const allH1 = wsAll.getCell("A1");
+    allH1.value = `BẢNG TỔNG HỢP CHI TIẾT LỖI HSE TOÀN CÔNG TY - THÁNG ${reportMonth}`;
+    allH1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    allH1.font = { name: fontFam, size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+    allH1.alignment = { horizontal: 'center', vertical: 'middle' };
+    wsAll.getRow(1).height = 36;
+
+    wsAll.mergeCells("A2:K2");
+    const allH2 = wsAll.getCell("A2");
+    allH2.value = "CÔNG TY TNHH VISION NEW MATERIALS VIỆT NAM | Báo cáo an toàn hiện trường chuẩn song ngữ Trung - Việt";
+    allH2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
+    allH2.font = { name: fontFam, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    allH2.alignment = { horizontal: 'center', vertical: 'middle' };
+    wsAll.getRow(2).height = 24;
+    wsAll.getRow(3).height = 10;
+
+    const dataHeaders = [
+      { col: "A", name: "Mã lỗi\n编号", width: 14 },
+      { col: "B", name: "Ngày ghi nhận\n记录日期", width: 13 },
+      { col: "C", name: "Tháng\n月份", width: 11 },
+      { col: "D", name: "Bộ phận\n部门", width: 22 },
+      { col: "E", name: "Nhóm lỗi HSE\n隐患类别", width: 24 },
+      { col: "F", name: "Mô tả chi tiết (Tiếng Trung)\n详细描述 (中文)", width: 42 },
+      { col: "G", name: "Mô tả chi tiết (Tiếng Việt)\n详细描述 (越南语)", width: 42 },
+      { col: "H", name: "Xem ảnh\n图片预览", width: 18 },
+      { col: "I", name: "Trạng thái\n状态", width: 18 },
+      { col: "J", name: "Ngày cải thiện\n改善日期", width: 14 },
+      { col: "K", name: "Ghi chú & Đối sách\n备注与改善对策", width: 26 }
+    ];
+
+    dataHeaders.forEach(h => {
+      const c = wsAll.getCell(`${h.col}4`);
+      c.value = h.name.replace(/\\n/g, '\n');
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      c.font = { name: fontFam, size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.border = headerBorder;
+      wsAll.getColumn(h.col).width = h.width;
+    });
+    wsAll.getRow(4).height = 36;
+
+    defectsList.forEach((item, idx) => {
+      const rNum = 5 + idx;
+      wsAll.getRow(rNum).height = 68;
+
+      wsAll.getCell(`A${rNum}`).value = item.code;
+      wsAll.getCell(`B${rNum}`).value = item.date;
+      wsAll.getCell(`C${rNum}`).value = item.month;
+      wsAll.getCell(`D${rNum}`).value = item.department;
+      wsAll.getCell(`E${rNum}`).value = item.category;
+      wsAll.getCell(`F${rNum}`).value = item.zh_issue;
+      wsAll.getCell(`G${rNum}`).value = item.vn_issue;
+      wsAll.getCell(`H${rNum}`).value = item.drive_view_url ? `🔗 Xem Drive` : "(Không có ảnh)";
+      wsAll.getCell(`I${rNum}`).value = item.status;
+      wsAll.getCell(`J${rNum}`).value = item.improve_date;
+      wsAll.getCell(`K${rNum}`).value = item.note;
+
+      if (item.drive_view_url) {
+        wsAll.getCell(`H${rNum}`).hyperlink = item.drive_view_url;
+      }
+
+      // Safe image embedding
+      if (item.imageData && item.imageData.startsWith("data:image/")) {
+        try {
+          const ext = item.imageData.includes("png") ? "png" : "jpeg";
+          const cleanB64 = item.imageData.split(",")[1];
+          if (cleanB64 && cleanB64.length < 5000000) {
+            const imgId = workbook.addImage({
+              base64: item.imageData,
+              extension: ext
+            });
+            wsAll.addImage(imgId, {
+              tl: { col: 7.12, row: rNum - 1 + 0.1 },
+              ext: { width: 110, height: 75 },
+              editAs: 'oneCell'
+            });
+            wsAll.getCell(`H${rNum}`).value = "";
+          }
+        } catch (e) {
+          // Ignore image encoding error
+        }
+      }
+
+      dataHeaders.forEach(h => {
+        const cell = wsAll.getCell(`${h.col}${rNum}`);
+        cell.font = { name: fontFam, size: 9 };
+        cell.border = borderThin;
+
+        if (["A", "B", "C", "H", "J"].includes(h.col)) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (["D", "E"].includes(h.col)) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        } else if (["F", "G", "K"].includes(h.col)) {
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        } else if (h.col === "I") {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          if (item.improved) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+            cell.font = { name: fontFam, size: 9, bold: true, color: { argb: 'FF065F46' } };
+          } else {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+            cell.font = { name: fontFam, size: 9, bold: true, color: { argb: 'FF9A3412' } };
+          }
+        }
+      });
+    });
+
+    // =========================================================================
+    // SHEETS 3+: DEPARTMENT SHEETS (SANITIZED TITLE, MAX 31 CHARS, NO /)
+    // =========================================================================
+    const existingTitles = new Set([wsDash.name, wsAll.name]);
+
+    deptStats.forEach((ds, dIdx) => {
+      const deptItems = defectsList.filter(d => d.department === ds.name);
+      if (!deptItems.length) return;
+
+      const cleanName = getCleanDeptSheetName(ds.name);
+      let sheetTitle = cleanName;
+      let counter = 1;
+      while (existingTitles.has(sheetTitle)) {
+        sheetTitle = `${cleanName.substring(0, 27)} (${counter++})`;
+      }
+      existingTitles.add(sheetTitle);
+
+      const wsDept = workbook.addWorksheet(sheetTitle, {
+        properties: { tabColor: { argb: 'FF2563EB' } }
+      });
+
+      // Banner
+      wsDept.mergeCells("A1:K1");
+      const dH1 = wsDept.getCell("A1");
+      dH1.value = `DANH SÁCH THEO DÕI LỖI HSE - BỘ PHẬN: ${ds.name.toUpperCase()}`;
+      dH1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      dH1.font = { name: fontFam, size: 12.5, bold: true, color: { argb: 'FFFFFFFF' } };
+      dH1.alignment = { horizontal: 'center', vertical: 'middle' };
+      wsDept.getRow(1).height = 34;
+
+      wsDept.mergeCells("A2:K2");
+      const dH2 = wsDept.getCell("A2");
+      dH2.value = `Trích xuất riêng cho bộ phận ${ds.name} (${deptItems.length} hạng mục) — Phục vụ đôn đốc & kiểm tra khắc phục hiện trường`;
+      dH2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
+      dH2.font = { name: fontFam, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      dH2.alignment = { horizontal: 'center', vertical: 'middle' };
+      wsDept.getRow(2).height = 24;
+      wsDept.getRow(3).height = 10;
+
+      dataHeaders.forEach(h => {
+        const c = wsDept.getCell(`${h.col}4`);
+        c.value = h.name.replace(/\\n/g, '\n');
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+        c.font = { name: fontFam, size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+        c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        c.border = headerBorder;
+        wsDept.getColumn(h.col).width = h.width;
+      });
+      wsDept.getRow(4).height = 36;
+
+      deptItems.forEach((item, idx) => {
+        const rNum = 5 + idx;
+        wsDept.getRow(rNum).height = 68;
+
+        wsDept.getCell(`A${rNum}`).value = item.code;
+        wsDept.getCell(`B${rNum}`).value = item.date;
+        wsDept.getCell(`C${rNum}`).value = item.month;
+        wsDept.getCell(`D${rNum}`).value = item.department;
+        wsDept.getCell(`E${rNum}`).value = item.category;
+        wsDept.getCell(`F${rNum}`).value = item.zh_issue;
+        wsDept.getCell(`G${rNum}`).value = item.vn_issue;
+        wsDept.getCell(`H${rNum}`).value = item.drive_view_url ? `🔗 Xem Drive` : "(Không có ảnh)";
+        wsDept.getCell(`I${rNum}`).value = item.status;
+        wsDept.getCell(`J${rNum}`).value = item.improve_date;
+        wsDept.getCell(`K${rNum}`).value = item.note;
+
+        if (item.drive_view_url) {
+          wsDept.getCell(`H${rNum}`).hyperlink = item.drive_view_url;
+        }
+
+        dataHeaders.forEach(h => {
+          const cell = wsDept.getCell(`${h.col}${rNum}`);
+          cell.font = { name: fontFam, size: 9 };
+          cell.border = borderThin;
+
+          if (["A", "B", "C", "H", "J"].includes(h.col)) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          } else if (["D", "E"].includes(h.col)) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+          } else if (["F", "G", "K"].includes(h.col)) {
+            cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+          } else if (h.col === "I") {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            if (item.improved) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+              cell.font = { name: fontFam, size: 9, bold: true, color: { argb: 'FF065F46' } };
+            } else {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+              cell.font = { name: fontFam, size: 9, bold: true, color: { argb: 'FF9A3412' } };
+            }
+          }
+        });
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `HSE_Report_${monthYear}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 2500);
+  }
+
   async function exportExcelDocument() {
     const excelBtn = $("#hse-export-excel-btn");
     if (excelBtn) {
       excelBtn.disabled = true;
-      excelBtn.dataset.origText = excelBtn.innerHTML;
+      if (!excelBtn.dataset.origText) excelBtn.dataset.origText = excelBtn.innerHTML;
       excelBtn.innerHTML = `<span>⏳</span> Đang tạo Excel...`;
     }
 
     try {
       setLoading(true, "Đang khởi tạo báo cáo Excel (.xlsx) đa Sheet chuyên nghiệp kèm Dashboard & Biểu đồ...");
-      const payload = makePayload();
+
+      // 1. Primary Strategy: Fast client-side generation using ExcelJS
+      try {
+        await generateExcelWithExcelJS();
+        showToast("✓ Đã xuất file Excel (.xlsx) chuẩn Dashboard thành công!");
+        return;
+      } catch (clientErr) {
+        console.warn("ExcelJS client export fallback to lightweight backend stream:", clientErr);
+      }
+
+      // 2. Secondary Strategy: Lightweight Backend Stream (Stripping heavy base64 images to prevent Render 502/timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const p = makePayload();
+      const lightPayload = {
+        ...p,
+        findings: (p.findings || []).map(f => ({
+          ...f,
+          imageData: "",
+          imageAfterData: ""
+        }))
+      };
 
       const resp = await fetch("/api/hse/export_excel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(lightPayload),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -1436,7 +2084,7 @@
         }
       }
       if (!filename) {
-        const rawDate = payload.metadata?.date || "2026-09";
+        const rawDate = p.metadata?.date || "2026-09";
         const parts = rawDate.split("T")[0].split("-");
         const monthYear = (parts.length >= 2) ? `${parts[1]}_${parts[0]}` : "09_2026";
         filename = `HSE_Report_${monthYear}.xlsx`;
@@ -1453,14 +2101,12 @@
         URL.revokeObjectURL(url);
       }, 2500);
 
-      const isDriveLocked = resp.headers.get("X-Drive-Locked") === "true";
-      if (isDriveLocked) {
-        showToast("⚠️ Tệp Excel đang được mở ở máy trạm, hệ thống đã lưu bản sao dự phòng an toàn!");
-      } else {
-        showToast("✓ Đã xuất file Excel (.xlsx) chuẩn Dashboard thành công!");
-      }
+      showToast("✓ Đã xuất file Excel (.xlsx) chuẩn Dashboard thành công!");
     } catch (err) {
-      showToast(err.message || "Lỗi khi xuất file Excel.", true);
+      console.error("Lỗi xuất Excel:", err);
+      const isTimeout = err.name === "AbortError" || (err.message && err.message.includes("aborted"));
+      const msg = isTimeout ? "Quá thời gian chờ tạo Excel (>15s). Vui lòng kiểm tra lại kết nối mạng." : (err.message || "Lỗi khi xuất file Excel.");
+      showToast("❌ " + msg, true);
     } finally {
       if (excelBtn) {
         excelBtn.disabled = false;
@@ -1470,7 +2116,8 @@
     }
   }
 
-  async function importWordOld(file) {
+
+    async function importWordOld(file) {
     if (!file) return;
     try {
       setLoading(true, "Đang giải mã file Word tháng trước sang Báo Cáo Phục Tra Cải Thiện...");

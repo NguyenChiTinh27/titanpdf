@@ -62,7 +62,7 @@ class ReportMetadata(BaseModel):
 
 
 class ChecklistItem(BaseModel):
-    row: int = Field(..., description="Checklist row index (3..32)")
+    row: Union[int, str] = Field(..., description="Checklist row index (3..32)")
     category: Optional[str] = Field(default="")
     content: Optional[str] = Field(default="")
     method: Optional[str] = Field(default="")
@@ -73,7 +73,7 @@ class ChecklistItem(BaseModel):
 
 
 class FindingItem(BaseModel):
-    id: Optional[str] = Field(default="")
+    id: Optional[Union[str, int]] = Field(default="")
     departmentKey: Optional[str] = Field(default="san-xuat")
     departmentVi: Optional[str] = Field(default="Sản xuất")
     departmentZh: Optional[str] = Field(default="生产部")
@@ -267,10 +267,11 @@ class HSEStorageManager:
         return root
 
     @staticmethod
-    def get_or_create_monthly_folder(year_month: str) -> Tuple[Path, Path]:
+    def get_or_create_monthly_folder(year_month: str, sync_gas: bool = False) -> Tuple[Path, Path]:
         """
         Creates/returns:
         (hinh_anh_dir, bao_cao_dir) under HSE_ZhanChen_Storage/{year_month}/
+        Non-blocking: Never blocks the calling thread on Google Apps Script network requests.
         """
         clean_ym = year_month.strip() if year_month else ""
         if not re.match(r'^\d{4}-\d{2}$', clean_ym):
@@ -290,15 +291,19 @@ class HSEStorageManager:
         local_cache_img.mkdir(parents=True, exist_ok=True)
         local_cache_rpt.mkdir(parents=True, exist_ok=True)
 
-        # Cloud Drive monthly folder sync via GAS
-        try:
-            from core.msds_gas_sync import MSDSGASSyncService
-            if MSDSGASSyncService.is_configured() and clean_ym not in _monthly_drive_urls:
-                res = MSDSGASSyncService.get_or_create_monthly_folder(clean_ym)
-                if res and (res.get("folderUrl") or res.get("folder_url")):
-                    _monthly_drive_urls[clean_ym] = res.get("folderUrl") or res.get("folder_url")
-        except Exception:
-            pass
+        # Cloud Drive monthly folder sync via GAS (STRICTLY NON-BLOCKING BACKGROUND)
+        if sync_gas and clean_ym not in _monthly_drive_urls:
+            def _async_gas_folder_sync():
+                try:
+                    from core.msds_gas_sync import MSDSGASSyncService
+                    if MSDSGASSyncService.is_configured():
+                        res = MSDSGASSyncService.get_or_create_monthly_folder(clean_ym)
+                        if res and (res.get("folderUrl") or res.get("folder_url")):
+                            _monthly_drive_urls[clean_ym] = res.get("folderUrl") or res.get("folder_url")
+                except Exception:
+                    pass
+            import threading
+            threading.Thread(target=_async_gas_folder_sync, daemon=True).start()
 
         return img_dir, rpt_dir
 

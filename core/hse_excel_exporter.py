@@ -177,65 +177,100 @@ class HSEExcelExporter:
         # Check if dynamic findings are provided and valid
         valid_findings = [f for f in findings if (f.get("issueVi") or f.get("issueZh") or f.get("aiHint"))]
 
-        if valid_findings:
-            for idx, f in enumerate(valid_findings, 1):
-                code = f"HSE-{report_month.replace('-', '')[2:]}-{idx:02d}"
-                dept = normalize_department(
-                    f.get("departmentZh", ""),
-                    f.get("departmentVi", ""),
-                    f.get("departmentKey", "")
-                )
-                zh_issue = clean_zh(f.get("issueZh") or f.get("aiHint") or "")
-                vn_issue = clean_vn(f.get("issueVi") or f.get("suggestion") or "")
-                category = categorize_hse(zh_issue + " " + vn_issue)
-                improved = bool(f.get("improved", False))
-                status = "Đã cải thiện / 已改善" if improved else "Chờ xử lý / 待处理"
-                improve_date = f.get("recheckDate", "") if improved else ""
-                note = clean_vn(f.get("note") or f.get("suggestion") or "")
+        for idx, f in enumerate(valid_findings, 1):
+            code = f"HSE-{report_month.replace('-', '')[2:]}-{idx:02d}"
+            dept = normalize_department(
+                f.get("departmentZh", ""),
+                f.get("departmentVi", ""),
+                f.get("departmentKey", "")
+            )
+            zh_issue = clean_zh(f.get("issueZh") or f.get("aiHint") or "")
+            vn_issue = clean_vn(f.get("issueVi") or f.get("suggestion") or "")
+            category = categorize_hse(zh_issue + " " + vn_issue)
+            improved = bool(f.get("improved", False))
+            status = "Đã cải thiện / 已改善" if improved else "Chờ xử lý / 待处理"
+            improve_date = f.get("recheckDate", "") if improved else ""
+            note = clean_vn(f.get("note") or f.get("suggestion") or "")
 
-                # Handle image null-safely
-                img_path = ""
-                img_data = f.get("imageData") or ""
-                if img_data and isinstance(img_data, str) and temp_dir:
-                    try:
-                        clean_data = img_data.strip()
-                        if "," in clean_data:
-                            header, b64 = clean_data.split(",", 1)
-                        else:
-                            header, b64 = "", clean_data
-                        clean_b64 = re.sub(r"\s+", "", b64)
-                        if clean_b64:
-                            img_bytes = base64.b64decode(clean_b64)
-                            if len(img_bytes) > 0 and len(img_bytes) <= 30 * 1024 * 1024:
-                                ext = ".png" if "png" in header.lower() else ".jpg"
-                                tmp_img = os.path.join(temp_dir, f"finding_{idx}{ext}")
-                                with open(tmp_img, "wb") as ifile:
-                                    ifile.write(img_bytes)
-                                if os.path.exists(tmp_img) and os.path.getsize(tmp_img) > 0:
-                                    img_path = tmp_img
-                    except Exception as e:
-                        logger.warning(f"Failed to decode defect image safely: {e}")
-                        img_path = ""
-                elif f.get("imagePath") and os.path.exists(str(f["imagePath"])):
-                    img_path = str(f["imagePath"])
+            # Handle image null-safely
+            img_path = ""
+            img_data = f.get("imageData") or ""
+            if img_data and isinstance(img_data, str) and temp_dir:
+                try:
+                    clean_data = img_data.strip()
+                    if "," in clean_data:
+                        header, b64 = clean_data.split(",", 1)
+                    else:
+                        header, b64 = "", clean_data
+                    clean_b64 = re.sub(r"\s+", "", b64)
+                    if clean_b64:
+                        img_bytes = base64.b64decode(clean_b64)
+                        if len(img_bytes) > 0 and len(img_bytes) <= 30 * 1024 * 1024:
+                            ext = ".png" if "png" in header.lower() else ".jpg"
+                            tmp_img = os.path.join(temp_dir, f"finding_{idx}{ext}")
+                            with open(tmp_img, "wb") as ifile:
+                                ifile.write(img_bytes)
+                            if os.path.exists(tmp_img) and os.path.getsize(tmp_img) > 0:
+                                img_path = tmp_img
+                except Exception as e:
+                    logger.warning(f"Failed to decode defect image safely: {e}")
+                    img_path = ""
+            elif f.get("imagePath") and os.path.exists(str(f["imagePath"])):
+                img_path = str(f["imagePath"])
 
-                processed_defects.append({
-                    "idx": idx,
-                    "code": code,
-                    "date": f.get("date") or clean_date_str,
-                    "month": report_month,
-                    "department": dept,
-                    "category": category,
-                    "zh_issue": zh_issue,
-                    "vn_issue": vn_issue,
-                    "img_path": img_path,
-                    "drive_view_url": f.get("driveViewUrl") or f.get("driveDirectUrl") or "",
-                    "status": status,
-                    "improve_date": improve_date,
-                    "note": note
-                })
-        else:
-            # Fallback to standard 17 defects dataset
+            processed_defects.append({
+                "idx": idx,
+                "code": code,
+                "date": f.get("date") or clean_date_str,
+                "month": report_month,
+                "department": dept,
+                "category": category,
+                "zh_issue": zh_issue,
+                "vn_issue": vn_issue,
+                "img_path": img_path,
+                "drive_view_url": f.get("driveViewUrl") or f.get("driveDirectUrl") or "",
+                "status": status,
+                "improve_date": improve_date,
+                "note": note
+            })
+
+        # Also collect failed checklist items from the 26 inspection items
+        checklist = payload.get("checklist", []) if payload else []
+        failed_items = [c for c in checklist if c.get("status") == "fail"]
+        seen_issues = {d.get("vn_issue", "").strip().lower() for d in processed_defects if d.get("vn_issue")}
+
+        for c in failed_items:
+            vn_issue = clean_vn(c.get("issueVi") or "Chưa đạt tiêu chuẩn an toàn EHS (Cần khắc phục)")
+            zh_issue = clean_zh(c.get("issueZh") or "未达到EHS安全标准 (需整改)")
+            if vn_issue.strip().lower() in seen_issues:
+                continue
+            seen_issues.add(vn_issue.strip().lower())
+
+            r_num = c.get("row") or (len(processed_defects) + 1)
+            code = f"HSE-{report_month.replace('-', '')[2:]}-CK{r_num}"
+            dept = normalize_department("", "Sản xuất", "san-xuat")
+            category = categorize_hse(zh_issue + " " + vn_issue)
+            improved = bool(c.get("improved", False))
+            status = "Đã cải thiện / 已改善" if improved else "Chờ xử lý / 待处理"
+
+            processed_defects.append({
+                "idx": len(processed_defects) + 1,
+                "code": code,
+                "date": clean_date_str,
+                "month": report_month,
+                "department": dept,
+                "category": category,
+                "zh_issue": zh_issue,
+                "vn_issue": vn_issue,
+                "img_path": "",
+                "drive_view_url": "",
+                "status": status,
+                "improve_date": clean_date_str if improved else "",
+                "note": "Hạng mục kiểm tra 26 tiêu chuẩn xưởng ZhanChen"
+            })
+
+        # Fallback to standard 17 defects dataset ONLY if no findings and no failed checklist items
+        if not processed_defects:
             raw_defects = []
             if DEFAULT_DEFECTS_JSON.exists():
                 try:
