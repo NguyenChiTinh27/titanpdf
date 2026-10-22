@@ -212,13 +212,40 @@
     }, 1000);
   }
 
+  function normalizeDateToIso(rawDate) {
+    if (!rawDate) return new Date().toISOString().substring(0, 10);
+    const s = String(rawDate).trim().split("T")[0].split(" ")[0].replace("Z", "");
+    const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if (dmy) {
+      const day = dmy[1].padStart(2, "0");
+      const month = dmy[2].padStart(2, "0");
+      const year = dmy[3];
+      return `${year}-${month}-${day}`;
+    }
+    const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    if (ymd) {
+      const year = ymd[1];
+      const month = ymd[2].padStart(2, "0");
+      const day = ymd[3].padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    if (/^\d{8}$/.test(s)) {
+      return `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      return s;
+    }
+    return new Date().toISOString().substring(0, 10);
+  }
+
   // ==========================================================================
   // DATA PAYLOAD BUILDER & NORMALIZATION
   // ==========================================================================
   function makePayload() {
     const dateInput = $("#hse-inspection-date");
     const inspectorsInput = $("#hse-inspectors");
-    const dateVal = dateInput ? dateInput.value : state.metadata.date;
+    const rawDateVal = dateInput ? dateInput.value : state.metadata.date;
+    const dateVal = normalizeDateToIso(rawDateVal);
     const inspectorsVal = inspectorsInput ? inspectorsInput.value : state.metadata.inspectors;
 
     return {
@@ -1320,8 +1347,9 @@
     const timeoutId = setTimeout(() => controller.abort(), 35000);
 
     try {
-      const dateVal = ($("#hse-inspection-date")?.value || "").trim() || state.metadata.date || new Date().toISOString().substring(0, 10);
-      if ($("#hse-inspection-date") && !$("#hse-inspection-date").value) {
+      const rawDate = ($("#hse-inspection-date")?.value || "").trim() || state.metadata.date;
+      const dateVal = normalizeDateToIso(rawDate);
+      if ($("#hse-inspection-date")) {
         $("#hse-inspection-date").value = dateVal;
       }
       state.metadata.date = dateVal;
@@ -1473,8 +1501,8 @@
     workbook.creator = "LUV-PDF HSE Studio ZhanChen";
     workbook.created = new Date();
 
-    const rawDate = ($("#hse-inspection-date")?.value || "").trim() || state.metadata.date || new Date().toISOString().substring(0, 10);
-    const cleanDateStr = rawDate.split("T")[0];
+    const rawDate = ($("#hse-inspection-date")?.value || "").trim() || state.metadata.date;
+    const cleanDateStr = normalizeDateToIso(rawDate);
     const parts = cleanDateStr.split("-");
     const monthYear = (parts.length >= 2) ? `${parts[1]}_${parts[0]}` : "09_2026";
     const reportMonth = cleanDateStr.substring(0, 7) || "2026-10";

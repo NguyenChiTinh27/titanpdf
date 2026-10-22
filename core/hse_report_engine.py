@@ -234,6 +234,73 @@ def normalize_space(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def parse_flexible_date(raw_date: Any) -> date:
+    """
+    Parses date from various formats flexibly:
+    - date or datetime instance
+    - ISO format: YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS...
+    - Vietnamese / European: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    - Chinese / Japanese: YYYY/MM/DD, YYYY.MM.DD, YYYY年MM月DD日
+    - Compact: YYYYMMDD
+    Falls back to date.today() if invalid or None.
+    """
+    if isinstance(raw_date, datetime):
+        return raw_date.date()
+    if isinstance(raw_date, date):
+        return raw_date
+    if not raw_date:
+        return date.today()
+
+    s = str(raw_date).strip()
+    if not s:
+        return date.today()
+
+    # Strip ISO time if present
+    s = s.split("T")[0].split(" ")[0].replace("Z", "").strip()
+
+    # Check for Chinese date format: 2026年10月21日
+    m_cn = re.match(r"^(\d{4})年(\d{1,2})月(\d{1,2})日?$", s)
+    if m_cn:
+        try:
+            return date(int(m_cn.group(1)), int(m_cn.group(2)), int(m_cn.group(3)))
+        except ValueError:
+            pass
+
+    # Normalize delimiters / . _ to -
+    # Case: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+    m_dmy = re.match(r"^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})$", s)
+    if m_dmy:
+        day, month, year = int(m_dmy.group(1)), int(m_dmy.group(2)), int(m_dmy.group(3))
+        try:
+            return date(year, month, day)
+        except ValueError:
+            pass
+
+    # Case: YYYY/MM/DD or YYYY-MM-DD or YYYY.MM.DD
+    m_ymd = re.match(r"^(\d{4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})$", s)
+    if m_ymd:
+        year, month, day = int(m_ymd.group(1)), int(m_ymd.group(2)), int(m_ymd.group(3))
+        try:
+            return date(year, month, day)
+        except ValueError:
+            pass
+
+    # Case: YYYYMMDD (8 digits)
+    if len(s) == 8 and s.isdigit():
+        try:
+            return date(int(s[:4]), int(s[4:6]), int(s[6:8]))
+        except ValueError:
+            pass
+
+    # Standard isoformat try
+    try:
+        return date.fromisoformat(s)
+    except Exception:
+        pass
+
+    return date.today()
+
+
 def classify_department_from_text(hint: str) -> tuple[str, str, str]:
     hint_lower = (hint or "").casefold()
     if any(k in hint_lower for k in ("kho", "chứa hàng", "pallet", "thành phẩm")):
@@ -798,12 +865,7 @@ def strip_original_findings(doc: Document) -> None:
 
 
 def apply_metadata(doc: Document, metadata: dict[str, Any], report_type: str = "inspection") -> None:
-    raw_date = str(metadata.get("date") or date.today().isoformat())
-    try:
-        clean_date_str = raw_date.split("T")[0].replace("Z", "")
-        dt = date.fromisoformat(clean_date_str)
-    except Exception as exc:
-        raise ValueError(f"Ngày kiểm tra không hợp lệ: {raw_date}") from exc
+    dt = parse_flexible_date(metadata.get("date"))
 
     year_str = str(dt.year)
     month_str = f"{dt.month:02d}"
@@ -870,9 +932,18 @@ def apply_checklist(
                 issue_vi = normalize_space(result.get("issueVi", ""))
                 issue_zh = normalize_space(result.get("issueZh", ""))
                 if not issue_vi and not issue_zh:
-                    raise ValueError(f"Mục checklist dòng {row_index} chưa đủ vấn đề Việt–Trung.")
-                if not issue_zh:
-                    issue_zh = translate_vi_to_zh(issue_vi)
+                    issue_vi = "Chưa đạt tiêu chuẩn an toàn EHS (Cần khắc phục)"
+                    issue_zh = "未达到EHS安全标准 (需整改)"
+                elif not issue_zh:
+                    try:
+                        issue_zh = translate_vi_to_zh(issue_vi)
+                    except Exception:
+                        issue_zh = f"整改问题: {issue_vi}"
+                elif not issue_vi:
+                    try:
+                        issue_vi = translate_vi_to_zh(issue_zh, kind="text")
+                    except Exception:
+                        issue_vi = f"Vấn đề an toàn: {issue_zh}"
                 clean_issue_zh = re.sub(r"^问题[:：]\s*", "", issue_zh, flags=re.IGNORECASE).strip()
                 clean_issue_vi = re.sub(r"^Vấn đề[:：]\s*", "", issue_vi, flags=re.IGNORECASE).strip()
                 is_improved = bool(result.get("improved", False))
@@ -1080,7 +1151,8 @@ def build_docx(
     checklist = payload.get("checklist") or []
     findings = payload.get("findings") or []
     report_type = payload.get("reportType") or payload.get("mode") or "inspection"
-    inspection_date = normalize_space(metadata.get("date")) or date.today().isoformat()
+    d_obj = parse_flexible_date(metadata.get("date"))
+    inspection_date = d_obj.strftime("%Y-%m-%d")
 
     doc = Document(str(tpl_path))
     apply_metadata(doc, metadata, report_type=report_type)
@@ -1159,6 +1231,8 @@ def safe_write_bytes(target_file: Path | str, data: bytes) -> tuple[Path, bool]:
     Returns: (actual_saved_path, was_locked_flag).
     """
     target_path = Path(target_file)
+    clean_name = re.sub(r'[\\/*?:"<>|]', '_', target_path.name)
+    target_path = target_path.parent / clean_name
     target_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(target_path, "wb") as f:

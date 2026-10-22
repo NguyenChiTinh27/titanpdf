@@ -170,9 +170,10 @@ class HSEExcelExporter:
 
         findings = payload.get("findings", []) if payload else []
         meta = payload.get("metadata", {}) if payload else {}
-        report_date = meta.get("date") or "2026-09-30"
-        clean_date_str = report_date.split("T")[0]
-        report_month = clean_date_str[:7] if len(clean_date_str) >= 7 else "2026-09"
+        from core.hse_report_engine import parse_flexible_date
+        d_obj = parse_flexible_date(meta.get("date") or "2026-09-30")
+        clean_date_str = d_obj.strftime("%Y-%m-%d")
+        report_month = d_obj.strftime("%Y-%m")
 
         # Check if dynamic findings are provided and valid
         valid_findings = [f for f in findings if (f.get("issueVi") or f.get("issueZh") or f.get("aiHint"))]

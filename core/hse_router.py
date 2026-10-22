@@ -323,7 +323,9 @@ class HSEStorageManager:
         Generates standard name:
         [YYYYMMDD]_[BoPhan]_[DongChecklist/Loi]_[Truoc/SauCaiThien].jpg
         """
-        clean_date = (date_str or date.today().isoformat()).split("T")[0].replace("-", "")[:8]
+        from core.hse_report_engine import parse_flexible_date
+        d_obj = parse_flexible_date(date_str)
+        clean_date = d_obj.strftime("%Y%m%d")
         dept_slug = HSEStorageManager.normalize_department_slug(dept_vi, dept_key)
 
         if item_type == "checklist" and row:
@@ -361,13 +363,10 @@ def get_checklist_schema():
 def generate_docx_endpoint(payload: GenerateReportRequest):
     from core.hse_report_engine import build_docx, safe_write_bytes
 
-    raw_date = payload.metadata.date
-    if raw_date:
-        try:
-            clean_date_str = raw_date.split("T")[0].replace("Z", "")
-            date.fromisoformat(clean_date_str)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Ngày kiểm tra không hợp lệ: {raw_date}")
+    from core.hse_report_engine import parse_flexible_date
+    d_obj = parse_flexible_date(payload.metadata.date)
+    clean_date = d_obj.strftime("%Y-%m-%d")
+    payload.metadata.date = clean_date
 
     # Auto-fill missing bilingual issues for failed checklist items instead of failing
     for item in payload.checklist:
@@ -378,6 +377,7 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
                 item.issueZh = "未达到EHS安全标准 (需整改)"
 
     payload_dict = payload.model_dump()
+    payload_dict["metadata"]["date"] = clean_date
 
     try:
         docx_bytes = build_docx(payload_dict)
@@ -385,9 +385,6 @@ def generate_docx_endpoint(payload: GenerateReportRequest):
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Lỗi tạo tài liệu Word: {exc}")
-
-    insp_date = payload.metadata.date or date.today().isoformat()
-    clean_date = insp_date.split("T")[0]
     suffix = "_Improvement" if payload.get_effective_mode() == "improvement" else ""
     filename = f"HSE_Report_{clean_date}{suffix}.docx"
     bilingual_filename = f"越南展辰_HSE_办巡厂报告_{clean_date}{suffix}.docx"
@@ -453,13 +450,10 @@ async def export_excel_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=f"Lỗi tạo tài liệu Excel: {exc}")
 
     meta = (payload_dict or {}).get("metadata", {})
-    raw_date = meta.get("date") or "2026-09-30"
-    clean_date = raw_date.split("T")[0]
-    parts = clean_date.split("-")
-    if len(parts) >= 2:
-        month_year_str = f"{parts[1]}_{parts[0]}"
-    else:
-        month_year_str = "09_2026"
+    from core.hse_report_engine import parse_flexible_date
+    d_obj = parse_flexible_date(meta.get("date"))
+    clean_date = d_obj.strftime("%Y-%m-%d")
+    month_year_str = d_obj.strftime("%m_%Y")
     filename = f"HSE_Report_{month_year_str}.xlsx"
     target_path = REPORTS_DIR / filename
 
@@ -503,8 +497,18 @@ async def export_excel_endpoint(request: Request):
 
 @hse_router.post("/preview_docx")
 def preview_docx_endpoint(payload: GenerateReportRequest):
-    from core.hse_report_engine import build_docx, safe_write_bytes
+    from core.hse_report_engine import build_docx, safe_write_bytes, parse_flexible_date
+    d_obj = parse_flexible_date(payload.metadata.date)
+    clean_date = d_obj.strftime("%Y-%m-%d")
+    payload.metadata.date = clean_date
+    for item in payload.checklist:
+        if item.status == "fail":
+            if not item.issueVi or not item.issueVi.strip():
+                item.issueVi = "Chưa đạt tiêu chuẩn an toàn EHS (Cần khắc phục)"
+            if not item.issueZh or not item.issueZh.strip():
+                item.issueZh = "未达到EHS安全标准 (需整改)"
     payload_dict = payload.model_dump()
+    payload_dict["metadata"]["date"] = clean_date
     try:
         docx_bytes = build_docx(payload_dict)
     except ValueError as exc:
@@ -684,12 +688,16 @@ def save_ai_config(cfg: AIConfigModel, _: str = Depends(require_owner)):
 def save_report_endpoint(req: SaveReportRequest):
     from core.hse_report_engine import build_docx, safe_write_bytes
 
+    from core.hse_report_engine import parse_flexible_date
+    d_obj = parse_flexible_date(req.metadata.date)
+    clean_date = d_obj.strftime("%Y-%m-%d")
+    req.metadata.date = clean_date
+
     payload_dict = req.model_dump()
     report_id = req.id or f"hse_{int(datetime.now().timestamp()*1000)}"
     payload_dict["id"] = report_id
     payload_dict["reportType"] = req.get_effective_mode()
-    insp_date = req.metadata.date or date.today().isoformat()
-    clean_date = insp_date.split("T")[0]
+    payload_dict["metadata"]["date"] = clean_date
 
     json_filename = f"HSE_Report_{clean_date}_{report_id}.json"
     json_path = REPORTS_DIR / json_filename
@@ -910,8 +918,10 @@ def upload_image_endpoint(req: UploadImageRequest):
         raise HTTPException(status_code=400, detail=f"Không thể giải mã ảnh: {e}")
 
     # Determine date & month
-    raw_date = (req.date or date.today().isoformat()).split("T")[0]
-    year_month = raw_date[:7] if len(raw_date) >= 7 else date.today().strftime("%Y-%m")
+    from core.hse_report_engine import parse_flexible_date
+    d_obj = parse_flexible_date(req.date)
+    raw_date = d_obj.strftime("%Y-%m-%d")
+    year_month = d_obj.strftime("%Y-%m")
 
     # Generate standardized filename: [YYYYMMDD]_[BoPhan]_[DongChecklist/Loi]_[Truoc/SauCaiThien].jpg
     filename = req.customFilename or HSEStorageManager.build_standard_image_filename(
