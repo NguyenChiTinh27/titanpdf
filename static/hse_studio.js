@@ -130,19 +130,24 @@
   }
 
   // ==========================================================================
-  // INDEXEDDB PERSISTENCE (HseStudioDB · store: current_session · key: latest)
+  // INDEXEDDB PERSISTENCE (HseStudioDB · store: current_session & saved_reports_archive)
   // ==========================================================================
   const DB_NAME = "HseStudioDB";
+  const DB_VERSION = 2;
   const STORE_NAME = "current_session";
+  const ARCHIVE_STORE_NAME = "saved_reports_archive";
 
   function initDb() {
     return new Promise((resolve) => {
       try {
-        const req = indexedDB.open(DB_NAME, 1);
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = (e) => {
           const db = e.target.result;
           if (!db.objectStoreNames.contains(STORE_NAME)) {
             db.createObjectStore(STORE_NAME);
+          }
+          if (!db.objectStoreNames.contains(ARCHIVE_STORE_NAME)) {
+            db.createObjectStore(ARCHIVE_STORE_NAME, { keyPath: "id" });
           }
         };
         req.onsuccess = (e) => resolve(e.target.result);
@@ -151,6 +156,59 @@
         resolve(null);
       }
     });
+  }
+
+  // Lưu vĩnh viễn báo cáo vào kho lưu trữ máy khách IndexedDB (Không bao giờ mất khi server ngủ/restart)
+  async function archiveReportToIndexedDb(reportData) {
+    try {
+      const db = await initDb();
+      if (!db) return;
+      const id = reportData.id || `hse_${Date.now()}`;
+      const cleanDate = reportData.metadata?.date || reportData.date || new Date().toISOString().substring(0, 10);
+      const record = {
+        id,
+        filename: reportData.filename || `HSE_Report_${cleanDate}_${id}.json`,
+        title: reportData.metadata?.title || reportData.title || `Báo cáo HSE ${cleanDate}`,
+        date: cleanDate,
+        reportType: reportData.reportType || reportData.mode || "inspection",
+        findingsCount: (reportData.findings || []).length,
+        savedAt: Date.now(),
+        payload: reportData
+      };
+      const tx = db.transaction(ARCHIVE_STORE_NAME, "readwrite");
+      tx.objectStore(ARCHIVE_STORE_NAME).put(record);
+      await new Promise(r => { tx.oncomplete = r; tx.onerror = r; });
+    } catch (e) {
+      console.warn("Failed to archive report to IndexedDB:", e);
+    }
+  }
+
+  // Lấy toàn bộ báo cáo từ kho lưu trữ máy khách IndexedDB
+  async function getAllArchivedReportsFromDb() {
+    try {
+      const db = await initDb();
+      if (!db || !db.objectStoreNames.contains(ARCHIVE_STORE_NAME)) return [];
+      return new Promise((resolve) => {
+        const tx = db.transaction(ARCHIVE_STORE_NAME, "readonly");
+        const req = tx.objectStore(ARCHIVE_STORE_NAME).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Xóa báo cáo khỏi kho lưu trữ máy khách IndexedDB
+  async function deleteArchivedReportFromDb(reportId) {
+    try {
+      const db = await initDb();
+      if (!db || !db.objectStoreNames.contains(ARCHIVE_STORE_NAME)) return;
+      const tx = db.transaction(ARCHIVE_STORE_NAME, "readwrite");
+      tx.objectStore(ARCHIVE_STORE_NAME).delete(reportId);
+    } catch (e) {
+      console.warn("Failed to delete archived report:", e);
+    }
   }
 
   async function saveSessionToDb(payload) {
@@ -2321,6 +2379,12 @@
       if (res.id) {
         state.currentReportId = res.id;
       }
+      // Lưu vĩnh viễn báo cáo vào kho lưu trữ máy khách IndexedDB (chống trôi khi Render ngủ/restart)
+      await archiveReportToIndexedDb({
+        ...payload,
+        id: res.id || state.currentReportId,
+        filename: res.filename || res.json_file
+      });
       triggerAutoSave();
       await updateHseSavedCountBadge();
 
@@ -2396,10 +2460,54 @@
     `;
 
     try {
-      const resp = await fetch("/api/hse/reports/list");
-      if (!resp.ok) throw new Error("Không thể tải danh sách báo cáo từ máy chủ.");
-      const data = await resp.json();
-      let rawReports = data.reports || [];
+      // 1. Nạp danh sách từ IndexedDB máy khách (vĩnh viễn)
+      const archivedReports = await getAllArchivedReportsFromDb();
+
+      // 2. Nạp từ máy chủ
+      let serverReports = [];
+      try {
+        const resp = await fetch("/api/hse/reports/list");
+        if (resp.ok) {
+          const data = await resp.json();
+          serverReports = data.reports || [];
+        }
+      } catch (srvErr) {
+        console.warn("Máy chủ đang ngủ hoặc mất kết nối, nạp từ cache máy khách:", srvErr);
+      }
+
+      // 3. Hợp nhất hai nguồn dữ liệu
+      const mergedMap = new Map();
+      serverReports.forEach(r => {
+        const k = String(r.id || r.filename || "").toLowerCase();
+        if (k) mergedMap.set(k, r);
+      });
+
+      archivedReports.forEach(ar => {
+        const k = String(ar.id || ar.filename || "").toLowerCase();
+        if (k && !mergedMap.has(k)) {
+          mergedMap.set(k, {
+            id: ar.id,
+            filename: ar.filename,
+            title: ar.title,
+            date: ar.date,
+            reportType: ar.reportType,
+            findingsCount: ar.findingsCount,
+            docx_file: ar.filename ? ar.filename.replace(/\.json$/, ".docx") : "",
+            isLocalArchived: true,
+            payload: ar.payload
+          });
+          // Tự động đẩy bù lên máy chủ trong nền nếu máy chủ vừa ngủ dậy
+          if (ar.payload) {
+            fetch("/api/hse/reports/save", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...ar.payload, save_docx: true })
+            }).catch(() => {});
+          }
+        }
+      });
+
+      let rawReports = Array.from(mergedMap.values());
       try {
         const deletedReports = JSON.parse(localStorage.getItem("deleted_hse_report_ids") || "[]");
         const delSet = new Set(deletedReports.map(x => String(x).toLowerCase()));
@@ -2515,6 +2623,9 @@
               </button>
               <button type="button" onclick="downloadReportDocx('${escapeHtml(docxName)}')" title="Tải xuống tệp Word (.docx)" style="display:inline-flex; align-items:center; gap:4px; padding:6px 10px; font-size:12px; font-weight:700; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
                 📄 Tải Word
+              </button>
+              <button type="button" onclick="downloadReportExcel('${escapeHtml(r.filename || r.id)}')" title="Tải xuống tệp Excel (.xlsx)" style="display:inline-flex; align-items:center; gap:4px; padding:6px 10px; font-size:12px; font-weight:700; background:#f0fdf4; color:#15803d; border:1px solid #86efac; border-radius:6px; cursor:pointer;">
+                📊 Tải Excel
               </button>
               <button type="button" onclick="deleteHseReport('${escapeHtml(r.filename)}')" title="Xóa bản lưu này" style="display:inline-flex; align-items:center; padding:6px 9px; font-size:12px; font-weight:700; background:#fef2f2; color:#ef4444; border:1px solid #fee2e2; border-radius:6px; cursor:pointer;">
                 🗑️
@@ -2669,8 +2780,17 @@
     showToast(`📄 Đang tải tệp Word: ${cleanName}`);
   }
 
+  function downloadReportExcel(identifier) {
+    if (!identifier) return;
+    showToast("📊 Đang khởi tạo và tải file Excel báo cáo...");
+    window.location.href = `/api/hse/reports/download-excel/${encodeURIComponent(identifier)}`;
+  }
+  window.downloadReportExcel = downloadReportExcel;
+
   async function deleteHseReport(filename) {
     if (!filename) return;
+    // Xóa khỏi kho lưu trữ máy khách
+    await deleteArchivedReportFromDb(filename);
     if (!confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn bản lưu báo cáo "${filename}"?`)) {
       return;
     }
@@ -3077,6 +3197,7 @@
   window.loadHseReportById = loadHseReportById;
   window.cloneReportToImprovement = cloneReportToImprovement;
   window.downloadReportDocx = downloadReportDocx;
+  window.downloadReportExcel = downloadReportExcel;
   window.deleteHseReport = deleteHseReport;
   window.openHseGoogleDriveFolder = openHseGoogleDriveFolder;
   window.updateHseSavedCountBadge = updateHseSavedCountBadge;

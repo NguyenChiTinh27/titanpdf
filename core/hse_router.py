@@ -817,6 +817,31 @@ def save_report_endpoint(req: SaveReportRequest):
         except Exception as e:
             print(f"[HSE_DRIVE_SYNC_WARNING] Error syncing to drive: {e}", flush=True)
 
+    # 2b. Cloud Google Drive sync via Google Apps Script (GAS) if configured
+    try:
+        from core.msds_gas_sync import MSDSGASSyncService
+        if MSDSGASSyncService.is_configured():
+            with open(json_path, "rb") as _jf:
+                _jbytes = _jf.read()
+            upload_res = MSDSGASSyncService.upload_file_to_drive(
+                file_bytes=_jbytes,
+                filename=json_filename,
+                mime_type="application/json",
+                subfolder="HSE_BaoCao"
+            )
+            if docx_bytes:
+                MSDSGASSyncService.upload_file_to_drive(
+                    file_bytes=docx_bytes,
+                    filename=docx_filename,
+                    mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    subfolder="HSE_BaoCao"
+                )
+            if upload_res.get("fileId") or upload_res.get("file_id"):
+                drive_saved = True
+                drive_report_path = upload_res.get("viewUrl") or upload_res.get("view_url") or "Google Drive Cloud"
+    except Exception as _gas_rep_err:
+        print(f"[HSE_GAS_REPORT_SYNC_WARNING] Error syncing report to GAS Drive: {_gas_rep_err}", flush=True)
+
     # 3. Synchronize report violations directly into Master Defect Tracker
     try:
         from core.hse_defect_tracker import DefectAggregatorService
@@ -853,6 +878,47 @@ def download_report_docx_endpoint(filename: str):
         str(p),
         filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+
+@hse_router.get("/reports/download-excel/{identifier}")
+def download_report_excel_endpoint(identifier: str):
+    from core.hse_excel_exporter import HSEExcelExporter
+
+    target = None
+    clean_id = identifier.replace(".json", "").replace(".xlsx", "")
+    for f in REPORTS_DIR.glob("*.json"):
+        if f.name == identifier or clean_id in f.name:
+            target = f
+            break
+
+    if not target or not target.exists():
+        drive_dir = detect_google_drive()
+        if drive_dir:
+            target_folder = drive_dir if drive_dir.name == "HSE_BaoCao" else (drive_dir / "HSE_BaoCao")
+            if target_folder.exists():
+                for f in target_folder.glob("*.json"):
+                    if f.name == identifier or clean_id in f.name:
+                        target = f
+                        break
+
+    if not target or not target.exists():
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu báo cáo '{identifier}' để xuất Excel.")
+
+    with open(target, "r", encoding="utf-8") as jf:
+        payload = json.load(jf)
+
+    exporter = HSEExcelExporter()
+    excel_bytes = exporter.export_bytes(payload)
+    out_name = target.stem + ".xlsx"
+    quoted_name = urllib.parse.quote(out_name)
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{out_name}\"; filename*=UTF-8''{quoted_name}"
+        }
     )
 
 

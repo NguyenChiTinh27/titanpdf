@@ -953,6 +953,11 @@ class MSDSExtractorEngine:
     """Động cơ đọc hiểu, trích xuất 16 mục GHS và phân tích sâu dữ liệu MSDS."""
 
     @classmethod
+    def _enrich_chemical_spec_fields(cls, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Chuẩn hóa và đồng bộ 11 trường thông số MSDS / CIL (cả snake_case và camelCase)."""
+        return MSDSDatabase._enrich_chemical_spec_fields(item)
+
+    @classmethod
     def _extract_text_from_docx_object(cls, doc_path: str) -> str:
         """Đọc toàn bộ đoạn văn, bảng biểu (kể cả bảng lồng nhau) và header/footer từ tệp DOCX theo đúng thứ tự 16 mục GHS."""
         d = docx.Document(doc_path)

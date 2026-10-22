@@ -382,10 +382,8 @@ class HSEExcelExporter:
             # KPI Cards (Rows 5-7)
             kpis = [
                 ("B", "C", "TỔNG SỐ LỖI GHI NHẬN / 总隐患数量", f"=COUNTA('📋 Tổng Hợp Lỗi'!A5:A{last_row})", "1E40AF", "DBEAFE", "1E40AF", "0"),
-                ("E", "F", "CẢI THIỆN / 已改善
-已改善完成", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Cải thiện*")', "065F46", "D1FAE5", "065F46", "0"),
-                ("H", "I", "CHƯA CẢI THIỆN / 未改善
-待处理/未改善", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Chưa cải thiện*")', "92400E", "FEF3C7", "92400E", "0"),
+                ("E", "F", "CẢI THIỆN / 已改善\n已改善完成", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Cải thiện*")', "065F46", "D1FAE5", "065F46", "0"),
+                ("H", "I", "CHƯA CẢI THIỆN / 未改善\n待处理/未改善", f'=COUNTIF(\'📋 Tổng Hợp Lỗi\'!I5:I{last_row}, "*Chưa cải thiện*")', "92400E", "FEF3C7", "92400E", "0"),
                 ("K", "L", "TỶ LỆ HOÀN THÀNH / 整改完成率", "=IF(B6>0, E6/B6, 0)", "5B21B6", "EDE9FE", "5B21B6", "0.0%")
             ]
             ws_dash.row_dimensions[5].height = 26
