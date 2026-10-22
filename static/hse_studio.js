@@ -2392,10 +2392,15 @@
       let rawReports = data.reports || [];
       try {
         const deletedReports = JSON.parse(localStorage.getItem("deleted_hse_report_ids") || "[]");
-        if (deletedReports.length > 0) {
-          const delSet = new Set(deletedReports.map(x => String(x).toLowerCase()));
-          rawReports = rawReports.filter(r => !delSet.has(String(r.filename || "").toLowerCase()) && !delSet.has(String(r.id || "").toLowerCase()));
-        }
+        const delSet = new Set(deletedReports.map(x => String(x).toLowerCase()));
+        rawReports = rawReports.filter(r => {
+          const fName = String(r.filename || "").toLowerCase();
+          const rId = String(r.id || "").toLowerCase();
+          if (delSet.has(fName) || delSet.has(rId)) return false;
+          // Loại bỏ các báo cáo cũ hse_17918...
+          if (rId.includes("17918") || fName.includes("17918")) return false;
+          return true;
+        });
       } catch (_) {}
       savedReportsList = rawReports;
       

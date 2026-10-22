@@ -70,3 +70,6 @@ run_*.bat
 run_*.vbs
 
 data/HSE_ZhanChen_Storage/
+data/hse_reports/*
+!data/hse_reports/.gitkeep
+

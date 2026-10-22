@@ -421,22 +421,23 @@ class DefectAggregatorService:
         except Exception as e:
             logger.error(f"Could not clear overrides file: {e}")
 
-        # 3. Gửi lệnh xóa sạch lên Google Apps Script
+        # 3. Gửi lệnh xóa sạch lên Google Apps Script (hỗ trợ cả script mới lẫn script cũ)
         gas_url = cls.get_gas_url()
-        try:
-            gas_payload = {
-                "action": "clearAllDefects",
-                "timestamp": datetime.now().isoformat()
-            }
-            requests.post(
-                gas_url,
-                data=json.dumps(gas_payload, ensure_ascii=False),
-                headers={"Content-Type": "text/plain;charset=utf-8"},
-                allow_redirects=True,
-                timeout=5.0
-            )
-        except Exception:
-            pass
+        for act in ["clearAllDefects", "clearAll"]:
+            try:
+                gas_payload = {
+                    "action": act,
+                    "timestamp": datetime.now().isoformat()
+                }
+                requests.post(
+                    gas_url,
+                    data=json.dumps(gas_payload, ensure_ascii=False),
+                    headers={"Content-Type": "text/plain;charset=utf-8"},
+                    allow_redirects=True,
+                    timeout=5.0
+                )
+            except Exception:
+                pass
 
         return {
             "success": True,
@@ -461,15 +462,29 @@ class DefectAggregatorService:
         """Tổng hợp danh sách sự cố Master Defect Tracker (tôn trọng 100% Tombstones)."""
         tb = HSETombstoneManager.load_tombstones()
 
-        # Nếu người dùng đã xóa tất cả, trả về rỗng TUYỆT ĐỐI không phục hồi
-        if not force_reconcile and tb.get("cleared_all_defects") is True:
-            return {
-                "total": 0,
-                "defects": [],
-                "available_months": [],
-                "available_departments": [],
-                "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
-            }
+        # Nếu người dùng đã xóa tất cả, trả về rỗng TUYỆT ĐỐI không tự ý phục hồi
+        if tb.get("cleared_all_defects") is True:
+            cleared_at = tb.get("cleared_all_defects_at") or ""
+            has_new_reports = False
+            for f in HSE_REPORTS_DIR.glob("*.json"):
+                if HSETombstoneManager.is_report_deleted(f.stem, f.name):
+                    continue
+                try:
+                    f_mtime = datetime.fromtimestamp(f.stat().st_mtime).isoformat()
+                    if not cleared_at or f_mtime > cleared_at:
+                        has_new_reports = True
+                        break
+                except Exception:
+                    pass
+
+            if not has_new_reports:
+                return {
+                    "total": 0,
+                    "defects": [],
+                    "available_months": [],
+                    "available_departments": [],
+                    "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
+                }
 
         overrides = cls.load_overrides()
         baseline_defects: List[Dict[str, Any]] = []
@@ -883,7 +898,31 @@ class DefectAggregatorService:
         except Exception as e:
             status_msg = f"Lỗi kết nối GAS: {str(e)}"
 
-        all_defects = cls.aggregate_all_defects(force_reconcile=True)
+        tb = HSETombstoneManager.load_tombstones()
+        if tb.get("cleared_all_defects") is True:
+            # Nếu hệ thống đang ở trạng thái đã xóa sạch, lập tức đè lệnh xóa lên GAS
+            try:
+                for act in ["clearAllDefects", "clearAll"]:
+                    requests.post(
+                        gas_url,
+                        data=json.dumps({"action": act, "timestamp": datetime.now().isoformat()}, ensure_ascii=False),
+                        headers={"Content-Type": "text/plain;charset=utf-8"},
+                        allow_redirects=True,
+                        timeout=5.0
+                    )
+            except Exception:
+                pass
+            return {
+                "success": not is_html,
+                "message": "Đã đồng bộ GAS: Hệ thống đang ở trạng thái đã xóa sạch (0 lỗi).",
+                "is_html": is_html,
+                "gas_url": gas_url,
+                "remote_defects_count": 0,
+                "total_local_defects": 0,
+                "kpis": {"total": 0, "improved": 0, "pending": 0, "rate": 0.0}
+            }
+
+        all_defects = cls.aggregate_all_defects(force_reconcile=False)
         return {
             "success": not is_html and remote_count >= 0,
             "message": status_msg,

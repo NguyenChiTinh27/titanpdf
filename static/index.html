@@ -4196,6 +4196,21 @@
                     </div>
                 </div>
 
+                <!-- Hộp Copy Mã Nguồn Code.gs Chuẩn -->
+                <div style="margin-bottom: 16px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 12px 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <div style="font-weight: 800; color: #166534; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                            <span>⚡</span> MÃ NGUỒN CODE.GS CHUẨN MỚI NHẤT (DRIVE &amp; SHEET)
+                        </div>
+                        <button type="button" id="msds-gas-copy-code-btn" style="background: #16a34a; color: #ffffff; border: none; padding: 5px 12px; border-radius: 6px; font-weight: 700; font-size: 11.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            📋 Copy Mã GAS
+                        </button>
+                    </div>
+                    <div style="font-size: 11.5px; color: #15803d; line-height: 1.4;">
+                        Tích hợp trọn gói 38 cột CIL hóa chất, lưu trữ Google Drive, và quản lý xóa dữ liệu hai chiều an toàn.
+                    </div>
+                </div>
+
                 <!-- Webhook URL Input -->
                 <div style="margin-bottom:14px;">
                     <label for="msds-gas-url-input" style="display:block; font-size:13px; font-weight:700; color:#334155; margin-bottom:6px;">
@@ -4907,6 +4922,27 @@
                         <button type="button" id="hse-gas-save-btn" style="flex: 1; padding: 9px 14px; background: #2563eb; border: none; color: #fff; font-weight: 700; border-radius: 8px; cursor: pointer;">
                             💾 Lưu & Đồng Bộ Ngay
                         </button>
+                    </div>
+
+                    <!-- Hộp Mã Nguồn Code.gs Chuẩn Mới Nhất -->
+                    <div style="margin-bottom: 16px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 14px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <div style="font-weight: 800; color: #166534; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                <span>⚡</span> MÃ NGUỒN CODE.GS CHUẨN MỚI NHẤT
+                            </div>
+                            <button type="button" id="hse-gas-copy-code-btn" style="background: #16a34a; color: #ffffff; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 1px 3px rgba(22,163,74,0.3);">
+                                📋 Copy Mã GAS
+                            </button>
+                        </div>
+                        <p style="margin: 0 0 8px 0; font-size: 12px; color: #15803d; line-height: 1.5;">
+                            Đã tích hợp đầy đủ tính năng <b>deleteReport</b> (xóa file Drive), <b>deleteDefect</b> (xóa dòng Sheet) và <b>clearAllDefects</b> (xóa toàn bộ). Bấm nút để copy toàn bộ mã nguồn rồi dán vào Apps Script Editor.
+                        </p>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="hse-gas-toggle-code-btn" style="background: #ffffff; border: 1px solid #bbf7d0; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+                                👁️ Xem trước mã nguồn
+                            </button>
+                        </div>
+                        <textarea id="hse-gas-code-preview" readonly style="display: none; width: 100%; height: 180px; margin-top: 8px; font-family: monospace; font-size: 11px; padding: 8px; border: 1px solid #bbf7d0; border-radius: 6px; background: #ffffff; color: #0f172a; resize: vertical; box-sizing: border-box;"></textarea>
                     </div>
 
                     <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; color: #334155;">

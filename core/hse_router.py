@@ -1248,6 +1248,14 @@ async def sync_defects_gas_endpoint(request: Request):
     return DefectAggregatorService.sync_with_gas(custom_gas_url=custom_url)
 
 
+@hse_router.get("/gas_code")
+def get_gas_code_endpoint():
+    code_path = Path(BASE_DIR) / "Code.gs"
+    if code_path.exists():
+        return Response(content=code_path.read_text(encoding="utf-8"), media_type="text/plain;charset=utf-8")
+    return Response(content="// Code.gs not found", media_type="text/plain;charset=utf-8")
+
+
 @hse_router.post("/defects/clear_all")
 def clear_all_defects_endpoint():
     from core.hse_defect_tracker import DefectAggregatorService

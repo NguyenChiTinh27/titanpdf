@@ -91,17 +91,28 @@
 
       let fetchedDefects = data.defects || [];
 
-      // Lọc qua Tombstones trong localStorage để chống phục hồi dữ liệu đã xóa
+      // Lọc qua Tombstones và mốc thời gian xóa trong localStorage để chống phục hồi dữ liệu đã xóa
+      const isCleared = localStorage.getItem("IS_DB_CLEARED_HSE") === "true" || localStorage.getItem("HSE_TRACKER_CLEARED") === "true";
+      const clearedAt = localStorage.getItem("hse_cleared_at_timestamp") || "";
+
       try {
         const deletedIds = JSON.parse(localStorage.getItem("deleted_hse_defect_ids") || "[]");
-        if (deletedIds.length > 0) {
-          const delSet = new Set(deletedIds.map(x => String(x).trim().toUpperCase()));
-          fetchedDefects = fetchedDefects.filter(d => !delSet.has(String(d.id || "").trim().toUpperCase()) && !delSet.has(String(d.code || "").trim().toUpperCase()));
-        }
+        const delSet = new Set(deletedIds.map(x => String(x).trim().toUpperCase()));
+
+        fetchedDefects = fetchedDefects.filter(d => {
+          const codeUpper = String(d.id || d.code || "").trim().toUpperCase();
+          if (delSet.has(codeUpper)) return false;
+
+          // Nếu hệ thống đã bị xóa sạch: loại bỏ bất kỳ bản ghi cũ nào (tháng 2026-09 hoặc các lỗi cũ)
+          if (isCleared) {
+            if (d.month === "2026-09" || codeUpper.startsWith("DEF-202609-")) return false;
+            if (clearedAt && d.created_at && d.created_at <= clearedAt) return false;
+          }
+          return true;
+        });
       } catch (_) {}
 
-      const isCleared = localStorage.getItem("IS_DB_CLEARED_HSE") === "true" || localStorage.getItem("HSE_TRACKER_CLEARED") === "true";
-      if (isCleared && (data.cleared || fetchedDefects.length === 0)) {
+      if (isCleared && fetchedDefects.length === 0) {
         state.allDefects = [];
       } else {
         state.allDefects = fetchedDefects;
@@ -798,9 +809,11 @@
       if (!resp.ok || !res.success) throw new Error(res.detail || res.message || "Lỗi khi xóa dữ liệu HSE.");
 
       try {
+        const nowIso = new Date().toISOString();
         localStorage.setItem("IS_DB_CLEARED_HSE", "true");
         localStorage.setItem("IS_DB_CLEARED", "true");
         localStorage.setItem("HSE_TRACKER_CLEARED", "true");
+        localStorage.setItem("hse_cleared_at_timestamp", nowIso);
         localStorage.setItem("deleted_hse_defect_ids", "[]");
       } catch (_) {}
 
@@ -1002,6 +1015,61 @@
       if (e.key === "Escape") {
         closeDetailModal();
         closeGasConfigModal();
+      }
+    });
+
+    // Copy mã nguồn Code.gs
+    const setupCopyBtn = (btnId) => {
+      const btn = $(btnId);
+      btn?.addEventListener("click", async () => {
+        try {
+          btn.textContent = "⏳ Đang lấy mã...";
+          let codeText = "";
+          const preview = $("#hse-gas-code-preview");
+          if (preview && preview.value.trim()) {
+            codeText = preview.value;
+          } else {
+            const resp = await fetch("/api/hse/gas_code");
+            if (resp.ok) {
+              codeText = await resp.text();
+              if (preview) preview.value = codeText;
+            }
+          }
+          if (!codeText) throw new Error("Không thể tải mã Code.gs từ server.");
+
+          await navigator.clipboard.writeText(codeText);
+          btn.textContent = "✅ Đã Copy Mã GAS!";
+          btn.style.background = "#059669";
+          setTimeout(() => {
+            btn.textContent = "📋 Copy Mã GAS";
+            btn.style.background = "#16a34a";
+          }, 3000);
+          showToast("✓ Đã sao chép toàn bộ mã nguồn Code.gs! Bạn hãy dán đè vào Apps Script Editor.");
+        } catch (err) {
+          showToast("Lỗi sao chép: " + err.message, true);
+          btn.textContent = "📋 Copy Mã GAS";
+        }
+      });
+    };
+    setupCopyBtn("#hse-gas-copy-code-btn");
+    setupCopyBtn("#msds-gas-copy-code-btn");
+
+    $("#hse-gas-toggle-code-btn")?.addEventListener("click", async () => {
+      const preview = $("#hse-gas-code-preview");
+      const btn = $("#hse-gas-toggle-code-btn");
+      if (!preview) return;
+      if (preview.style.display === "none") {
+        if (!preview.value.trim()) {
+          try {
+            const resp = await fetch("/api/hse/gas_code");
+            if (resp.ok) preview.value = await resp.text();
+          } catch (_) {}
+        }
+        preview.style.display = "block";
+        if (btn) btn.textContent = "🙈 Ẩn mã nguồn";
+      } else {
+        preview.style.display = "none";
+        if (btn) btn.textContent = "👁️ Xem trước mã nguồn";
       }
     });
 
